@@ -12,7 +12,7 @@ export default async function SignupPage({ searchParams }: { searchParams: Searc
   return (
     <div className="auth">
       <form action={signUp} className="panel stack">
-        <div className="brand" style={{ color: "var(--fg)", padding: 0 }}><span className="mark">KA</span>{t("app_name")}</div>
+        <div className="brand" style={{ color: "var(--fg)", padding: 0 }}><span className="mark">TP</span>{t("app_name")}</div>
         <h1>{t("signup_title")}</h1>
         <ErrorNote message={err(q("error"))} />
         <label className="f">{t("full_name")}<input id="name" name="name" autoComplete="name" required /></label>

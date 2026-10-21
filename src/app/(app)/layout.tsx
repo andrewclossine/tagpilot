@@ -28,7 +28,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <div className="shell">
       <aside className="side">
-        <div className="brand"><span className="mark">KA</span>{t("app_name")}</div>
+        <div className="brand"><span className="mark">TP</span>{t("app_name")}</div>
         <form action={changeCompany}>
           <label className="small" htmlFor="companyId" style={{ display: "block", padding: "0 6px 4px", opacity: .7 }}>{t("switch_company")}</label>
           <AutoSubmitSelect id="companyId" name="companyId" defaultValue={ctx.company.id}>

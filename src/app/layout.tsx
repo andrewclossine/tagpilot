@@ -3,7 +3,7 @@ import { getI18n } from "@/lib/i18n";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: { default: "Konti AI", template: "%s · Konti AI" },
+  title: { default: "TAGPILOT", template: "%s · TAGPILOT" },
   description: "Accounting for Rwanda, with AI that reads your supporting documents.",
 };
 

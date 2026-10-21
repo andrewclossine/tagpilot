@@ -12,7 +12,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Search
   return (
     <div className="auth">
       <form action={signIn} className="panel stack">
-        <div className="brand" style={{ color: "var(--fg)", padding: 0 }}><span className="mark">KA</span>{t("app_name")}</div>
+        <div className="brand" style={{ color: "var(--fg)", padding: 0 }}><span className="mark">TP</span>{t("app_name")}</div>
         <p className="muted small" style={{ margin: 0 }}>{t("tagline")}</p>
         <h1>{t("login_title")}</h1>
         <ErrorNote message={err(q("error"))} />

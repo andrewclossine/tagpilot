@@ -1,5 +1,5 @@
 const en = {
-  app_name: "Konti AI", tagline: "Accounting for Rwanda, with AI that reads your documents.",
+  app_name: "TAGPILOT", tagline: "Accounting for Rwanda, with AI that reads your documents.",
   save: "Save", cancel: "Cancel", delete: "Delete", edit: "Edit", add: "Add", create: "Create", back: "Back", close: "Close",
   yes: "Yes", no: "No", none: "— none —", all: "All", total: "Total", date: "Date", due_date: "Due date", number: "No.",
   reference: "Reference", memo: "Memo", description: "Description", account: "Account", debit: "Debit", credit: "Credit",
@@ -104,7 +104,7 @@ const en = {
   subtype: "Role in the books", sub_none: "—", sub_bank: "Bank", sub_cash: "Cash", sub_momo: "Mobile money", sub_ar: "Customers (receivable)",
   sub_ap: "Suppliers (payable)", sub_vat_in: "Input VAT", sub_vat_out: "Output VAT", sub_wht: "Withholding tax",
   acc_ar: "Customers account", acc_ap: "Suppliers account", acc_vat_in: "Input VAT account", acc_vat_out: "Output VAT account", acc_wht: "Withholding tax account",
-  invite_help: "Give a colleague access. They must create a Konti AI account first, with this email.", invite_btn: "Give access", members: "People with access",
+  invite_help: "Give a colleague access. They must create a TAGPILOT account first, with this email.", invite_btn: "Give access", members: "People with access",
   donor: "Donor", name_en: "Name (English)", name_fr: "Name (French)", remove: "Remove",
 
   audit_title: "Audit trail", audit_who: "Who", audit_what: "What", audit_when: "When",
@@ -113,7 +113,7 @@ const en = {
 export type Key = keyof typeof en;
 
 const fr: Record<Key, string> = {
-  app_name: "Konti AI", tagline: "La comptabilité au Rwanda, avec une IA qui lit vos pièces.",
+  app_name: "TAGPILOT", tagline: "La comptabilité au Rwanda, avec une IA qui lit vos pièces.",
   save: "Enregistrer", cancel: "Annuler", delete: "Supprimer", edit: "Modifier", add: "Ajouter", create: "Créer", back: "Retour", close: "Fermer",
   yes: "Oui", no: "Non", none: "— aucun —", all: "Tous", total: "Total", date: "Date", due_date: "Échéance", number: "N°",
   reference: "Référence", memo: "Libellé", description: "Description", account: "Compte", debit: "Débit", credit: "Crédit",
@@ -218,7 +218,7 @@ const fr: Record<Key, string> = {
   subtype: "Rôle en comptabilité", sub_none: "—", sub_bank: "Banque", sub_cash: "Caisse", sub_momo: "Mobile money", sub_ar: "Clients (créances)",
   sub_ap: "Fournisseurs (dettes)", sub_vat_in: "TVA déductible", sub_vat_out: "TVA collectée", sub_wht: "Retenue à la source",
   acc_ar: "Compte clients", acc_ap: "Compte fournisseurs", acc_vat_in: "Compte TVA déductible", acc_vat_out: "Compte TVA collectée", acc_wht: "Compte de retenue à la source",
-  invite_help: "Donnez accès à un collègue. Il doit d'abord créer un compte Konti AI avec cet e-mail.", invite_btn: "Donner accès", members: "Personnes ayant accès",
+  invite_help: "Donnez accès à un collègue. Il doit d'abord créer un compte TAGPILOT avec cet e-mail.", invite_btn: "Donner accès", members: "Personnes ayant accès",
   donor: "Bailleur", name_en: "Nom (anglais)", name_fr: "Nom (français)", remove: "Retirer",
 
   audit_title: "Piste d'audit", audit_who: "Qui", audit_what: "Quoi", audit_when: "Quand",

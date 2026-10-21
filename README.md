@@ -1,4 +1,4 @@
-# Konti AI
+# TAGPILOT
 
 Accounting software for Rwandan companies and NGOs, with AI that reads supporting documents and proposes the booking.
 Interface in English and French. Amounts in RWF. IFRS presentation, RRA VAT and withholding tax, RSSB payroll.
