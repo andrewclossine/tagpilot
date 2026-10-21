@@ -4,7 +4,7 @@ import fs from "node:fs/promises";
 import crypto from "node:crypto";
 import { getDb, schema } from "@/db";
 
-const root = () => process.env.STORAGE_DIR || path.join(process.cwd(), "storage");
+const root = () => process.env.STORAGE_DIR || path.join(/* turbopackIgnore: true */ process.cwd(), "storage");
 
 export const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif", "application/pdf"] as const;
 export const MAX_UPLOAD = 15 * 1024 * 1024;

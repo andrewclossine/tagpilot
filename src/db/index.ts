@@ -8,7 +8,7 @@ import * as schema from "./schema";
 export type Db = NodePgDatabase<typeof schema>;
 export type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 
-const migrationsFolder = path.join(process.cwd(), "drizzle");
+const migrationsFolder = path.join(/* turbopackIgnore: true */ process.cwd(), "drizzle");
 
 async function connect(): Promise<Db> {
   const url = process.env.DATABASE_URL;
@@ -22,7 +22,7 @@ async function connect(): Promise<Db> {
   const { PGlite } = await import("@electric-sql/pglite");
   const { drizzle: drizzlePglite } = await import("drizzle-orm/pglite");
   const { migrate: migratePglite } = await import("drizzle-orm/pglite/migrator");
-  const dir = process.env.PGLITE_DIR || path.join(process.cwd(), "data", "pglite");
+  const dir = process.env.PGLITE_DIR || path.join(/* turbopackIgnore: true */ process.cwd(), "data", "pglite");
   fs.mkdirSync(dir, { recursive: true });
   const db = drizzlePglite(new PGlite(dir), { schema });
   await migratePglite(db, { migrationsFolder });
