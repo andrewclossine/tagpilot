@@ -4,7 +4,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: { default: "TAGPILOT", template: "%s · TAGPILOT" },
-  description: "Accounting for Rwanda, with AI that reads your supporting documents.",
+  description: "Smart accounting, with AI that reads your supporting documents.",
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {

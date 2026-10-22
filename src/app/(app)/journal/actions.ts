@@ -11,7 +11,7 @@ import { getI18n } from "@/lib/i18n";
 import { parseJournalLines } from "@/lib/parse";
 
 export async function saveJournal(fd: FormData) {
-  const ctx = await requireWrite();
+  const ctx = await requireWrite("journal");
   const id = str(fd, "id") || undefined;
   const back = id ? `/journal/${id}` : "/journal/new";
   const post = str(fd, "intent") === "post";
@@ -36,7 +36,7 @@ export async function saveJournal(fd: FormData) {
 }
 
 export async function postJournal(fd: FormData) {
-  const ctx = await requireWrite();
+  const ctx = await requireWrite("journal");
   const id = str(fd, "id");
   try {
     const db = await getDb();
@@ -47,7 +47,7 @@ export async function postJournal(fd: FormData) {
 }
 
 export async function reverseJournal(fd: FormData) {
-  const ctx = await requireWrite();
+  const ctx = await requireWrite("journal");
   const id = str(fd, "id");
   const { t } = await getI18n();
   let newId: string;
@@ -61,7 +61,7 @@ export async function reverseJournal(fd: FormData) {
 
 /** Adds the supplier or customer the AI found on a document, and links it to the draft. */
 export async function addPartnerFromAi(fd: FormData) {
-  const ctx = await requireWrite();
+  const ctx = await requireWrite("journal");
   const id = str(fd, "id");
   const db = await getDb();
   const [e] = await db.select().from(schema.journalEntries)
@@ -80,7 +80,7 @@ export async function addPartnerFromAi(fd: FormData) {
 }
 
 export async function deleteJournal(fd: FormData) {
-  const ctx = await requireWrite();
+  const ctx = await requireWrite("journal");
   const id = str(fd, "id");
   try {
     const db = await getDb();

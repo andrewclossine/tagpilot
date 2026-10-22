@@ -1,5 +1,6 @@
-import type { PayrollSettings, PayslipRow } from "@/db/schema";
+import type { LegacyPayrollSettings, LegacyPayslipRow, PayrollComponent, PayrollSettings, PayslipRow } from "@/db/schema";
 import { round2 } from "./format";
+import { PAYROLL_DEFAULTS, RWANDA_COMPONENTS } from "./template";
 
 type Bracket = { upTo: number; rate: number };
 
@@ -11,7 +12,7 @@ export function parseBrackets(s: string): Bracket[] {
   }).filter((b) => !Number.isNaN(b.upTo) && !Number.isNaN(b.rate)).sort((a, b) => a.upTo - b.upTo);
 }
 
-export function payeOf(base: number, brackets: Bracket[]): number {
+export function progressiveTax(base: number, brackets: Bracket[]): number {
   let tax = 0, prev = 0;
   for (const b of brackets) {
     if (base <= prev) break;
@@ -21,23 +22,54 @@ export function payeOf(base: number, brackets: Bracket[]): number {
   return Math.round(tax);
 }
 
-export type EmployeePay = { id: string; name: string; projectId: string | null; basic: number; transport: number; other: number };
-
-export function payslip(emp: EmployeePay, adj: { bonus?: number; deduction?: number }, cfg: PayrollSettings): PayslipRow {
-  const bonus = round2(adj.bonus ?? 0), deduction = round2(adj.deduction ?? 0);
-  const gross = round2(emp.basic + emp.transport + emp.other + bonus);
-  const payeBase = gross - (cfg.payeTransport ? 0 : emp.transport);
-  const rssbBase = gross - (cfg.rssbTransport ? 0 : emp.transport);
-  const pct = (base: number, r: number) => Math.round((base * r) / 100);
-  const paye = payeOf(payeBase, parseBrackets(cfg.brackets));
-  const penE = pct(rssbBase, cfg.pensionEmp), penR = pct(rssbBase, cfg.pensionEr);
-  const matE = pct(rssbBase, cfg.matEmp), matR = pct(rssbBase, cfg.matEr), oh = pct(rssbBase, cfg.ohEr);
-  const cbhi = pct(gross - paye - penE - matE, cfg.cbhi);
+/** Payroll rules saved before they became configurable are read as the Rwanda preset with the saved rates. */
+export function payrollConfig(saved: PayrollSettings | LegacyPayrollSettings | undefined): PayrollSettings {
+  if (!saved) return PAYROLL_DEFAULTS;
+  if ("components" in saved) return { ...PAYROLL_DEFAULTS, ...saved };
+  const rate = (code: string, r: number) => ({ ...RWANDA_COMPONENTS.find((c) => c.code === code)!, rate: r });
   return {
-    employeeId: emp.id, name: emp.name, projectId: emp.projectId,
-    basic: emp.basic, transport: emp.transport, other: emp.other, bonus, gross,
-    paye, penE, penR, matE, matR, oh, cbhi, deduction,
-    net: round2(gross - paye - penE - matE - cbhi - deduction),
-    employer: penR + matR + oh,
+    country: "Rwanda", reviewed: true, accSalary: saved.accSalary, accNet: saved.accNet, accAdv: saved.accAdv,
+    components: [
+      { ...RWANDA_COMPONENTS[0], brackets: saved.brackets, liabilityAccount: saved.accPaye },
+      { ...rate("PEN_E", saved.pensionEmp), liabilityAccount: saved.accRssb },
+      { ...rate("MAT_E", saved.matEmp), liabilityAccount: saved.accRssb },
+      { ...rate("CBHI", saved.cbhi), liabilityAccount: saved.accRssb },
+      { ...rate("PEN_R", saved.pensionEr), liabilityAccount: saved.accRssb, expenseAccount: saved.accEmployer },
+      { ...rate("MAT_R", saved.matEr), liabilityAccount: saved.accRssb, expenseAccount: saved.accEmployer },
+      { ...rate("OH", saved.ohEr), liabilityAccount: saved.accRssb, expenseAccount: saved.accEmployer },
+    ],
+  };
+}
+
+export function readPayslip(r: PayslipRow | LegacyPayslipRow): PayslipRow {
+  if ("deductions" in r) return r;
+  return {
+    employeeId: r.employeeId, name: r.name, position: "", projectId: r.projectId, gross: r.gross,
+    deductions: { PAYE: r.paye, PEN_E: r.penE, MAT_E: r.matE, CBHI: r.cbhi },
+    employer: { PEN_R: r.penR, MAT_R: r.matR, OH: r.oh },
+    otherDeduction: r.deduction, net: r.net, employerTotal: r.employer,
+  };
+}
+
+export type PayInput = { employeeId: string | null; name: string; position: string; projectId: string | null; gross: number; otherDeduction?: number };
+
+/** Applies the company's payroll rules, in order, to one person's gross pay for the month. */
+export function payslip(p: PayInput, components: PayrollComponent[]): PayslipRow {
+  const gross = round2(p.gross);
+  const deductions: Record<string, number> = {}, employer: Record<string, number> = {};
+  let remaining = gross;
+  for (const c of components) {
+    const base = c.base === "remaining" ? remaining : gross;
+    const amount = c.method === "brackets" ? progressiveTax(base, parseBrackets(c.brackets)) : Math.round((base * c.rate) / 100);
+    if (c.kind === "employee") { deductions[c.code] = amount; remaining = round2(remaining - amount); }
+    else employer[c.code] = amount;
+  }
+  const otherDeduction = round2(p.otherDeduction ?? 0);
+  const totalDed = Object.values(deductions).reduce((s, v) => s + v, 0);
+  return {
+    employeeId: p.employeeId, name: p.name, position: p.position, projectId: p.projectId, gross,
+    deductions, employer, otherDeduction,
+    net: round2(gross - totalDed - otherDeduction),
+    employerTotal: Object.values(employer).reduce((s, v) => s + v, 0),
   };
 }

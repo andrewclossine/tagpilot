@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { and, eq, sql } from "drizzle-orm";
 import { getDb, schema } from "@/db";
-import { getCtx } from "@/lib/auth";
+import { requireView } from "@/lib/auth";
 import { getI18n } from "@/lib/i18n";
 import { balances, moneyAccounts } from "@/lib/ledger";
 import { Empty, PageHead } from "@/components/ui";
@@ -9,7 +9,7 @@ import { Empty, PageHead } from "@/components/ui";
 export const metadata = { title: "Banking" };
 
 export default async function BankingPage() {
-  const ctx = await getCtx();
+  const ctx = await requireView("banking");
   const { t, accName, money } = await getI18n();
   const db = await getDb();
   const [accs, bal, open] = await Promise.all([

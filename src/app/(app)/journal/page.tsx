@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { and, desc, eq, gte, lte, sql } from "drizzle-orm";
 import { getDb, schema } from "@/db";
-import { getCtx } from "@/lib/auth";
+import { requireView } from "@/lib/auth";
 import { getI18n } from "@/lib/i18n";
 import { sp, type SearchParams } from "@/lib/actions";
 import { isIsoDate, today } from "@/lib/format";
@@ -10,7 +10,7 @@ import { Empty, PageHead, Pill, Tabs } from "@/components/ui";
 export const metadata = { title: "Journal" };
 
 export default async function JournalPage({ searchParams }: { searchParams: SearchParams }) {
-  const ctx = await getCtx();
+  const ctx = await requireView("journal");
   const { t, money } = await getI18n();
   const q = await sp(searchParams);
   const status = q("status") === "draft" ? "draft" : q("status") === "posted" ? "posted" : "";
@@ -29,7 +29,7 @@ export default async function JournalPage({ searchParams }: { searchParams: Sear
     <div className="stack">
       <PageHead title={t("jr_title")}>
         <a className="btn" href={`/api/export/journal?from=${from}&to=${to}`}>{t("export_csv")}</a>
-        {ctx.canWrite ? <Link href="/journal/new" className="btn primary">{t("jr_new")}</Link> : null}
+        {ctx.can("journal", "write") ? <Link href="/journal/new" className="btn primary">{t("jr_new")}</Link> : null}
       </PageHead>
       <div className="row">
         <Tabs current={status || "all"} items={[

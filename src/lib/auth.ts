@@ -7,6 +7,7 @@ import bcrypt from "bcryptjs";
 import { and, eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import type { Role } from "@/db/schema";
+import { can, type Area } from "./roles";
 
 const SESSION_COOKIE = "konti_session";
 const COMPANY_COOKIE = "konti_company";
@@ -59,8 +60,12 @@ export type Ctx = {
   user: NonNullable<Awaited<ReturnType<typeof getCurrentUser>>>;
   company: typeof schema.companies.$inferSelect;
   role: Role;
-  canWrite: boolean;
-  isOwner: boolean;
+  isAdmin: boolean;
+  /** Days left in the free trial, or null on a paid plan. */
+  trialDaysLeft: number | null;
+  /** True when the trial has ended without a subscription: the books stay readable but cannot change. */
+  locked: boolean;
+  can: (area: Area, mode?: "read" | "write") => boolean;
 };
 
 /** The signed-in user, their current company and their role in it. Sends them to login or onboarding when missing. */
@@ -73,13 +78,25 @@ export const getCtx = cache(async (): Promise<Ctx> => {
   if (!rows.length) redirect("/onboarding");
   const wanted = (await cookies()).get(COMPANY_COOKIE)?.value;
   const row = rows.find((r) => r.company.id === wanted) ?? rows[0];
-  return { user, company: row.company, role: row.role, canWrite: row.role !== "viewer", isOwner: row.role === "owner" };
+  const trialDaysLeft = row.company.plan === "active" ? null : Math.max(0, Math.ceil((row.company.trialEndsAt.getTime() - Date.now()) / 86400000));
+  const locked = row.company.plan !== "active" && trialDaysLeft === 0;
+  return {
+    user, company: row.company, role: row.role, isAdmin: row.role === "admin", trialDaysLeft, locked,
+    can: (area, mode = "read") => (mode === "write" && locked ? false : can(row.role, area, mode)),
+  };
 });
 
-/** For server actions: the context, refusing viewers (and non-owners when `owner` is asked). */
-export async function requireWrite(level: "write" | "owner" = "write"): Promise<Ctx> {
+/** For server actions: the context, refusing anyone whose role may not change this area. */
+export async function requireWrite(area: Area): Promise<Ctx> {
   const ctx = await getCtx();
-  if (!ctx.canWrite || (level === "owner" && !ctx.isOwner)) throw new Error("You do not have permission to change this company's books.");
+  if (!ctx.can(area, "write")) throw new Error("You do not have permission to change this part of the books.");
+  return ctx;
+}
+
+/** For pages: the context, or the no-access page when the role may not see this area. */
+export async function requireView(area: Area): Promise<Ctx> {
+  const ctx = await getCtx();
+  if (!ctx.can(area)) redirect("/no-access");
   return ctx;
 }
 

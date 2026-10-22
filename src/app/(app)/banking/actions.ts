@@ -21,7 +21,7 @@ async function moneyAccount(companyId: string, id: string) {
 }
 
 export async function importStatement(fd: FormData) {
-  const ctx = await requireWrite();
+  const ctx = await requireWrite("banking");
   const accountId = str(fd, "accountId"), back = `/banking/${accountId}`;
   let n = 0;
   try {
@@ -47,7 +47,7 @@ async function openLine(companyId: string, id: string) {
 
 /** Links a statement line to a posted ledger line with the same amount. */
 export async function matchLine(fd: FormData) {
-  const ctx = await requireWrite();
+  const ctx = await requireWrite("banking");
   const back = `/banking/${str(fd, "accountId")}`;
   try {
     const l = await openLine(ctx.company.id, str(fd, "id"));
@@ -66,7 +66,7 @@ export async function matchLine(fd: FormData) {
 
 /** Posts a statement line that is not yet in the books against the chosen account. */
 export async function bookLine(fd: FormData) {
-  const ctx = await requireWrite();
+  const ctx = await requireWrite("banking");
   const back = `/banking/${str(fd, "accountId")}`;
   try {
     const l = await openLine(ctx.company.id, str(fd, "id"));
@@ -93,7 +93,7 @@ export async function bookLine(fd: FormData) {
 }
 
 export async function ignoreLine(fd: FormData) {
-  const ctx = await requireWrite();
+  const ctx = await requireWrite("banking");
   const back = `/banking/${str(fd, "accountId")}`;
   const db = await getDb();
   await db.update(schema.bankLines).set({ status: "ignored" })
@@ -104,7 +104,7 @@ export async function ignoreLine(fd: FormData) {
 
 /** Asks the AI which account each unexplained line belongs to, and stores the suggestions for review. */
 export async function suggestWithAi(fd: FormData) {
-  const ctx = await requireWrite();
+  const ctx = await requireWrite("banking");
   const accountId = str(fd, "accountId"), back = `/banking/${accountId}`;
   const { lang, accName } = await getI18n();
   try {
@@ -116,7 +116,7 @@ export async function suggestWithAi(fd: FormData) {
     const o = await bookOptions(ctx.company.id, accName);
     const s = ctx.company.settings;
     const picks = await suggestBankAccounts(open.map((l) => ({ id: l.id, date: l.date, description: l.description, amount: l.amount })), {
-      companyName: ctx.company.name, tin: ctx.company.tin, vatRegistered: ctx.company.vatRegistered, vatRate: ctx.company.vatRate,
+      companyName: ctx.company.name, tin: ctx.company.tin, country: ctx.company.country, currency: ctx.company.currency, vatRegistered: ctx.company.vatRegistered, vatRate: ctx.company.vatRate,
       vatIn: s.vatIn, vatOut: s.vatOut, policies: ctx.company.policies, language: lang === "fr" ? "French" : "English",
       accounts: o.accounts.filter((a) => a.id !== accountId).map((a) => ({ code: a.code, name: a.nameEn, type: a.type })),
       partners: [], projects: o.projects.map((p) => ({ code: p.code, name: p.name })), recent: [],
@@ -134,7 +134,7 @@ export async function suggestWithAi(fd: FormData) {
 }
 
 export async function reopenLines(fd: FormData) {
-  const ctx = await requireWrite();
+  const ctx = await requireWrite("banking");
   const back = `/banking/${str(fd, "accountId")}`;
   const db = await getDb();
   const ids = fd.getAll("id").map(String);

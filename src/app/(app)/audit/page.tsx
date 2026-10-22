@@ -1,6 +1,6 @@
 import { desc, eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
-import { getCtx } from "@/lib/auth";
+import { requireView } from "@/lib/auth";
 import { getI18n } from "@/lib/i18n";
 import { Empty, PageHead } from "@/components/ui";
 
@@ -8,7 +8,7 @@ export const metadata = { title: "Audit trail" };
 
 /** Who did what, and when: every save, posting, payment, reversal and access change. */
 export default async function AuditPage() {
-  const ctx = await getCtx();
+  const ctx = await requireView("audit");
   const { t } = await getI18n();
   const db = await getDb();
   const rows = await db.select({ a: schema.auditLog, who: schema.users.name }).from(schema.auditLog)

@@ -31,7 +31,7 @@ const BankSuggestions = z.object({
 });
 
 export type BookContext = {
-  companyName: string; tin: string; vatRegistered: boolean; vatRate: number;
+  companyName: string; tin: string; country: string; currency: string; vatRegistered: boolean; vatRate: number;
   vatIn: string; vatOut: string; policies: string; language: "English" | "French";
   accounts: { code: string; name: string; type: string }[];
   partners: { id: string; name: string; kind: string; tin: string }[];
@@ -45,7 +45,7 @@ function client() {
 }
 
 function contextText(c: BookContext): string {
-  return `COMPANY: ${c.companyName} · TIN ${c.tin || "-"} · currency RWF · VAT registered: ${c.vatRegistered ? "yes" : "no"} · VAT rate ${c.vatRate}% · input VAT account ${c.vatIn} · output VAT account ${c.vatOut}
+  return `COMPANY: ${c.companyName} · country ${c.country || "-"} · tax number ${c.tin || "-"} · currency ${c.currency} · VAT registered: ${c.vatRegistered ? "yes" : "no"} · VAT rate ${c.vatRate}% · input VAT account ${c.vatIn} · output VAT account ${c.vatOut}
 
 COMPANY ACCOUNTING POLICY (follow it; it overrides general practice):
 ${c.policies || "(none given; use standard IFRS practice)"}
@@ -64,7 +64,7 @@ export async function readDocument(file: { bytes: Buffer; mimeType: string; file
     ? { type: "document", source: { type: "base64", media_type: "application/pdf", data } }
     : { type: "image", source: { type: "base64", media_type: file.mimeType as "image/jpeg" | "image/png" | "image/webp" | "image/gif", data } };
 
-  const prompt = `You are a senior accountant in Rwanda working under IFRS and Rwanda Revenue Authority (RRA) rules.
+  const prompt = `You are a senior accountant working under IFRS and the tax rules of ${c.country || "the company's country"}.
 The attached file (${file.fileName}) is one supporting document. Read it carefully and propose ONE balanced journal entry for the books of the company below.
 
 ${contextText(c)}
@@ -76,7 +76,7 @@ RECENT APPROVED ENTRIES (follow the company's habits for similar documents):
 ${c.recent.join("\n") || "(none yet)"}
 
 Rules:
-- Total debits must equal total credits. Each line has either a debit or a credit; the other is 0. Amounts are plain numbers in RWF.
+- Total debits must equal total credits. Each line has either a debit or a credit; the other is 0. Amounts are plain numbers in ${c.currency}; if the document is in another currency, convert at the rate shown on it, or say in a warning that a rate is needed.
 - If VAT applies and the company is VAT registered, split the VAT to the VAT account.
 - partner.existing_id is the id from the list above when the document's supplier or customer is already known, otherwise null.
 - date is YYYY-MM-DD, or null if unreadable.
@@ -101,7 +101,7 @@ Rules:
 export async function suggestBankAccounts(
   lines: { id: string; date: string; description: string; amount: number }[], c: BookContext,
 ): Promise<Map<string, string>> {
-  const prompt = `You are an accountant in Rwanda. For each bank statement line below, choose the account it should be booked against (the other side of the bank account). Positive amounts are money received, negative amounts are money paid out.
+  const prompt = `You are an accountant. For each bank statement line below, choose the account it should be booked against (the other side of the bank account). Positive amounts are money received, negative amounts are money paid out.
 
 ${contextText(c)}
 
@@ -119,4 +119,44 @@ Return one suggestion per line, using only account codes from the chart of accou
   });
   if (res.stop_reason === "refusal") throw new UserError("err_ai_refused");
   return new Map((res.parsed_output?.suggestions ?? []).map((s) => [s.id, s.account_code]));
+}
+
+const PayrollRules = z.object({
+  components: z.array(z.object({
+    code: z.string(), name: z.string(), kind: z.enum(["employee", "employer"]), method: z.enum(["percent", "brackets"]),
+    rate: z.number(), brackets: z.string(), base: z.enum(["gross", "remaining"]),
+    liability_account: z.string(), expense_account: z.string(),
+  })),
+  new_accounts: z.array(z.object({ code: z.string(), name: z.string(), type: z.enum(["liability", "expense"]) })),
+  notes: z.array(z.string()),
+});
+export type PayrollRulesProposal = z.infer<typeof PayrollRules>;
+
+/** Drafts the monthly payroll taxes and contributions of a country, mapped to the company's accounts, for a person to review. */
+export async function suggestPayrollRules(country: string, currency: string, accounts: { code: string; name: string; type: string }[], language: "English" | "French") {
+  const prompt = `You are a payroll specialist. Write the statutory monthly payroll deductions and employer contributions that apply to an ordinary salaried employee in ${country}, as of your latest knowledge. Currency: ${currency}.
+
+Each component is either deducted from the employee's gross pay ("employee") or paid by the employer on top of it ("employer").
+- method "percent": rate is the percentage of the base.
+- method "brackets": progressive monthly bands written as "upTo:rate%" pairs, e.g. "60000:0, 100000:10, 200000:20, *:30" ("*" means everything above). Convert annual bands to monthly.
+- base "gross": gross pay. base "remaining": gross minus the employee components listed before this one (use it only when the law computes the item on net pay). Order the list so that "remaining" items come after what they depend on.
+- code: short uppercase id (e.g. PAYE, PENSION_EE). name: the official name, in ${language}.
+- liability_account: the account code, from the chart below, that is credited with the amount owed to the authority. expense_account: for employer components, the expense account debited; empty for employee components.
+- If the chart has no suitable account, invent a code that is free in the chart, use it, and list it in new_accounts.
+- Leave out anything that depends on facts you cannot know (voluntary schemes, allowances, family situation). If thresholds or ceilings apply, approximate and explain in notes.
+- notes: what the accountant must check, the year of the rates, and any simplification, in ${language}.
+
+CHART OF ACCOUNTS - code | name | type:
+${accounts.map((a) => `${a.code} | ${a.name} | ${a.type}`).join("\n")}`;
+  const res = await client().beta.messages.parse({
+    model: MODEL,
+    max_tokens: 16000,
+    betas: ["server-side-fallback-2026-07-01"],
+    fallbacks: "default",
+    output_config: { effort: "high", format: betaZodOutputFormat(PayrollRules) },
+    messages: [{ role: "user", content: prompt }],
+  });
+  if (res.stop_reason === "refusal") throw new UserError("err_ai_refused");
+  if (!res.parsed_output) throw new UserError("err_ai_failed");
+  return res.parsed_output;
 }

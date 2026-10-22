@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { and, eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
-import { getCtx } from "@/lib/auth";
+import { requireView } from "@/lib/auth";
 import { getI18n } from "@/lib/i18n";
 import { sp, type SearchParams } from "@/lib/actions";
 import { today } from "@/lib/format";
@@ -15,7 +15,7 @@ export const metadata = { title: "Journal entry" };
 
 export default async function EntryPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: SearchParams }) {
   const { id } = await params;
-  const ctx = await getCtx();
+  const ctx = await requireView("journal");
   const { t, err, accName, money } = await getI18n();
   const q = await sp(searchParams);
   const db = await getDb();
@@ -30,7 +30,7 @@ export default async function EntryPage({ params, searchParams }: { params: Prom
   const [partner] = e.partnerId ? await db.select().from(schema.partners).where(eq(schema.partners.id, e.partnerId)) : [];
   const [creator] = e.createdBy ? await db.select({ name: schema.users.name }).from(schema.users).where(eq(schema.users.id, e.createdBy)) : [];
   const [poster] = e.postedBy ? await db.select({ name: schema.users.name }).from(schema.users).where(eq(schema.users.id, e.postedBy)) : [];
-  const editable = e.status === "draft" && ctx.canWrite;
+  const editable = e.status === "draft" && ctx.can("journal", "write");
   const totalD = lines.reduce((s, l) => s + l.line.debit, 0), totalC = lines.reduce((s, l) => s + l.line.credit, 0);
 
   const aiBox = e.ai ? (
@@ -86,7 +86,7 @@ export default async function EntryPage({ params, searchParams }: { params: Prom
       </div>
       {e.reversedById ? <div className="small"><Link href={`/journal/${e.reversedById}`}>{t("reversed_by")} →</Link></div> : null}
       {e.reversesId ? <div className="small"><Link href={`/journal/${e.reversesId}`}>{t("reverse_of")} →</Link></div> : null}
-      {e.status === "posted" && ctx.canWrite && !e.reversedById ? (
+      {e.status === "posted" && ctx.can("journal", "write") && !e.reversedById ? (
         <form action={reverseJournal} className="row">
           <input type="hidden" name="id" value={e.id} />
           <label className="f" style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>{t("date")}<input type="date" name="date" id="revDate" defaultValue={today()} style={{ width: "auto" }} /></label>

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { and, asc, eq, gte, inArray, lt, lte, sql } from "drizzle-orm";
 import { getDb, schema } from "@/db";
-import { getCtx } from "@/lib/auth";
+import { requireView } from "@/lib/auth";
 import { getI18n, type Key } from "@/lib/i18n";
 import { sp, type SearchParams } from "@/lib/actions";
 import { balances, listAccounts } from "@/lib/ledger";
@@ -18,7 +18,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
   const { kind: k } = await params;
   if (!(k in KINDS)) notFound();
   const kind = k as Kind;
-  const ctx = await getCtx();
+  const ctx = await requireView("reports");
   const { t, accName, money } = await getI18n();
   const q = await sp(searchParams);
   const from = isIsoDate(q("from")) ? q("from") : `${today().slice(0, 4)}-01-01`;

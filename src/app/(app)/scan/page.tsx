@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { and, desc, eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
-import { getCtx } from "@/lib/auth";
+import { requireView } from "@/lib/auth";
 import { getI18n } from "@/lib/i18n";
 import { sp, type SearchParams } from "@/lib/actions";
 import { Empty, ErrorNote, PageHead } from "@/components/ui";
@@ -11,7 +11,7 @@ import { scanDocument } from "./actions";
 export const metadata = { title: "Scan & book" };
 
 export default async function ScanPage({ searchParams }: { searchParams: SearchParams }) {
-  const ctx = await getCtx();
+  const ctx = await requireView("journal");
   const { t, err } = await getI18n();
   const q = await sp(searchParams);
   const db = await getDb();
@@ -25,7 +25,7 @@ export default async function ScanPage({ searchParams }: { searchParams: SearchP
       <ErrorNote message={err(q("error"))} />
       <div className="grid2">
         <div className="panel">
-          {ctx.canWrite
+          {ctx.can("journal", "write")
             ? <ScanForm action={scanDocument} labels={{ drop: t("ai_drop"), choose: t("ai_choose"), read: t("ai_read"), reading: t("ai_reading") }} />
             : <Empty>{t("role_viewer")}</Empty>}
         </div>

@@ -16,8 +16,9 @@ const kindOf = (fd: FormData): DocKind => (str(fd, "kind") === "bill" ? "bill" :
 const docBase = (kind: DocKind) => (kind === "invoice" ? "/sales/invoices" : "/purchases/bills");
 
 export async function saveDoc(fd: FormData) {
-  const ctx = await requireWrite();
-  const kind = kindOf(fd), base = docBase(kind);
+  const kind = kindOf(fd);
+  const ctx = await requireWrite(kind === "invoice" ? "sales" : "purchases");
+  const base = docBase(kind);
   const id = str(fd, "id") || undefined;
   const post = str(fd, "intent") === "post";
   let savedId: string;
@@ -43,8 +44,9 @@ export async function saveDoc(fd: FormData) {
 }
 
 export async function postDocAction(fd: FormData) {
-  const ctx = await requireWrite();
-  const kind = kindOf(fd), base = docBase(kind), id = str(fd, "id");
+  const kind = kindOf(fd);
+  const ctx = await requireWrite(kind === "invoice" ? "sales" : "purchases");
+  const base = docBase(kind), id = str(fd, "id");
   try {
     const db = await getDb();
     await db.transaction((tx) => postDoc(tx, kind, ctx.company.id, ctx.user.id, id, ctx.company.settings));
@@ -54,8 +56,9 @@ export async function postDocAction(fd: FormData) {
 }
 
 export async function payDocAction(fd: FormData) {
-  const ctx = await requireWrite();
-  const kind = kindOf(fd), base = docBase(kind), id = str(fd, "id");
+  const kind = kindOf(fd);
+  const ctx = await requireWrite(kind === "invoice" ? "sales" : "purchases");
+  const base = docBase(kind), id = str(fd, "id");
   try {
     const date = str(fd, "date");
     if (!isIsoDate(date)) throw new UserError("err_required");
@@ -69,8 +72,9 @@ export async function payDocAction(fd: FormData) {
 }
 
 export async function voidDocAction(fd: FormData) {
-  const ctx = await requireWrite();
-  const kind = kindOf(fd), base = docBase(kind), id = str(fd, "id");
+  const kind = kindOf(fd);
+  const ctx = await requireWrite(kind === "invoice" ? "sales" : "purchases");
+  const base = docBase(kind), id = str(fd, "id");
   const { t } = await getI18n();
   try {
     const db = await getDb();
@@ -81,8 +85,9 @@ export async function voidDocAction(fd: FormData) {
 }
 
 export async function deleteDocDraft(fd: FormData) {
-  const ctx = await requireWrite();
-  const kind = kindOf(fd), base = docBase(kind), id = str(fd, "id");
+  const kind = kindOf(fd);
+  const ctx = await requireWrite(kind === "invoice" ? "sales" : "purchases");
+  const base = docBase(kind), id = str(fd, "id");
   try {
     const db = await getDb();
     await db.transaction(async (tx) => {

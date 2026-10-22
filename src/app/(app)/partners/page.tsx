@@ -2,7 +2,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getDb, schema } from "@/db";
-import { getCtx, requireWrite } from "@/lib/auth";
+import { requireView, requireWrite } from "@/lib/auth";
 import { getI18n } from "@/lib/i18n";
 import { fail, sp, type SearchParams } from "@/lib/actions";
 import { str } from "@/lib/format";
@@ -15,7 +15,7 @@ export const metadata = { title: "Customers & suppliers" };
 
 async function savePartner(fd: FormData) {
   "use server";
-  const ctx = await requireWrite();
+  const ctx = await requireWrite("partners");
   const id = str(fd, "id");
   const kind = (["customer", "supplier", "both"] as const).find((k) => k === str(fd, "kind")) ?? "customer";
   const values = { name: str(fd, "name"), kind, tin: str(fd, "tin"), phone: str(fd, "phone"), email: str(fd, "email"), address: str(fd, "address") };
@@ -32,7 +32,7 @@ async function savePartner(fd: FormData) {
 
 async function deletePartner(fd: FormData) {
   "use server";
-  const ctx = await requireWrite();
+  const ctx = await requireWrite("partners");
   const id = str(fd, "id");
   try {
     const db = await getDb();
@@ -47,7 +47,7 @@ async function deletePartner(fd: FormData) {
 }
 
 export default async function PartnersPage({ searchParams }: { searchParams: SearchParams }) {
-  const ctx = await getCtx();
+  const ctx = await requireView("partners");
   const { t, err, money } = await getI18n();
   const q = await sp(searchParams);
   const db = await getDb();
@@ -86,7 +86,7 @@ export default async function PartnersPage({ searchParams }: { searchParams: Sea
                     <td>{t(p.kind)}</td><td>{p.tin}</td><td>{p.phone}</td>
                     <td className="num">{b.owed ? money(b.owed) : ""}</td><td className="num">{b.owe ? money(b.owe) : ""}</td>
                     <td style={{ whiteSpace: "nowrap" }}>
-                      {ctx.canWrite ? <>
+                      {ctx.can("partners", "write") ? <>
                         <a className="btn ghost sm" href={`/partners?edit=${p.id}#form`}>{t("edit")}</a>
                         <form action={deletePartner} style={{ display: "inline" }}><input type="hidden" name="id" value={p.id} />
                           <ConfirmButton className="btn ghost sm danger" confirmLabel={t("confirm")}>{t("delete")}</ConfirmButton></form>
@@ -99,7 +99,7 @@ export default async function PartnersPage({ searchParams }: { searchParams: Sea
           </table></div>
         ) : <Empty>{t("nothing_yet")}</Empty>}
       </div>
-      {ctx.canWrite ? (
+      {ctx.can("partners", "write") ? (
         <form action={savePartner} className="panel stack" id="form" key={editing?.id ?? "new"}>
           <h2>{editing ? `${t("edit")}: ${editing.name}` : t("add")}</h2>
           {editing ? <input type="hidden" name="id" value={editing.id} /> : null}

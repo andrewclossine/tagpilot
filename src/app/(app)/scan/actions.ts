@@ -14,7 +14,7 @@ import type { AiInfo } from "@/db/schema";
 
 /** Saves the document, asks the AI for a booking, and opens it as a draft for review. */
 export async function scanDocument(fd: FormData) {
-  const ctx = await requireWrite();
+  const ctx = await requireWrite("journal");
   const { lang, accName } = await getI18n();
   const file = fd.get("file");
   try {
@@ -31,7 +31,7 @@ export async function scanDocument(fd: FormData) {
   let aiError = "";
   try {
     proposal = await readDocument({ bytes, mimeType: file.type, fileName: file.name }, {
-      companyName: ctx.company.name, tin: ctx.company.tin, vatRegistered: ctx.company.vatRegistered, vatRate: ctx.company.vatRate,
+      companyName: ctx.company.name, tin: ctx.company.tin, country: ctx.company.country, currency: ctx.company.currency, vatRegistered: ctx.company.vatRegistered, vatRate: ctx.company.vatRate,
       vatIn: s.vatIn, vatOut: s.vatOut, policies: ctx.company.policies, language: lang === "fr" ? "French" : "English",
       accounts: o.accounts.map((a) => ({ code: a.code, name: a.nameEn, type: a.type })),
       partners: o.partners.map((p) => ({ id: p.id, name: p.name, kind: p.kind, tin: p.tin })),

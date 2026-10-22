@@ -1,53 +1,56 @@
-import { getCtx, listMyCompanies } from "@/lib/auth";
+import { getCtx } from "@/lib/auth";
 import { getI18n } from "@/lib/i18n";
-import { changeCompany, setLang, signOut } from "@/app/session-actions";
-import { AutoSubmitSelect, NavLinks, type NavItem } from "@/components/NavLinks";
+import type { Area } from "@/lib/roles";
+import { setLang, signOut } from "@/app/session-actions";
+import { NavLinks, type NavItem } from "@/components/NavLinks";
+import { Logo } from "@/components/Logo";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const ctx = await getCtx();
   const { t, lang } = await getI18n();
-  const companies = await listMyCompanies(ctx.user.id);
+  const link = (area: Area, href: string, label: string): NavItem[] => (ctx.can(area) ? [{ href, label }] : []);
+  const group = (label: string, items: NavItem[]): NavItem[] => (items.length ? [{ group: label }, ...items] : []);
   const items: NavItem[] = [
-    { href: "/dashboard", label: t("nav_dashboard") },
-    { href: "/scan", label: t("nav_ai") },
-    { group: t("nav_sales") },
-    { href: "/sales/invoices", label: t("nav_invoices") },
-    { href: "/partners", label: t("nav_partners") },
-    { group: t("nav_purchases") },
-    { href: "/purchases/bills", label: t("nav_bills") },
-    { group: t("nav_journal") },
-    { href: "/journal", label: t("nav_journal") },
-    { href: "/banking", label: t("nav_banking") },
-    { href: "/payroll", label: t("nav_payroll") },
-    { href: "/budgets", label: t("nav_budgets") },
-    { group: t("nav_reports") },
-    { href: "/reports", label: t("nav_reports") },
-    { href: "/settings", label: t("nav_settings") },
-    { href: "/audit", label: t("nav_audit") },
+    ...link("dashboard", "/dashboard", t("nav_dashboard")),
+    ...(ctx.can("journal", "write") ? [{ href: "/scan", label: t("nav_ai") }] : []),
+    ...group(t("nav_sales"), [...link("sales", "/sales/invoices", t("nav_invoices")), ...link("partners", "/partners", t("nav_partners"))]),
+    ...group(t("nav_purchases"), link("purchases", "/purchases/bills", t("nav_bills"))),
+    ...group(t("nav_accounting"), [
+      ...link("journal", "/journal", t("nav_journal")),
+      ...link("accounts", "/accounts", t("nav_coa")),
+      ...link("banking", "/banking", t("nav_banking")),
+      ...link("assets", "/assets", t("nav_assets")),
+      ...link("payroll", "/payroll", t("nav_payroll")),
+      ...link("budgets", "/budgets", t("nav_budgets")),
+    ]),
+    ...group(t("nav_reports"), [
+      ...link("reports", "/reports", t("nav_reports")),
+      ...link("company", "/settings", t("nav_settings")),
+      ...link("users", "/users", t("nav_users")),
+      ...link("audit", "/audit", t("nav_audit")),
+    ]),
   ];
   return (
     <div className="shell">
       <aside className="side">
-        <div className="brand"><span className="mark">TP</span>{t("app_name")}</div>
-        <form action={changeCompany}>
-          <label className="small" htmlFor="companyId" style={{ display: "block", padding: "0 6px 4px", opacity: .7 }}>{t("switch_company")}</label>
-          <AutoSubmitSelect id="companyId" name="companyId" defaultValue={ctx.company.id}>
-            {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </AutoSubmitSelect>
-        </form>
+        <div style={{ padding: "0 6px" }}><Logo size={30} onDark /></div>
+        <div style={{ padding: "0 8px", fontWeight: 600, color: "#fff" }}>{ctx.company.name}</div>
         <NavLinks items={items} />
         <div className="foot">
-          <div>{ctx.user.name} · {t(`role_${ctx.role}`)}</div>
+          <div>{ctx.user.name}<div className="small" style={{ opacity: .7 }}>@{ctx.user.username} · {t(`role_${ctx.role}`)}</div></div>
           <form action={setLang} className="row" style={{ gap: 6 }}>
             <input type="hidden" name="back" value="/dashboard" />
             <button type="submit" name="lang" value="en" className="btn sm" aria-pressed={lang === "en"}>EN</button>
             <button type="submit" name="lang" value="fr" className="btn sm" aria-pressed={lang === "fr"}>FR</button>
           </form>
-          <a href="/onboarding" className="link" style={{ color: "var(--side-fg)" }}>+ {t("add_company")}</a>
           <form action={signOut}><button type="submit" className="btn sm">{t("sign_out")}</button></form>
         </div>
       </aside>
-      <main className="main">{children}</main>
+      <main className="main">
+        {ctx.locked ? <div className="note bad" style={{ marginBottom: 16 }}>{t("trial_over")}</div>
+          : ctx.trialDaysLeft !== null && ctx.isAdmin ? <div className="note info small" style={{ marginBottom: 16 }}>{t("trial_left").replace("{n}", String(ctx.trialDaysLeft))}</div> : null}
+        {children}
+      </main>
     </div>
   );
 }

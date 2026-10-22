@@ -34,3 +34,8 @@ export function str(fd: FormData, key: string): string {
 
 export const daysBetween = (a: string, b: string) =>
   Math.round((Date.parse(b + "T00:00:00Z") - Date.parse(a + "T00:00:00Z")) / 86400000);
+
+/** Usernames: 3 to 40 lowercase letters, digits, dots, dashes or underscores. */
+export const isUsername = (u: string) => /^[a-z0-9._-]{3,40}$/.test(u);
+
+export const isUuid = (s: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);

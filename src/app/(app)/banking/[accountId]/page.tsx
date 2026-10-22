@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { and, desc, eq, inArray, ne } from "drizzle-orm";
 import { getDb, schema } from "@/db";
-import { getCtx } from "@/lib/auth";
+import { requireView } from "@/lib/auth";
 import { getI18n } from "@/lib/i18n";
 import { sp, type SearchParams } from "@/lib/actions";
 import { balances } from "@/lib/ledger";
@@ -14,7 +14,7 @@ export const metadata = { title: "Bank account" };
 
 export default async function BankAccountPage({ params, searchParams }: { params: Promise<{ accountId: string }>; searchParams: SearchParams }) {
   const { accountId } = await params;
-  const ctx = await getCtx();
+  const ctx = await requireView("banking");
   const { t, err, accName, money } = await getI18n();
   const q = await sp(searchParams);
   const db = await getDb();
@@ -63,7 +63,7 @@ export default async function BankAccountPage({ params, searchParams }: { params
 
       <div className="panel stack">
         <div className="row"><h2 style={{ flex: 1 }}>{t("bank_open")}</h2>
-          {ctx.canWrite && open.length ? (
+          {ctx.can("banking", "write") && open.length ? (
             <form action={suggestWithAi}><input type="hidden" name="accountId" value={acc.id} /><button type="submit" className="btn">{t("bank_suggest_ai")}</button></form>
           ) : null}
         </div>
@@ -80,7 +80,7 @@ export default async function BankAccountPage({ params, searchParams }: { params
                     <td className="num">{l.amount > 0 ? money(l.amount, 2) : ""}</td>
                     <td className="num">{l.amount < 0 ? money(-l.amount, 2) : ""}</td>
                     <td style={{ minWidth: 320 }}>
-                      {!ctx.canWrite ? null : c ? (
+                      {!ctx.can("banking", "write") ? null : c ? (
                         <form action={matchLine} className="row" style={{ gap: 6 }}>
                           <input type="hidden" name="accountId" value={acc.id} /><input type="hidden" name="id" value={l.id} /><input type="hidden" name="journalLineId" value={c.l.id} />
                           <span className="small" style={{ flex: 1 }}>{c.date} · {c.memo}</span>
@@ -111,7 +111,7 @@ export default async function BankAccountPage({ params, searchParams }: { params
         ) : <Empty>{t("nothing_yet")}</Empty>}
       </div>
 
-      {ctx.canWrite ? (
+      {ctx.can("banking", "write") ? (
         <form action={importStatement} className="panel stack">
           <h2>{t("bank_import")}</h2>
           <input type="hidden" name="accountId" value={acc.id} />

@@ -36,7 +36,7 @@ export async function DocList({ kind, ctx, status }: { kind: DocKind; ctx: Ctx; 
     <div className="stack">
       <PageHead title={t(kind === "invoice" ? "inv_title" : "bill_title")}>
         <Link className="btn" href={kind === "invoice" ? "/reports/ar" : "/reports/ap"}>{t(kind === "invoice" ? "r_ar" : "r_ap")}</Link>
-        {ctx.canWrite ? <Link className="btn primary" href={`${base}/new`}>{t(kind === "invoice" ? "inv_new" : "bill_new")}</Link> : null}
+        {ctx.can(kind === "invoice" ? "sales" : "purchases", "write") ? <Link className="btn primary" href={`${base}/new`}>{t(kind === "invoice" ? "inv_new" : "bill_new")}</Link> : null}
       </PageHead>
       <Tabs current={status || "all"} items={[
         { key: "all", href: base, label: t("all") },
@@ -138,7 +138,7 @@ export async function DocView({ kind, ctx, doc, error }: { kind: DocKind; ctx: C
     moneyAccounts(db, ctx.company.id),
   ]);
   const balance = round2(doc.total - doc.amountPaid);
-  const canPay = ctx.canWrite && (doc.status === "open" || doc.status === "partial");
+  const canPay = ctx.can(kind === "invoice" ? "sales" : "purchases", "write") && (doc.status === "open" || doc.status === "partial");
   return (
     <div className="stack">
       <PageHead title={`${t(kind === "invoice" ? "inv_invoice" : "bill_bill")} ${doc.number}`}>
@@ -179,7 +179,7 @@ export async function DocView({ kind, ctx, doc, error }: { kind: DocKind; ctx: C
               <div><button type="submit" className="btn primary">{t("record_payment")}</button></div>
             </form>
           ) : null}
-          {ctx.canWrite && doc.status !== "void" && doc.amountPaid === 0 ? (
+          {ctx.can(kind === "invoice" ? "sales" : "purchases", "write") && doc.status !== "void" && doc.amountPaid === 0 ? (
             <form action={voidDocAction}>
               <input type="hidden" name="kind" value={kind} /><input type="hidden" name="id" value={doc.id} />
               <ConfirmButton className="btn danger sm" confirmLabel={t("confirm")}>{t("void_doc")}</ConfirmButton>
@@ -225,7 +225,7 @@ export async function DocPage({ kind, ctx, id, error }: { kind: DocKind; ctx: Ct
     ? (await db.select().from(schema.invoices).where(and(eq(schema.invoices.id, id), eq(schema.invoices.companyId, ctx.company.id))))[0]
     : (await db.select().from(schema.bills).where(and(eq(schema.bills.id, id), eq(schema.bills.companyId, ctx.company.id))))[0];
   if (!doc) return null;
-  if (doc.status === "draft" && ctx.canWrite) {
+  if (doc.status === "draft" && ctx.can(kind === "invoice" ? "sales" : "purchases", "write")) {
     const lineTable = kind === "invoice" ? schema.invoiceLines : schema.billLines;
     const fk = kind === "invoice" ? schema.invoiceLines.invoiceId : schema.billLines.billId;
     const lines = await db.select().from(lineTable).where(eq(fk, id)).orderBy(lineTable.lineNo);

@@ -2,7 +2,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getDb, schema } from "@/db";
-import { getCtx, requireWrite } from "@/lib/auth";
+import { requireView, requireWrite } from "@/lib/auth";
 import { getI18n } from "@/lib/i18n";
 import { sp, type SearchParams } from "@/lib/actions";
 import { parseAmount, str, today } from "@/lib/format";
@@ -14,7 +14,7 @@ export const metadata = { title: "Budgets" };
 
 async function saveBudget(fd: FormData) {
   "use server";
-  const ctx = await requireWrite();
+  const ctx = await requireWrite("budgets");
   const year = Number(str(fd, "year")), projectId = str(fd, "projectId") || null;
   const db = await getDb();
   const accounts = await db.select().from(schema.accounts).where(eq(schema.accounts.companyId, ctx.company.id));
@@ -30,7 +30,7 @@ async function saveBudget(fd: FormData) {
 }
 
 export default async function BudgetsPage({ searchParams }: { searchParams: SearchParams }) {
-  const ctx = await getCtx();
+  const ctx = await requireView("budgets");
   const { t, accName, money } = await getI18n();
   const q = await sp(searchParams);
   const year = /^\d{4}$/.test(q("year")) ? Number(q("year")) : Number(today().slice(0, 4));
@@ -55,7 +55,7 @@ export default async function BudgetsPage({ searchParams }: { searchParams: Sear
       return (
         <tr key={a.id}>
           <td><code className="k">{a.code}</code> {accName(a)}</td>
-          <td className="num">{ctx.canWrite ? <input name={`a_${a.id}`} id={`a_${a.id}`} className="num" style={{ width: 140 }} defaultValue={b || ""} inputMode="decimal" aria-label={t("budget")} /> : money(b)}</td>
+          <td className="num">{ctx.can("budgets", "write") ? <input name={`a_${a.id}`} id={`a_${a.id}`} className="num" style={{ width: 140 }} defaultValue={b || ""} inputMode="decimal" aria-label={t("budget")} /> : money(b)}</td>
           <td className="num">{money(act)}</td>
           <td className="num" style={{ color: b && (type === "expense" ? act > b : act < b) ? "var(--bad)" : undefined }}>{b ? money(b - act) : ""}</td>
           <td>{b ? <><span className={`meter${used > 100 ? " over" : ""}`}><i style={{ width: `${Math.min(used, 100)}%` }} /></span> <span className="small num">{used}%</span></> : null}</td>
@@ -91,7 +91,7 @@ export default async function BudgetsPage({ searchParams }: { searchParams: Sear
             <tr className="total"><td>{t("net_result")}</td><td className="num">{money(inc.tb - exp.tb)}</td><td className="num">{money(inc.ta - exp.ta)}</td><td /><td /></tr>
           </tbody>
         </table></div>
-        {ctx.canWrite ? <div><button type="submit" className="btn primary">{t("bud_save")}</button></div> : null}
+        {ctx.can("budgets", "write") ? <div><button type="submit" className="btn primary">{t("bud_save")}</button></div> : null}
       </form>
     </div>
   );
