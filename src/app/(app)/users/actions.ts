@@ -25,8 +25,14 @@ export async function createUser(fd: FormData) {
     const db = await getDb();
     const [taken] = await db.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.username, username));
     if (taken) throw new UserError("err_username_taken");
+    // An email is optional; with one, the person can reset a forgotten password themselves.
+    const email = str(fd, "email").toLowerCase() || null;
+    if (email) {
+      const [used] = await db.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.email, email));
+      if (used) throw new UserError("err_email_taken");
+    }
     await db.transaction(async (tx) => {
-      const [u] = await tx.insert(schema.users).values({ username, name, passwordHash: await hashPassword(password), createdBy: ctx.user.id })
+      const [u] = await tx.insert(schema.users).values({ username, name, email, passwordHash: await hashPassword(password), createdBy: ctx.user.id })
         .returning({ id: schema.users.id });
       await tx.insert(schema.memberships).values({ companyId: ctx.company.id, userId: u.id, role: roleOf(fd) });
       await audit(tx, ctx.company.id, ctx.user.id, "create", "user", username, { role: roleOf(fd) });

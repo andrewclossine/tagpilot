@@ -7,7 +7,16 @@ Interface in English and French. Any home currency. IFRS presentation (IAS 16 fo
 
 - One subscription opens one organisation. The person who signs up is its **administrator** and starts a free 30-day trial.
 - The administrator creates every other user (username + first password) and gives each a role: Administrator, Accountant, Sales, Purchases, Payroll or Viewer. Everyone signs in on the same page with their username and lands in their organisation.
-- When the trial ends without a subscription, the books stay readable but nothing can change. (Payment collection is not built yet.)
+- The administrator pays on the **Subscription** page (monthly or yearly, one plan) through Flutterwave: cards and mobile money. A payment counts only after the server verifies it with Flutterwave (on the return page and through the webhook), and it extends the subscription from the end of the current period.
+- When the trial or the paid period ends, the books stay readable but nothing can change until the next payment.
+- Forgotten password: users with an email address get a one-hour reset link by email (SMTP). Users without one ask their administrator, who can reset it on the Users page.
+
+### Setting up payments and email
+
+1. Flutterwave dashboard > Settings > API keys: put the secret key in `FLW_SECRET_KEY` (test key first, live key in production).
+2. Flutterwave dashboard > Settings > Webhooks: URL `<APP_URL>/api/flutterwave/webhook`, choose a secret hash and put the same value in `FLW_SECRET_HASH`.
+3. Set the prices: `SUBSCRIPTION_CURRENCY`, `SUBSCRIPTION_PRICE_MONTHLY`, `SUBSCRIPTION_PRICE_YEARLY`.
+4. Email: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM` from your mail provider. Without SMTP on your computer, reset links are printed in the terminal.
 
 ## Modules
 
@@ -39,7 +48,7 @@ Data is kept in `./data` (PGlite, a built-in PostgreSQL) and uploaded documents 
 
 Set `DATABASE_URL` (PostgreSQL), `ANTHROPIC_API_KEY` and `STORAGE_DIR` (a persistent disk), then `npm ci && npm run build && npm start` behind HTTPS. Tables are created and updated automatically at start.
 
-Before taking paying customers: payment collection for subscriptions, password reset by email, automated tests, daily backups, monitoring and rate limits on sign-in.
+Before taking paying customers: a test payment with Flutterwave test keys end to end, automated tests, daily backups, monitoring and rate limits on sign-in.
 
 ## How the code is organised
 

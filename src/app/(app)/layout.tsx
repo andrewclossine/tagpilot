@@ -27,6 +27,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       ...link("reports", "/reports", t("nav_reports")),
       ...link("company", "/settings", t("nav_settings")),
       ...link("users", "/users", t("nav_users")),
+      ...(ctx.isAdmin ? [{ href: "/billing", label: t("billing_title") }] : []),
       ...link("audit", "/audit", t("nav_audit")),
     ]),
   ];
@@ -47,8 +48,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </div>
       </aside>
       <main className="main">
-        {ctx.locked ? <div className="note bad" style={{ marginBottom: 16 }}>{t("trial_over")}</div>
-          : ctx.trialDaysLeft !== null && ctx.isAdmin ? <div className="note info small" style={{ marginBottom: 16 }}>{t("trial_left").replace("{n}", String(ctx.trialDaysLeft))}</div> : null}
+        {ctx.locked ? <div className="note bad row" style={{ marginBottom: 16 }}><span style={{ flex: 1 }}>{t("trial_over")}</span>{ctx.isAdmin ? <a className="btn primary sm" href="/billing">{t("billing_pay")}</a> : null}</div>
+          : ctx.trialDaysLeft !== null && ctx.isAdmin ? <div className="note info small row" style={{ marginBottom: 16 }}><span style={{ flex: 1 }}>{t("trial_left").replace("{n}", String(ctx.trialDaysLeft))}</span><a className="btn sm" href="/billing">{t("billing_pay")}</a></div> : null}
         {children}
       </main>
     </div>

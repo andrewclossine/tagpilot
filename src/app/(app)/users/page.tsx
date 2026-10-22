@@ -69,6 +69,7 @@ export default async function UsersPage({ searchParams }: { searchParams: Search
           <label className="f">{t("full_name")}<input id="u-name" name="name" required /></label>
           <label className="f">{t("username")}<input id="u-username" name="username" autoCapitalize="none" pattern="[a-zA-Z0-9._\-]{3,40}" required /></label>
           <label className="f">{t("password")}<input id="u-password" name="password" type="password" minLength={8} autoComplete="new-password" required /></label>
+          <label className="f">{t("email_optional")}<input id="u-email" name="email" type="email" autoComplete="off" /></label>
           <label className="f">{t("role")}<select id="u-role" name="role" defaultValue="accountant">{roleOptions}</select></label>
           <div><button type="submit" className="btn primary">{t("add_user")}</button></div>
         </form>

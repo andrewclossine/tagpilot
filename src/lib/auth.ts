@@ -78,8 +78,10 @@ export const getCtx = cache(async (): Promise<Ctx> => {
   if (!rows.length) redirect("/onboarding");
   const wanted = (await cookies()).get(COMPANY_COOKIE)?.value;
   const row = rows.find((r) => r.company.id === wanted) ?? rows[0];
-  const trialDaysLeft = row.company.plan === "active" ? null : Math.max(0, Math.ceil((row.company.trialEndsAt.getTime() - Date.now()) / 86400000));
-  const locked = row.company.plan !== "active" && trialDaysLeft === 0;
+  // A company is paid up while its last paid period has not ended; otherwise the free trial applies.
+  const paid = !!row.company.paidUntil && row.company.paidUntil.getTime() > Date.now();
+  const trialDaysLeft = paid ? null : Math.max(0, Math.ceil((row.company.trialEndsAt.getTime() - Date.now()) / 86400000));
+  const locked = !paid && trialDaysLeft === 0;
   return {
     user, company: row.company, role: row.role, isAdmin: row.role === "admin", trialDaysLeft, locked,
     can: (area, mode = "read") => (mode === "write" && locked ? false : can(row.role, area, mode)),

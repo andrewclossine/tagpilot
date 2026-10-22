@@ -72,6 +72,7 @@ export const companies = pgTable("companies", {
   currency: text("currency").notNull().default("USD"),
   plan: text("plan").$type<"trial" | "active" | "expired">().notNull().default("trial"),
   trialEndsAt: timestamp("trial_ends_at", { withTimezone: true }).notNull().default(sql`now() + interval '30 days'`),
+  paidUntil: timestamp("paid_until", { withTimezone: true }), // end of the last paid subscription period
   vatRegistered: boolean("vat_registered").notNull().default(true),
   vatRate: numeric("vat_rate", { precision: 5, scale: 2, mode: "number" }).notNull().default(18),
   policies: text("policies").notNull().default(""),
@@ -359,6 +360,31 @@ export const assetMovements = pgTable("asset_movements", {
   notes: text("notes").notNull().default(""),
   createdAt: created(),
 }, (t) => [index("asset_movements_asset").on(t.assetId, t.date)]);
+
+// ---------- subscription & account recovery ----------
+export const subscriptionPayments = pgTable("subscription_payments", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  txRef: text("tx_ref").notNull().unique(),
+  period: text("period").$type<"monthly" | "yearly">().notNull(),
+  amount: money("amount"),
+  currency: text("currency").notNull(),
+  status: text("status").$type<"pending" | "successful" | "failed">().notNull().default("pending"),
+  providerTransactionId: text("provider_transaction_id"),
+  periodStart: timestamp("period_start", { withTimezone: true }),
+  periodEnd: timestamp("period_end", { withTimezone: true }),
+  createdBy: uuid("created_by").references(() => users.id),
+  createdAt: created(),
+  paidAt: timestamp("paid_at", { withTimezone: true }),
+}, (t) => [index("subscription_payments_company").on(t.companyId)]);
+
+export const passwordResets = pgTable("password_resets", {
+  id: text("id").primaryKey(), // sha-256 of the token sent by email
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  usedAt: timestamp("used_at", { withTimezone: true }),
+  createdAt: created(),
+});
 
 // ---------- audit trail ----------
 export const auditLog = pgTable("audit_log", {

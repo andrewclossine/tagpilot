@@ -1,7 +1,11 @@
 "use server";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { eq, or } from "drizzle-orm";
+import crypto from "node:crypto";
+import { and, eq, gt, or } from "drizzle-orm";
+import { appUrl } from "@/lib/billing";
+import { sendMail } from "@/lib/mail";
+import { getI18n } from "@/lib/i18n";
 import { getDb, schema } from "@/db";
 import { checkPassword, endSession, hashPassword, requireUser, startSession, switchCompany } from "@/lib/auth";
 import { isUsername, parseAmount, str } from "@/lib/format";
@@ -34,6 +38,54 @@ export async function signIn(fd: FormData) {
   await startSession(u.id);
   redirect("/dashboard");
 }
+
+const resetHash = (token: string) => crypto.createHash("sha256").update(token).digest("hex");
+
+/**
+ * Emails a one-hour reset link to the address on the account. The answer is the same whether or not the
+ * account exists, so the form cannot be used to find out who has an account.
+ */
+export async function requestPasswordReset(fd: FormData) {
+  const login = str(fd, "login").toLowerCase();
+  if (login) {
+    const db = await getDb();
+    const [u] = await db.select().from(schema.users).where(or(eq(schema.users.username, login), eq(schema.users.email, login)));
+    if (u?.email) {
+      const recent = await db.select({ id: schema.passwordResets.id }).from(schema.passwordResets)
+        .where(and(eq(schema.passwordResets.userId, u.id), gt(schema.passwordResets.createdAt, new Date(Date.now() - 3600000))));
+      if (recent.length < 3) {
+        const token = crypto.randomBytes(32).toString("base64url");
+        await db.insert(schema.passwordResets).values({ id: resetHash(token), userId: u.id, expiresAt: new Date(Date.now() + 3600000) });
+        const link = `${await appUrl()}/reset?token=${token}`;
+        const { t } = await getI18n();
+        try {
+          await sendMail(u.email, t("reset_mail_subject"),
+            `${t("reset_mail_hello")} ${u.name},\n\n${t("reset_mail_body")}\n\n${link}\n\n${t("reset_mail_ignore")}`,
+            `<p>${t("reset_mail_hello")} ${escapeHtml(u.name)},</p><p>${t("reset_mail_body")}</p><p><a href="${link}">${t("reset_mail_button")}</a></p><p style="color:#666">${t("reset_mail_ignore")}</p>`);
+        } catch (e) { console.error("Password reset email failed", e); }
+      }
+    }
+  }
+  redirect("/forgot?sent=1");
+}
+
+export async function resetPassword(fd: FormData) {
+  const token = str(fd, "token"), password = String(fd.get("password") ?? ""), confirm = String(fd.get("confirm") ?? "");
+  const back = `/reset?token=${encodeURIComponent(token)}`;
+  if (password.length < 8) redirect(`${back}&error=err_password_short`);
+  if (password !== confirm) redirect(`${back}&error=err_password_match`);
+  const db = await getDb();
+  const [r] = await db.select().from(schema.passwordResets).where(eq(schema.passwordResets.id, resetHash(token)));
+  if (!r || r.usedAt || r.expiresAt.getTime() < Date.now()) redirect("/forgot?error=err_reset_expired");
+  await db.transaction(async (tx) => {
+    await tx.update(schema.users).set({ passwordHash: await hashPassword(password) }).where(eq(schema.users.id, r.userId));
+    await tx.update(schema.passwordResets).set({ usedAt: new Date() }).where(eq(schema.passwordResets.id, r.id));
+    await tx.delete(schema.sessions).where(eq(schema.sessions.userId, r.userId));
+  });
+  redirect("/login?reset=1");
+}
+
+const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
 
 export async function signOut() {
   await endSession();
