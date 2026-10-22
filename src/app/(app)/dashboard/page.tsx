@@ -66,6 +66,10 @@ export default async function Dashboard() {
   const topExp = accounts.filter((a) => a.type === "expense").map((a) => ({ a, v: ytd.get(a.id)?.net ?? 0 })).filter((x) => x.v > 0).sort((x, y) => y.v - x.v).slice(0, 5);
   const topMax = topExp[0]?.v ?? 1;
 
+  const lowStock = ctx.can("inventory") ? (await db.select().from(schema.items)
+    .where(and(eq(schema.items.companyId, cid), eq(schema.items.kind, "stock"), eq(schema.items.isActive, true))))
+    .filter((i) => i.reorderLevel > 0 && i.qtyOnHand <= i.reorderLevel) : [];
+
   const monthLabel = (m: string) => new Date(`${m}-01T00:00:00Z`).toLocaleString(lang === "fr" ? "fr-FR" : "en-US", { month: "short", timeZone: "UTC" });
   const labels = months.map(monthLabel);
   const kpi = (label: string, value: string, href: string) => (
@@ -80,6 +84,11 @@ export default async function Dashboard() {
         {ctx.can("purchases", "write") ? <Link className="btn" href="/purchases/bills/new">{t("qa_bill")}</Link> : null}
       </PageHead>
 
+      {lowStock.length ? (
+        <Link href="/inventory" className="note warn small" style={{ textDecoration: "none" }}>
+          {t("low_stock")}: {lowStock.map((i) => `${i.sku} ${i.name} (${i.qtyOnHand} ${i.unit})`).join(", ")} →
+        </Link>
+      ) : null}
       <div className="grid2">
         <div className="panel stack" style={{ gap: 6 }}>
           <div className="label">{t("sales_this_month")} · {cur}</div>

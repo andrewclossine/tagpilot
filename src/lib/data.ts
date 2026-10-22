@@ -33,7 +33,7 @@ export function journalLabels(t: T) {
 
 export function docLabels(t: T) {
   return {
-    description: t("description"), qty: t("qty"), unit_price: t("unit_price"), vat: t("vat"), account: t("account"), project: t("project"),
+    description: t("description"), qty: t("qty"), unit_price: t("unit_price"), vat: t("vat"), account: t("account"), project: t("project"), item: t("item"),
     add_line: t("add_line"), subtotal: t("subtotal"), total: t("total"), delete: t("delete"), types: typeLabels(t),
   };
 }

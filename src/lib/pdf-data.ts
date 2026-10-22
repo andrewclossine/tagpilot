@@ -7,6 +7,18 @@ import { invoicePdf, payslipPdf } from "./pdf";
 import { payrollConfig, readPayslip } from "./payroll";
 import { UserError } from "./ledger";
 import { isUuid } from "./format";
+import { readAttachment } from "./storage";
+
+/** The organisation as printed on documents, with its logo when it has one. */
+async function printedCompany(ctx: Ctx) {
+  const db = await getDb();
+  let logo: Buffer | null = null;
+  if (ctx.company.logoAttachmentId) {
+    const [a] = await db.select().from(schema.attachments).where(and(eq(schema.attachments.id, ctx.company.logoAttachmentId), eq(schema.attachments.companyId, ctx.company.id)));
+    if (a) logo = await readAttachment(a.storagePath).catch(() => null);
+  }
+  return { ...ctx.company, logo };
+}
 
 /** The invoice as a PDF, with the data needed to email it. */
 export async function buildInvoicePdf(ctx: Ctx, id: string) {
@@ -18,7 +30,7 @@ export async function buildInvoicePdf(ctx: Ctx, id: string) {
   const [customer] = await db.select().from(schema.partners).where(eq(schema.partners.id, inv.partnerId));
   const lines = await db.select().from(schema.invoiceLines).where(eq(schema.invoiceLines.invoiceId, id)).orderBy(schema.invoiceLines.lineNo);
   const pdf = await invoicePdf({
-    company: ctx.company, lang, vatRate: ctx.company.vatRegistered ? ctx.company.vatRate : 0,
+    company: await printedCompany(ctx), lang, vatRate: ctx.company.vatRegistered ? ctx.company.vatRate : 0,
     labels: {
       title: t("inv_invoice"), number: t("number"), date: t("date"), due: t("due_date"), billTo: t("pdf_bill_to"), description: t("description"),
       qty: t("qty"), price: t("unit_price"), vat: t("vat"), amount: t("amount"), subtotal: t("subtotal"), total: t("total"),
@@ -39,7 +51,7 @@ export async function buildPayslipPdf(ctx: Ctx, runId: string, index: number) {
   if (!run || !raw) throw new UserError("err_not_found");
   const row = readPayslip(raw);
   const pdf = await payslipPdf({
-    company: ctx.company, lang, month: run.month, row, components: payrollConfig(run.settings).components,
+    company: await printedCompany(ctx), lang, month: run.month, row, components: payrollConfig(run.settings).components,
     labels: {
       title: t("payslip"), month: t("month"), employee: t("pdf_employee"), position: t("position"), gross: t("gross"),
       deductions: t("pdf_pay_lines"), other: t("deduction"), net: t("net"), employer: t("er_cost"), footer: t("pdf_footer"),

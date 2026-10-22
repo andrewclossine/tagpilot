@@ -30,6 +30,7 @@ export const STARTER_ACCOUNTS: StarterAccount[] = [
   { code: "4800", type: "income", en: "Gain on disposal of assets", fr: "Plus-values de cession d'actifs" },
   { code: "4900", type: "income", en: "Other income", fr: "Autres produits" },
   { code: "5100", type: "expense", en: "Cost of goods sold", fr: "Coût des marchandises vendues" },
+  { code: "5150", type: "expense", en: "Stock adjustments & losses", fr: "Ajustements et pertes de stock" },
   { code: "6100", type: "expense", en: "Salaries & wages", fr: "Salaires et traitements" },
   { code: "6101", type: "expense", en: "Employer social contributions", fr: "Charges sociales patronales" },
   { code: "6105", type: "expense", en: "Transport & fuel", fr: "Transport et carburant" },

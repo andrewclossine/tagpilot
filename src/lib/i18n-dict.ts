@@ -191,6 +191,16 @@ const en = {
   mail_invoice_body: "Please find attached invoice", mail_payslip_body: "Please find attached your payslip for", err_email_invalid: "Enter a valid email address.",
   payslips_mail_help: "{n} of {total} people have an email address. Each receives only their own payslip.", payslips_mail_btn: "Email payslips",
   payslips_mailed: "Payslips sent: {sent}. Without email address: {skipped}. Failed: {failed}.",
+  logo_title: "Logo", logo_none: "No logo yet", logo_upload: "Upload logo", logo_help: "PNG or JPEG, up to 2 MB. It appears on invoices, payslips and in the menu. A wide logo on a white or transparent background prints best.",
+  err_logo_type: "Use a PNG or JPEG image for the logo.", err_logo_size: "The logo is larger than 2 MB.",
+  nav_inventory: "Inventory", item_new: "New item", item: "Item", sku: "Item code", unit: "Unit", item_kind: "Type", item_stock: "Stock item", item_service: "Service",
+  sale_price: "Sale price", purchase_cost: "Purchase cost", reorder_level: "Reorder level", inv_account: "Inventory account", cogs_account: "Cost of sales account",
+  stock_value: "Stock value", items_count: "Items", low_stock: "Low stock", on_hand: "On hand", avg_cost: "Average cost", unit_cost: "Unit cost",
+  inv_opening: "Opening stock", inv_opening_help: "Quantity already in store when you start using TAGPILOT, at its cost. It is booked to inventory against the account chosen.",
+  inv_opening_credit: "Balancing account", stock_count: "Stock count", stock_count_help: "Enter the quantity counted in store. The difference with the books is booked to stock adjustments (account 5150).",
+  counted_qty: "Quantity counted", unit_cost_surplus: "Unit cost of a surplus", reason: "Reason", stock_count_btn: "Record the count", stock_moves: "Stock movements",
+  mvk_opening: "Opening", mvk_purchase: "Purchase", mvk_sale: "Sale", mvk_adjustment: "Count adjustment", mvk_void: "Voided document",
+  err_stock_insufficient: "Not enough stock for an item on this invoice. Record the purchase or a stock count first.", err_not_stock: "This item is a service and holds no stock.",
 } as const;
 
 export type Key = keyof typeof en;
@@ -388,6 +398,16 @@ const fr: Record<Key, string> = {
   mail_invoice_body: "Veuillez trouver ci-joint la facture", mail_payslip_body: "Veuillez trouver ci-joint votre bulletin de paie pour", err_email_invalid: "Saisissez une adresse e-mail valide.",
   payslips_mail_help: "{n} personnes sur {total} ont une adresse e-mail. Chacune reçoit uniquement son propre bulletin.", payslips_mail_btn: "Envoyer les bulletins",
   payslips_mailed: "Bulletins envoyés : {sent}. Sans adresse e-mail : {skipped}. Échecs : {failed}.",
+  logo_title: "Logo", logo_none: "Pas encore de logo", logo_upload: "Téléverser le logo", logo_help: "PNG ou JPEG, jusqu'à 2 Mo. Il figure sur les factures, les bulletins de paie et dans le menu. Un logo large sur fond blanc ou transparent s'imprime le mieux.",
+  err_logo_type: "Utilisez une image PNG ou JPEG pour le logo.", err_logo_size: "Le logo dépasse 2 Mo.",
+  nav_inventory: "Stocks", item_new: "Nouvel article", item: "Article", sku: "Code article", unit: "Unité", item_kind: "Type", item_stock: "Article stocké", item_service: "Service",
+  sale_price: "Prix de vente", purchase_cost: "Coût d'achat", reorder_level: "Seuil de réapprovisionnement", inv_account: "Compte de stock", cogs_account: "Compte de coût des ventes",
+  stock_value: "Valeur du stock", items_count: "Articles", low_stock: "Stock bas", on_hand: "En stock", avg_cost: "Coût moyen", unit_cost: "Coût unitaire",
+  inv_opening: "Stock d'ouverture", inv_opening_help: "Quantité déjà en magasin au démarrage de TAGPILOT, à son coût. Elle est comptabilisée en stock contre le compte choisi.",
+  inv_opening_credit: "Compte de contrepartie", stock_count: "Inventaire physique", stock_count_help: "Saisissez la quantité comptée en magasin. L'écart avec la comptabilité est passé en ajustements de stock (compte 5150).",
+  counted_qty: "Quantité comptée", unit_cost_surplus: "Coût unitaire d'un excédent", reason: "Motif", stock_count_btn: "Enregistrer le comptage", stock_moves: "Mouvements de stock",
+  mvk_opening: "Ouverture", mvk_purchase: "Achat", mvk_sale: "Vente", mvk_adjustment: "Ajustement d'inventaire", mvk_void: "Pièce annulée",
+  err_stock_insufficient: "Stock insuffisant pour un article de cette facture. Enregistrez d'abord l'achat ou un inventaire.", err_not_stock: "Cet article est un service et n'a pas de stock.",
 };
 
 export const dict = { en, fr } as const;

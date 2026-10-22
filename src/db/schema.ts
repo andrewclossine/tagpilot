@@ -73,6 +73,7 @@ export const companies = pgTable("companies", {
   plan: text("plan").$type<"trial" | "active" | "expired">().notNull().default("trial"),
   trialEndsAt: timestamp("trial_ends_at", { withTimezone: true }).notNull().default(sql`now() + interval '30 days'`),
   paidUntil: timestamp("paid_until", { withTimezone: true }), // end of the last paid subscription period
+  logoAttachmentId: uuid("logo_attachment_id"), // shown on PDFs and in the sidebar
   vatRegistered: boolean("vat_registered").notNull().default(true),
   vatRate: numeric("vat_rate", { precision: 5, scale: 2, mode: "number" }).notNull().default(18),
   policies: text("policies").notNull().default(""),
@@ -208,6 +209,7 @@ const docLineColumns = () => ({
   vatApplies: boolean("vat_applies").notNull().default(true),
   accountId: uuid("account_id").notNull().references(() => accounts.id),
   projectId: uuid("project_id").references(() => projects.id),
+  itemId: uuid("item_id").references(() => items.id), // stock items move inventory when the document is posted
   amount: money("amount"), // quantity x unit price, before VAT
 });
 
@@ -315,6 +317,48 @@ export const payrollRuns = pgTable("payroll_runs", {
   entryId: uuid("entry_id").references(() => journalEntries.id),
   createdAt: created(),
 }, (t) => [uniqueIndex("payroll_company_month").on(t.companyId, t.month)]);
+
+// ---------- inventory (IAS 2, weighted average cost) ----------
+const qty = (name: string) => numeric(name, { precision: 18, scale: 3, mode: "number" }).notNull().default(0);
+
+export const items = pgTable("items", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  sku: text("sku").notNull(),
+  name: text("name").notNull(),
+  unit: text("unit").notNull().default("pcs"),
+  kind: text("kind").$type<"stock" | "service">().notNull().default("stock"),
+  salePrice: money("sale_price"),
+  purchaseCost: money("purchase_cost"),       // default price on bills
+  inventoryAccount: text("inventory_account").notNull().default("1300"), // account codes
+  incomeAccount: text("income_account").notNull().default("4100"),
+  cogsAccount: text("cogs_account").notNull().default("5100"),
+  expenseAccount: text("expense_account").notNull().default("6900"),     // services bought
+  reorderLevel: qty("reorder_level"),
+  qtyOnHand: qty("qty_on_hand"),
+  avgCost: numeric("avg_cost", { precision: 18, scale: 4, mode: "number" }).notNull().default(0),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: created(),
+}, (t) => [uniqueIndex("items_company_sku").on(t.companyId, t.sku)]);
+
+/** Every change in quantity. On-hand quantity and average cost on the item are the running result of these. */
+export const stockMoves = pgTable("stock_moves", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  itemId: uuid("item_id").notNull().references(() => items.id, { onDelete: "cascade" }),
+  date: date("date", { mode: "string" }).notNull(),
+  kind: text("kind").$type<"opening" | "purchase" | "sale" | "adjustment" | "void">().notNull(),
+  quantity: qty("quantity"),                  // in is positive, out is negative
+  unitCost: numeric("unit_cost", { precision: 18, scale: 4, mode: "number" }).notNull().default(0),
+  value: money("value"),                      // quantity x unit cost, signed
+  qtyAfter: qty("qty_after"),
+  avgCostAfter: numeric("avg_cost_after", { precision: 18, scale: 4, mode: "number" }).notNull().default(0),
+  sourceType: text("source_type").$type<"invoice" | "bill" | "adjustment" | "item">(),
+  sourceId: uuid("source_id"),
+  entryId: uuid("entry_id").references(() => journalEntries.id),
+  notes: text("notes").notNull().default(""),
+  createdAt: created(),
+}, (t) => [index("stock_moves_item").on(t.itemId, t.date)]);
 
 // ---------- fixed assets (IAS 16) ----------
 export type DepMethod = "straight_line" | "reducing_balance";

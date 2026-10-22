@@ -6,7 +6,7 @@ import { sp, type SearchParams } from "@/lib/actions";
 import { ConfirmButton } from "@/components/editors";
 import { ErrorNote, PageHead, Tabs } from "@/components/ui";
 import { CompanyFields } from "@/components/CompanyFields";
-import { deleteProject, saveCompanySettings, saveProject } from "./actions";
+import { deleteProject, removeLogo, saveCompanySettings, saveProject, uploadLogo } from "./actions";
 
 export const metadata = { title: "Settings" };
 
@@ -28,6 +28,25 @@ export default async function SettingsPage({ searchParams }: { searchParams: Sea
       </select>
     );
     body = (
+      <div className="stack">
+      <div className="panel row" style={{ alignItems: "flex-start" }}>
+        <div style={{ width: 180, height: 90, border: "1px dashed var(--line)", borderRadius: "var(--r)", display: "grid", placeItems: "center", background: "#fff", flex: "none" }}>
+          {c.logoAttachmentId ? <img src={`/api/files/${c.logoAttachmentId}`} alt={c.name} style={{ maxWidth: 170, maxHeight: 80, objectFit: "contain" }} /> : <span className="small muted">{t("logo_none")}</span>}
+        </div>
+        <div className="stack" style={{ flex: 1, minWidth: 220, gap: 8 }}>
+          <h2>{t("logo_title")}</h2>
+          <div className="small muted">{t("logo_help")}</div>
+          {edit ? (
+            <div className="row">
+              <form action={uploadLogo} className="row">
+                <input id="logo" name="logo" type="file" accept="image/png,image/jpeg" required style={{ width: "auto" }} />
+                <button type="submit" className="btn">{t("logo_upload")}</button>
+              </form>
+              {c.logoAttachmentId ? <form action={removeLogo}><button type="submit" className="btn ghost danger">{t("remove")}</button></form> : null}
+            </div>
+          ) : null}
+        </div>
+      </div>
       <form action={saveCompanySettings} className="panel stack">
         <fieldset disabled={!edit} style={{ border: 0, padding: 0, margin: 0 }} className="stack">
           <CompanyFields t={t} c={c} />
@@ -44,6 +63,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Sea
           {edit ? <div><button type="submit" className="btn primary">{t("save")}</button></div> : null}
         </fieldset>
       </form>
+      </div>
     );
   } else {
     const projects = await db.select().from(schema.projects).where(eq(schema.projects.companyId, c.id)).orderBy(schema.projects.code);

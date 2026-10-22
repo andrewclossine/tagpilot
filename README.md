@@ -28,11 +28,12 @@ Interface in English and French. Any home currency. IFRS presentation (IAS 16 fo
 | Chart of accounts | Accounts grouped by type with balances; add, edit, deactivate. |
 | Sales / Purchases | Invoices and bills with VAT, payments, withholding tax on supplier payments, ageing. Invoices download as PDF and are emailed to the customer with the PDF attached. |
 | Banking | Paste a bank statement, automatic matching, book the rest (optionally with AI suggestions). |
+| Inventory | Stock items and services; bills put stock in at their cost, invoices take it out at weighted average cost (IAS 2) and book cost of sales; opening stock, stock counts with adjustments, stock value and low-stock alerts. |
 | Fixed assets | Register, asset classes, straight-line or reducing-balance depreciation run by month, additions, impairment, revaluation (elimination method), disposal with gain/loss, and the IAS 16.73 movement schedule. |
 | Payroll | Upload an Excel sheet (Name, Position, Project, Gross, optional Advance) or use the employee list. Taxes and contributions come from the organisation's payroll rules, which the AI can draft for any country and a person must confirm. One draft entry per month, split by project. Payslips as PDF, emailed to each person who has an email address (employee list or an Email column in the sheet). |
 | Budgets | Annual budget per account, company-wide or per project; budget vs actual. |
 | Reports | Trial balance, income statement, balance sheet, VAT summary, by project, general ledger, customer and supplier ageing. |
-| Settings, Users, Audit trail | Organisation profile (type, sector, registration number, address, currency, VAT), projects, accounting policy for the AI, users and roles, who did what and when. |
+| Settings, Users, Audit trail | Organisation profile (type, sector, registration number, address, currency, VAT, logo printed on PDFs), projects, accounting policy for the AI, users and roles, who did what and when. |
 
 ## Run it on your computer (Windows)
 

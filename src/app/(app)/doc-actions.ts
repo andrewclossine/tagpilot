@@ -2,7 +2,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { and, eq } from "drizzle-orm";
-import { getDb, schema } from "@/db";
+import { getDb, schema, type Tx } from "@/db";
 import { requireWrite } from "@/lib/auth";
 import { fail } from "@/lib/actions";
 import { isIsoDate, parseAmount, str, today } from "@/lib/format";
@@ -28,16 +28,24 @@ export async function saveDoc(fd: FormData) {
     const lines = parseDocLines(fd);
     const vatRate = ctx.company.vatRegistered ? ctx.company.vatRate : 0;
     const db = await getDb();
-    savedId = await db.transaction(async (tx) => {
-      const [p] = await tx.select().from(schema.partners).where(and(eq(schema.partners.id, partnerId), eq(schema.partners.companyId, ctx.company.id)));
-      if (!p) throw new UserError("err_required");
-      const docId = await saveDocDraft(tx, kind, ctx.company.id, ctx.user.id, id, {
-        partnerId, date, dueDate, notes: str(fd, "notes"), projectId: str(fd, "projectId") || null,
-        supplierRef: str(fd, "supplierRef"), whtRate: parseAmount(fd.get("whtRate")),
-      }, lines, vatRate);
-      if (post) await postDoc(tx, kind, ctx.company.id, ctx.user.id, docId, ctx.company.settings);
-      return docId;
-    });
+    const draft = (tx: Tx) => saveDocDraft(tx, kind, ctx.company.id, ctx.user.id, id, {
+      partnerId, date, dueDate, notes: str(fd, "notes"), projectId: str(fd, "projectId") || null,
+      supplierRef: str(fd, "supplierRef"), whtRate: parseAmount(fd.get("whtRate")),
+    }, lines, vatRate);
+    const [p] = await db.select().from(schema.partners).where(and(eq(schema.partners.id, partnerId), eq(schema.partners.companyId, ctx.company.id)));
+    if (!p) throw new UserError("err_required");
+    try {
+      savedId = await db.transaction(async (tx) => {
+        const docId = await draft(tx);
+        if (post) await postDoc(tx, kind, ctx.company.id, ctx.user.id, docId, ctx.company.settings);
+        return docId;
+      });
+    } catch (e) {
+      // Posting can fail for a reason the user fixes elsewhere (not enough stock): keep their work as a draft.
+      if (!(e instanceof UserError) || !post) throw e;
+      const keptId = await db.transaction((tx) => draft(tx));
+      fail(e, `${base}/${keptId}`);
+    }
   } catch (e) { fail(e, id ? `${base}/${id}` : `${base}/new`); }
   revalidatePath(base);
   redirect(`${base}/${savedId}`);

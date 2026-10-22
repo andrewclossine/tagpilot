@@ -5,11 +5,12 @@ import { schema } from "@/db";
 import { round2 } from "./format";
 import { accountIdByCode, reverseEntry, saveEntry, UserError, type LineInput } from "./ledger";
 import { audit } from "./audit";
+import { linkMoves, loadItem, moveStock, reverseDocumentStock } from "./inventory";
 
 /** Invoices (sales) and bills (purchases) share one engine; `kind` picks the tables and the accounting. */
 export type DocKind = "invoice" | "bill";
 
-export type DocLineInput = { description: string; quantity: number; unitPrice: number; vatApplies: boolean; accountId: string; projectId: string | null };
+export type DocLineInput = { description: string; quantity: number; unitPrice: number; vatApplies: boolean; accountId: string; projectId: string | null; itemId?: string | null };
 export type DocHeader = {
   partnerId: string; date: string; dueDate: string; notes: string; projectId: string | null;
   supplierRef?: string; whtRate?: number; attachmentId?: string | null;
@@ -60,7 +61,7 @@ export async function saveDocDraft(tx: Tx, kind: DocKind, companyId: string, use
   }
   await tx.insert(t.lines).values(totals.lines.map((l, i) => ({
     [t.fk]: id!, lineNo: i + 1, description: l.description, quantity: l.quantity, unitPrice: l.unitPrice,
-    vatApplies: l.vatApplies, accountId: l.accountId, projectId: l.projectId || h.projectId || null, amount: l.amount,
+    vatApplies: l.vatApplies, accountId: l.accountId, projectId: l.projectId || h.projectId || null, itemId: l.itemId || null, amount: l.amount,
   })) as never);
   await audit(tx, companyId, userId, "save_draft", kind, id);
   return id;
@@ -74,6 +75,31 @@ export async function postDoc(tx: Tx, kind: DocKind, companyId: string, userId: 
   const docLines = await tx.select().from(t.lines).where(eq(t.fkCol, id));
   if (!docLines.length || d.total <= 0) throw new UserError("err_no_lines");
 
+  // Stock items: a bill puts them into inventory at its price; an invoice takes them out at average cost (IAS 2)
+  // and books that cost of sales next to the revenue.
+  const moveIds: (string | null)[] = [];
+  const cogs: LineInput[] = [];
+  const stockItems = new Map<string, Awaited<ReturnType<typeof loadItem>>>();
+  for (const l of docLines) {
+    if (!l.itemId) continue;
+    const it = stockItems.get(l.itemId) ?? await loadItem(tx, companyId, l.itemId);
+    stockItems.set(l.itemId, it);
+    if (it.kind !== "stock" || !l.quantity) continue;
+    if (kind === "bill") {
+      l.accountId = await accountIdByCode(tx, companyId, it.inventoryAccount);
+      const m = await moveStock(tx, companyId, { itemId: it.id, date: d.date, kind: "purchase", quantity: l.quantity, unitCost: l.amount / l.quantity, sourceType: "bill", sourceId: d.id, notes: d.number });
+      moveIds.push(m.moveId);
+    } else {
+      const m = await moveStock(tx, companyId, { itemId: it.id, date: d.date, kind: "sale", quantity: -l.quantity, sourceType: "invoice", sourceId: d.id, notes: d.number });
+      moveIds.push(m.moveId);
+      const cost = -m.value;
+      if (cost) cogs.push(
+        { accountId: await accountIdByCode(tx, companyId, it.cogsAccount), debit: cost, credit: 0, projectId: l.projectId, description: `${it.sku} x ${l.quantity}` },
+        { accountId: await accountIdByCode(tx, companyId, it.inventoryAccount), debit: 0, credit: cost, projectId: l.projectId, description: `${it.sku} x ${l.quantity}` },
+      );
+    }
+  }
+
   // One ledger line per account and project, plus VAT and the partner's balance.
   const grouped = new Map<string, LineInput>();
   for (const l of docLines) {
@@ -82,7 +108,7 @@ export async function postDoc(tx: Tx, kind: DocKind, companyId: string, userId: 
     if (kind === "invoice") g.credit = round2(g.credit + l.amount); else g.debit = round2(g.debit + l.amount);
     grouped.set(key, g);
   }
-  const lines = [...grouped.values()];
+  const lines = [...grouped.values(), ...cogs];
   const partnerAcc = await accountIdByCode(tx, companyId, kind === "invoice" ? settings.arAccount : settings.apAccount);
   if (d.vat) {
     const vatAcc = await accountIdByCode(tx, companyId, kind === "invoice" ? settings.vatOut : settings.vatIn);
@@ -100,6 +126,7 @@ export async function postDoc(tx: Tx, kind: DocKind, companyId: string, userId: 
     memo: `${d.number} - ${partner?.name ?? ""}`, partnerId: d.partnerId, projectId: d.projectId,
     source: kind, sourceId: d.id, attachmentId: kind === "bill" ? d.attachmentId : null, lines,
   }, true);
+  await linkMoves(tx, moveIds, entryId);
   await tx.update(t.doc).set({ status: "open", entryId }).where(eq(t.doc.id, id));
   await audit(tx, companyId, userId, kind === "invoice" ? "issue" : "approve", kind, id, { total: d.total });
 }
@@ -146,7 +173,10 @@ export async function voidDoc(tx: Tx, kind: DocKind, companyId: string, userId: 
   const t = tables(kind);
   const d = await getDoc(tx, kind, companyId, id);
   if (d.amountPaid > 0 || d.status === "void") throw new UserError("err_posted_locked");
-  if (d.entryId) await reverseEntry(tx, companyId, userId, d.entryId, date, memoPrefix);
+  if (d.entryId) {
+    await reverseEntry(tx, companyId, userId, d.entryId, date, memoPrefix);
+    await reverseDocumentStock(tx, companyId, kind, id, date);
+  }
   await tx.update(t.doc).set({ status: "void" }).where(eq(t.doc.id, id));
   await audit(tx, companyId, userId, "void", kind, id);
 }

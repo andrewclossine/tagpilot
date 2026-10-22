@@ -8,7 +8,10 @@ const amount = (n: number, lang: Lang) => fmt(n, lang, 2).replace(/[  ]/g, " 
 
 const BLUE = "#1d4ed8", INK = "#121c2e", MUTED = "#56647a", LINE = "#d3dbe8", SOFT = "#eef3fd";
 
-type Company = { name: string; registrationNo: string; tin: string; address: string; city: string; country: string; phone: string; email: string; currency: string };
+type Company = {
+  name: string; registrationNo: string; tin: string; address: string; city: string; country: string; phone: string; email: string; currency: string;
+  logo?: Buffer | null; // PNG or JPEG
+};
 
 function render(build: (doc: PDFKit.PDFDocument) => void): Promise<Buffer> {
   return new Promise((resolve, reject) => {
@@ -36,7 +39,12 @@ function mark(doc: PDFKit.PDFDocument, x: number, y: number, size: number) {
 /** Company block on the left, document title and number on the right, then a blue rule. */
 function header(doc: PDFKit.PDFDocument, c: Company, title: string, lines: [string, string][]) {
   const top = 50;
-  doc.fillColor(INK).font("Helvetica-Bold").fontSize(16).text(c.name, 50, top, { width: 280 });
+  let nameY = top;
+  if (c.logo) {
+    // A logo that cannot be read must not stop the document; it is simply left out.
+    try { doc.image(c.logo, 50, top, { fit: [150, 50] }); nameY = top + 58; } catch (e) { console.error("Logo not embedded", e); }
+  }
+  doc.fillColor(INK).font("Helvetica-Bold").fontSize(16).text(c.name, 50, nameY, { width: 280 });
   doc.font("Helvetica").fontSize(9).fillColor(MUTED);
   const info = [
     [c.address, c.city, c.country].filter(Boolean).join(", "),
@@ -44,6 +52,7 @@ function header(doc: PDFKit.PDFDocument, c: Company, title: string, lines: [stri
     c.registrationNo ? `Reg. No ${c.registrationNo}` : "", c.tin ? `Tax ID ${c.tin}` : "",
   ].filter(Boolean);
   for (const l of info) doc.text(l, { width: 280 });
+  const leftEnd = doc.y; // the right-hand block moves doc.y, so remember where the company details end
   doc.font("Helvetica-Bold").fontSize(20).fillColor(BLUE).text(title.toUpperCase(), 330, top, { width: 215, align: "right" });
   doc.font("Helvetica").fontSize(9);
   let y = top + 28;
@@ -52,7 +61,7 @@ function header(doc: PDFKit.PDFDocument, c: Company, title: string, lines: [stri
     doc.fillColor(INK).font("Helvetica-Bold").text(v, 440, y, { width: 105, align: "right" }).font("Helvetica");
     y += 14;
   }
-  const below = Math.max(doc.y, y) + 14;
+  const below = Math.max(leftEnd, y) + 14;
   doc.moveTo(50, below).lineTo(545, below).lineWidth(2).strokeColor(BLUE).stroke();
   doc.y = below + 16;
 }

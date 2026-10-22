@@ -9,6 +9,7 @@ import { parseAmount, str } from "@/lib/format";
 import { UserError } from "@/lib/ledger";
 import { companyProfile, CURRENCIES } from "@/lib/template";
 import { audit } from "@/lib/audit";
+import { saveAttachment } from "@/lib/storage";
 import type { AccountSubtype, AccountType } from "@/db/schema";
 
 const TYPES: AccountType[] = ["asset", "liability", "equity", "income", "expense"];
@@ -27,6 +28,31 @@ export async function saveCompanySettings(fd: FormData) {
   }).where(eq(schema.companies.id, ctx.company.id));
   await audit(db, ctx.company.id, ctx.user.id, "update", "company", ctx.company.id);
   revalidatePath("/settings");
+  redirect("/settings?saved=1");
+}
+
+/** Stores the organisation's logo (PNG or JPEG, the formats PDFs can embed). */
+export async function uploadLogo(fd: FormData) {
+  const ctx = await requireWrite("company");
+  try {
+    const file = fd.get("logo");
+    if (!(file instanceof File) || !file.size) throw new UserError("err_required");
+    if (!["image/png", "image/jpeg"].includes(file.type)) throw new UserError("err_logo_type");
+    if (file.size > 2 * 1024 * 1024) throw new UserError("err_logo_size");
+    const { id } = await saveAttachment(ctx.company.id, ctx.user.id, file);
+    const db = await getDb();
+    await db.update(schema.companies).set({ logoAttachmentId: id }).where(eq(schema.companies.id, ctx.company.id));
+    await audit(db, ctx.company.id, ctx.user.id, "update", "logo", id);
+  } catch (e) { fail(e, "/settings"); }
+  revalidatePath("/", "layout");
+  redirect("/settings?saved=1");
+}
+
+export async function removeLogo() {
+  const ctx = await requireWrite("company");
+  const db = await getDb();
+  await db.update(schema.companies).set({ logoAttachmentId: null }).where(eq(schema.companies.id, ctx.company.id));
+  revalidatePath("/", "layout");
   redirect("/settings?saved=1");
 }
 

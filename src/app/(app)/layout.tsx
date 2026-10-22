@@ -19,6 +19,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       ...link("journal", "/journal", t("nav_journal")),
       ...link("accounts", "/accounts", t("nav_coa")),
       ...link("banking", "/banking", t("nav_banking")),
+      ...link("inventory", "/inventory", t("nav_inventory")),
       ...link("assets", "/assets", t("nav_assets")),
       ...link("payroll", "/payroll", t("nav_payroll")),
       ...link("budgets", "/budgets", t("nav_budgets")),
@@ -35,7 +36,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <div className="shell">
       <aside className="side">
         <div style={{ padding: "0 6px" }}><Logo size={30} onDark /></div>
-        <div style={{ padding: "0 8px", fontWeight: 600, color: "#fff" }}>{ctx.company.name}</div>
+        <div className="row" style={{ padding: "0 8px", gap: 8, flexWrap: "nowrap" }}>
+          {ctx.company.logoAttachmentId ? <img src={`/api/files/${ctx.company.logoAttachmentId}`} alt="" style={{ height: 32, maxWidth: 64, objectFit: "contain", background: "#fff", borderRadius: 4, padding: 2 }} /> : null}
+          <span style={{ fontWeight: 600, color: "#fff", minWidth: 0, overflowWrap: "anywhere" }}>{ctx.company.name}</span>
+        </div>
         <NavLinks items={items} />
         <div className="foot">
           <div>{ctx.user.name}<div className="small" style={{ opacity: .7 }}>@{ctx.user.username} · {t(`role_${ctx.role}`)}</div></div>

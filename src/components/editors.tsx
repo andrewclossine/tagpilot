@@ -91,30 +91,45 @@ export function JournalLinesEditor({ accounts, projects, initial, labels, readOn
 }
 
 // ---------- invoice & bill lines ----------
-export type DLine = { description: string; quantity: string; unitPrice: string; vatApplies: boolean; accountId: string; projectId: string };
+export type DLine = { description: string; quantity: string; unitPrice: string; vatApplies: boolean; accountId: string; projectId: string; itemId?: string };
+/** A product or service offered on the line: picking it fills in the description, price and account. */
+export type ItemOpt = { id: string; label: string; name: string; price: number; accountId: string; stock: number | null; unit: string };
 
-export function DocLinesEditor({ accounts, projects, initial, vatRate, labels, accountTypes, defaultAccountId, readOnly }: {
+export function DocLinesEditor({ accounts, projects, initial, vatRate, labels, accountTypes, defaultAccountId, readOnly, items = [] }: {
   accounts: AccountOpt[]; projects: ProjectOpt[]; initial: DLine[]; vatRate: number; readOnly?: boolean;
-  accountTypes: readonly string[]; defaultAccountId: string;
-  labels: Record<"description" | "qty" | "unit_price" | "vat" | "account" | "project" | "add_line" | "subtotal" | "total" | "delete", string> & { types: Record<string, string> };
+  accountTypes: readonly string[]; defaultAccountId: string; items?: ItemOpt[];
+  labels: Record<"description" | "qty" | "unit_price" | "vat" | "account" | "project" | "add_line" | "subtotal" | "total" | "delete" | "item", string> & { types: Record<string, string> };
 }) {
-  const blank = (): DLine => ({ description: "", quantity: "1", unitPrice: "", vatApplies: vatRate > 0, accountId: defaultAccountId, projectId: "" });
+  const blank = (): DLine => ({ description: "", quantity: "1", unitPrice: "", vatApplies: vatRate > 0, accountId: defaultAccountId, projectId: "", itemId: "" });
   const [lines, setLines] = useState<DLine[]>(initial.length ? initial : [blank()]);
   const set = <K extends keyof DLine>(i: number, k: K, v: DLine[K]) => setLines((ls) => ls.map((l, j) => (j === i ? { ...l, [k]: v } : l)));
+  const pick = (i: number, itemId: string) => {
+    const it = items.find((x) => x.id === itemId);
+    setLines((ls) => ls.map((l, j) => (j !== i ? l : it
+      ? { ...l, itemId, description: it.name, unitPrice: it.price ? String(it.price) : l.unitPrice, accountId: it.accountId || l.accountId }
+      : { ...l, itemId: "" })));
+  };
   const amounts = lines.map((l) => Math.round(num(l.quantity) * num(l.unitPrice) * 100) / 100);
   const subtotal = amounts.reduce((s, a) => s + a, 0);
   const vat = lines.reduce((s, l, i) => s + (l.vatApplies ? Math.round(amounts[i] * vatRate) / 100 : 0), 0);
   const payload = JSON.stringify(lines.map((l) => ({
-    description: l.description, quantity: num(l.quantity), unitPrice: num(l.unitPrice), vatApplies: l.vatApplies, accountId: l.accountId, projectId: l.projectId || null,
+    description: l.description, quantity: num(l.quantity), unitPrice: num(l.unitPrice), vatApplies: l.vatApplies, accountId: l.accountId, projectId: l.projectId || null, itemId: l.itemId || null,
   })));
+  const withItems = items.length > 0;
   return (
     <div className="tbl-wrap">
       <input type="hidden" name="lines" value={payload} />
       <table className="lines">
-        <thead><tr><th>{labels.description}</th><th className="num">{labels.qty}</th><th className="num">{labels.unit_price}</th><th>{labels.vat}</th><th>{labels.account}</th><th>{labels.project}</th><th className="num">{labels.total}</th><th /></tr></thead>
+        <thead><tr>{withItems ? <th>{labels.item}</th> : null}<th>{labels.description}</th><th className="num">{labels.qty}</th><th className="num">{labels.unit_price}</th><th>{labels.vat}</th><th>{labels.account}</th><th>{labels.project}</th><th className="num">{labels.total}</th><th /></tr></thead>
         <tbody>
           {lines.map((l, i) => (
             <tr key={i}>
+              {withItems ? (
+                <td><select id={`it-${i}`} value={l.itemId ?? ""} onChange={(e) => pick(i, e.target.value)} disabled={readOnly} aria-label={labels.item} style={{ minWidth: 150 }}>
+                  <option value="">—</option>
+                  {items.map((it) => <option key={it.id} value={it.id}>{it.label}{it.stock !== null ? ` (${it.stock} ${it.unit})` : ""}</option>)}
+                </select></td>
+              ) : null}
               <td style={{ minWidth: 200 }}><input id={`d-${i}`} value={l.description} onChange={(e) => set(i, "description", e.target.value)} disabled={readOnly} aria-label={labels.description} /></td>
               <td><input id={`q-${i}`} className="num" style={{ minWidth: 70 }} inputMode="decimal" value={l.quantity} onChange={(e) => set(i, "quantity", e.target.value)} disabled={readOnly} aria-label={labels.qty} /></td>
               <td><input id={`p-${i}`} className="num" inputMode="decimal" value={l.unitPrice} onChange={(e) => set(i, "unitPrice", e.target.value)} disabled={readOnly} aria-label={labels.unit_price} /></td>
@@ -127,10 +142,10 @@ export function DocLinesEditor({ accounts, projects, initial, vatRate, labels, a
           ))}
         </tbody>
         <tfoot>
-          <tr><td colSpan={6}>{readOnly ? null : <button type="button" className="btn ghost" onClick={() => setLines((ls) => [...ls, blank()])}>+ {labels.add_line}</button>}</td><td /><td /></tr>
-          <tr><td colSpan={6} className="num">{labels.subtotal}</td><td className="num">{fmt(subtotal)}</td><td /></tr>
-          <tr><td colSpan={6} className="num">{labels.vat} {vatRate}%</td><td className="num">{fmt(vat)}</td><td /></tr>
-          <tr className="total"><td colSpan={6} className="num">{labels.total}</td><td className="num">{fmt(subtotal + vat)}</td><td /></tr>
+          <tr><td colSpan={withItems ? 7 : 6}>{readOnly ? null : <button type="button" className="btn ghost" onClick={() => setLines((ls) => [...ls, blank()])}>+ {labels.add_line}</button>}</td><td /><td /></tr>
+          <tr><td colSpan={withItems ? 7 : 6} className="num">{labels.subtotal}</td><td className="num">{fmt(subtotal)}</td><td /></tr>
+          <tr><td colSpan={withItems ? 7 : 6} className="num">{labels.vat} {vatRate}%</td><td className="num">{fmt(vat)}</td><td /></tr>
+          <tr className="total"><td colSpan={withItems ? 7 : 6} className="num">{labels.total}</td><td className="num">{fmt(subtotal + vat)}</td><td /></tr>
         </tfoot>
       </table>
     </div>

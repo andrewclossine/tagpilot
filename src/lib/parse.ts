@@ -9,7 +9,7 @@ const JournalLines = z.array(z.object({
 
 const DocLines = z.array(z.object({
   description: z.string(), quantity: z.number(), unitPrice: z.number(), vatApplies: z.boolean(),
-  accountId: z.string(), projectId: z.string().nullable().default(null),
+  accountId: z.string(), projectId: z.string().nullable().default(null), itemId: z.string().nullable().default(null),
 }));
 
 export function parseJournalLines(fd: FormData) {

@@ -36,6 +36,13 @@
       "when": 1792665763536,
       "tag": "0004_pdf_email",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1792673272520,
+      "tag": "0005_logo_inventory",
+      "breakpoints": true
     }
   ]
 }
