@@ -6,7 +6,7 @@ import { z } from "zod/v4";
 import { getDb, schema, type Tx } from "@/db";
 import { requireWrite, type Ctx } from "@/lib/auth";
 import { fail, withParam } from "@/lib/actions";
-import { lastDayOfMonth, parseAmount, round2, str } from "@/lib/format";
+import { isUuid, lastDayOfMonth, parseAmount, round2, str } from "@/lib/format";
 import { accountIdByCode, saveEntry, UserError, type LineInput } from "@/lib/ledger";
 import { payrollConfig, payslip, type PayInput } from "@/lib/payroll";
 import { RWANDA_COMPONENTS } from "@/lib/template";
@@ -28,7 +28,7 @@ export async function saveEmployee(fd: FormData) {
   const ctx = await requireWrite("payroll");
   const id = str(fd, "id");
   const values = {
-    name: str(fd, "name"), rssbNo: str(fd, "rssbNo"), nationalId: str(fd, "nationalId"), position: str(fd, "position"),
+    name: str(fd, "name"), rssbNo: str(fd, "rssbNo"), nationalId: str(fd, "nationalId"), position: str(fd, "position"), email: str(fd, "email").toLowerCase(),
     projectId: str(fd, "projectId") || null, basic: parseAmount(fd.get("basic")), transport: parseAmount(fd.get("transport")),
     other: parseAmount(fd.get("other")), isActive: str(fd, "isActive") !== "0",
   };
@@ -165,7 +165,7 @@ export async function uploadPayroll(fd: FormData) {
       if (!p && !unknown.includes(s)) unknown.push(s);
       return p?.id ?? null;
     };
-    const inputs: PayInput[] = staff.map((s) => ({ employeeId: null, name: s.name, position: s.position, projectId: projectOf(s.project), gross: s.gross, otherDeduction: s.deduction }));
+    const inputs: PayInput[] = staff.map((s) => ({ employeeId: null, name: s.name, position: s.position, projectId: projectOf(s.project), email: s.email, gross: s.gross, otherDeduction: s.deduction }));
     const labels = await runLabels();
     await db.transaction((tx) => createRun(tx, ctx, month, inputs, file.name, labels));
   } catch (e) { fail(e, back); }
@@ -184,7 +184,7 @@ export async function createRunFromEmployees(fd: FormData) {
     const emps = await db.select().from(schema.employees)
       .where(and(eq(schema.employees.companyId, ctx.company.id), eq(schema.employees.isActive, true))).orderBy(schema.employees.name);
     const inputs: PayInput[] = emps.map((e) => ({
-      employeeId: e.id, name: e.name, position: e.position, projectId: e.projectId,
+      employeeId: e.id, name: e.name, position: e.position, projectId: e.projectId, email: e.email,
       gross: round2(e.basic + e.transport + e.other + parseAmount(fd.get(`b_${e.id}`))), otherDeduction: parseAmount(fd.get(`d_${e.id}`)),
     }));
     const labels = await runLabels();
@@ -199,6 +199,7 @@ export async function deletePayrollRun(fd: FormData) {
   const id = str(fd, "id");
   let month = "";
   try {
+    if (!isUuid(id)) throw new UserError("err_not_found");
     const db = await getDb();
     await db.transaction(async (tx) => {
       const [run] = await tx.select().from(schema.payrollRuns).where(and(eq(schema.payrollRuns.id, id), eq(schema.payrollRuns.companyId, ctx.company.id)));

@@ -26,10 +26,10 @@ Interface in English and French. Any home currency. IFRS presentation (IAS 16 fo
 | Scan & book | Upload a photo or PDF of an invoice, receipt or slip. Claude reads it with the organisation's chart of accounts and written accounting policy and creates a **draft** entry for a person to approve. |
 | Journal | Manual entries, drafts, numbered posting, reversal (posted entries are never edited), CSV export. |
 | Chart of accounts | Accounts grouped by type with balances; add, edit, deactivate. |
-| Sales / Purchases | Invoices and bills with VAT, payments, withholding tax on supplier payments, ageing. |
+| Sales / Purchases | Invoices and bills with VAT, payments, withholding tax on supplier payments, ageing. Invoices download as PDF and are emailed to the customer with the PDF attached. |
 | Banking | Paste a bank statement, automatic matching, book the rest (optionally with AI suggestions). |
 | Fixed assets | Register, asset classes, straight-line or reducing-balance depreciation run by month, additions, impairment, revaluation (elimination method), disposal with gain/loss, and the IAS 16.73 movement schedule. |
-| Payroll | Upload an Excel sheet (Name, Position, Project, Gross, optional Advance) or use the employee list. Taxes and contributions come from the organisation's payroll rules, which the AI can draft for any country and a person must confirm. One draft entry per month, split by project; payslips. |
+| Payroll | Upload an Excel sheet (Name, Position, Project, Gross, optional Advance) or use the employee list. Taxes and contributions come from the organisation's payroll rules, which the AI can draft for any country and a person must confirm. One draft entry per month, split by project. Payslips as PDF, emailed to each person who has an email address (employee list or an Email column in the sheet). |
 | Budgets | Annual budget per account, company-wide or per project; budget vs actual. |
 | Reports | Trial balance, income statement, balance sheet, VAT summary, by project, general ledger, customer and supplier ageing. |
 | Settings, Users, Audit trail | Organisation profile (type, sector, registration number, address, currency, VAT), projects, accounting policy for the AI, users and roles, who did what and when. |

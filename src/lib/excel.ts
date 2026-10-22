@@ -1,7 +1,7 @@
 import "server-only";
 import ExcelJS from "exceljs";
 
-export type StaffRow = { name: string; position: string; project: string; gross: number; deduction: number };
+export type StaffRow = { name: string; position: string; project: string; email: string; gross: number; deduction: number };
 
 const HEAD = {
   name: /^(staff|employee|full ?name|names?|nom|noms|amazina|personnel)/i,
@@ -9,6 +9,7 @@ const HEAD = {
   project: /(project|projet|program|programme|donor)/i,
   gross: /(gross|brut|salary|salaire|amount|montant)/i,
   deduction: /(deduct|advance|avance|retenue|loan)/i,
+  email: /(e-?mail|courriel)/i,
 };
 
 function toNumber(v: unknown): number {
@@ -44,10 +45,10 @@ export async function readStaffSheet(file: File): Promise<StaffRow[]> {
   if (hi < 0) return [];
   const head = table[hi].map(toText);
   const col = (re: RegExp) => head.findIndex((h) => re.test(h));
-  const ci = { name: col(HEAD.name), position: col(HEAD.position), project: col(HEAD.project), gross: col(HEAD.gross), deduction: col(HEAD.deduction) };
+  const ci = { name: col(HEAD.name), position: col(HEAD.position), project: col(HEAD.project), gross: col(HEAD.gross), deduction: col(HEAD.deduction), email: col(HEAD.email) };
   return table.slice(hi + 1).map((r) => ({
     name: toText(r[ci.name]), position: ci.position >= 0 ? toText(r[ci.position]) : "",
-    project: ci.project >= 0 ? toText(r[ci.project]) : "", gross: Math.round(toNumber(r[ci.gross]) * 100) / 100,
+    project: ci.project >= 0 ? toText(r[ci.project]) : "", email: ci.email >= 0 ? toText(r[ci.email]).toLowerCase() : "", gross: Math.round(toNumber(r[ci.gross]) * 100) / 100,
     deduction: ci.deduction >= 0 ? Math.round(toNumber(r[ci.deduction]) * 100) / 100 : 0,
   })).filter((r) => r.name && r.gross > 0 && !/^total/i.test(r.name));
 }

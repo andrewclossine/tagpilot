@@ -211,7 +211,11 @@ const docLineColumns = () => ({
   amount: money("amount"), // quantity x unit price, before VAT
 });
 
-export const invoices = pgTable("invoices", documentColumns(), (t) => [uniqueIndex("invoices_company_number").on(t.companyId, t.number)]);
+export const invoices = pgTable("invoices", {
+  ...documentColumns(),
+  sentAt: timestamp("sent_at", { withTimezone: true }), // last time the PDF was emailed to the customer
+  sentTo: text("sent_to").notNull().default(""),
+}, (t) => [uniqueIndex("invoices_company_number").on(t.companyId, t.number)]);
 export const invoiceLines = pgTable("invoice_lines", {
   ...docLineColumns(),
   invoiceId: uuid("invoice_id").notNull().references(() => invoices.id, { onDelete: "cascade" }),
@@ -276,6 +280,7 @@ export const employees = pgTable("employees", {
   rssbNo: text("rssb_no").notNull().default(""),
   nationalId: text("national_id").notNull().default(""),
   position: text("position").notNull().default(""),
+  email: text("email").notNull().default(""), // payslips are sent here
   projectId: uuid("project_id").references(() => projects.id),
   basic: money("basic"),
   transport: money("transport"),
@@ -285,6 +290,7 @@ export const employees = pgTable("employees", {
 
 export type PayslipRow = {
   employeeId: string | null; name: string; position: string; projectId: string | null;
+  email?: string;                       // where the payslip is sent
   gross: number;
   deductions: Record<string, number>;   // employee components by code
   employer: Record<string, number>;     // employer components by code

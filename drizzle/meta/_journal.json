@@ -29,6 +29,13 @@
       "when": 1792664683827,
       "tag": "0003_billing_and_resets",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1792665763536,
+      "tag": "0004_pdf_email",
+      "breakpoints": true
     }
   ]
 }

@@ -146,7 +146,7 @@ const en = {
   sch_impairment: "Impairment losses", sch_reval_elim: "Eliminated on revaluation", sch_carrying: "Carrying amount",
   payroll_unknown_projects: "These projects in the sheet do not exist and were left blank", payroll_review_first: "The payroll rules were suggested by AI and are not confirmed yet.",
   payroll_rules_first: "Set up your country's payroll taxes first.", payroll_rules: "Tax rules", payroll_upload: "Upload the staff sheet (Excel)",
-  payroll_upload_help: "One row per person with these columns: Name, Position, Project, Gross. An Advance column is optional. TAGPILOT calculates every tax and contribution with your rules and books them to their accounts.",
+  payroll_upload_help: "One row per person with these columns: Name, Position, Project, Gross. Advance and Email columns are optional. TAGPILOT calculates every tax and contribution with your rules and books them to their accounts.",
   payroll_calculate: "Calculate and book", payroll_from_list: "Or use the employee list", social_no: "Social security number",
   payroll_unreviewed_note: "These rules were drafted by AI. Check every rate and band against your country's current law, then tick the confirmation box and save.",
   payroll_ai_rules: "Suggest rules with AI", payroll_rwanda: "Load Rwanda example",
@@ -185,6 +185,12 @@ const en = {
   reset_mail_body: "Someone asked to reset the password of your TAGPILOT account. Open this link within one hour to choose a new password:",
   reset_mail_ignore: "If you did not ask for this, ignore this email: your password stays the same.",
   email_optional: "Email (optional, for password reset)",
+  pdf_bill_to: "Bill to", pdf_footer: "Generated with TAGPILOT", pdf_employee: "Employee", pdf_pay_lines: "Pay and deductions",
+  pdf_send_title: "PDF and email", pdf_download: "Download PDF", pdf_send: "Send by email", pdf_sent_to: "Sent to",
+  pdf_message: "Message (optional)", pdf_message_default: "Leave empty to send a standard message with the amount due and the due date.",
+  mail_invoice_body: "Please find attached invoice", mail_payslip_body: "Please find attached your payslip for", err_email_invalid: "Enter a valid email address.",
+  payslips_mail_help: "{n} of {total} people have an email address. Each receives only their own payslip.", payslips_mail_btn: "Email payslips",
+  payslips_mailed: "Payslips sent: {sent}. Without email address: {skipped}. Failed: {failed}.",
 } as const;
 
 export type Key = keyof typeof en;
@@ -337,7 +343,7 @@ const fr: Record<Key, string> = {
   sch_impairment: "Pertes de valeur", sch_reval_elim: "Éliminés à la réévaluation", sch_carrying: "Valeur comptable",
   payroll_unknown_projects: "Ces projets de la feuille n'existent pas et ont été laissés vides", payroll_review_first: "Les règles de paie ont été proposées par l'IA et ne sont pas encore confirmées.",
   payroll_rules_first: "Paramétrez d'abord les impôts et cotisations de votre pays.", payroll_rules: "Règles fiscales", payroll_upload: "Téléverser la feuille du personnel (Excel)",
-  payroll_upload_help: "Une ligne par personne avec ces colonnes : Nom, Poste, Projet, Brut. Une colonne Avance est facultative. TAGPILOT calcule chaque impôt et cotisation selon vos règles et les comptabilise.",
+  payroll_upload_help: "Une ligne par personne avec ces colonnes : Nom, Poste, Projet, Brut. Les colonnes Avance et E-mail sont facultatives. TAGPILOT calcule chaque impôt et cotisation selon vos règles et les comptabilise.",
   payroll_calculate: "Calculer et comptabiliser", payroll_from_list: "Ou utiliser la liste des employés", social_no: "Numéro de sécurité sociale",
   payroll_unreviewed_note: "Ces règles ont été rédigées par l'IA. Vérifiez chaque taux et tranche par rapport à la loi en vigueur, puis cochez la confirmation et enregistrez.",
   payroll_ai_rules: "Proposer les règles avec l'IA", payroll_rwanda: "Charger l'exemple du Rwanda",
@@ -376,6 +382,12 @@ const fr: Record<Key, string> = {
   reset_mail_body: "Quelqu'un a demandé à réinitialiser le mot de passe de votre compte TAGPILOT. Ouvrez ce lien dans l'heure pour choisir un nouveau mot de passe :",
   reset_mail_ignore: "Si vous n'avez rien demandé, ignorez cet e-mail : votre mot de passe ne change pas.",
   email_optional: "E-mail (facultatif, pour réinitialiser le mot de passe)",
+  pdf_bill_to: "Facturé à", pdf_footer: "Généré avec TAGPILOT", pdf_employee: "Employé", pdf_pay_lines: "Rémunération et retenues",
+  pdf_send_title: "PDF et e-mail", pdf_download: "Télécharger le PDF", pdf_send: "Envoyer par e-mail", pdf_sent_to: "Envoyée à",
+  pdf_message: "Message (facultatif)", pdf_message_default: "Laissez vide pour envoyer un message standard avec le montant dû et l'échéance.",
+  mail_invoice_body: "Veuillez trouver ci-joint la facture", mail_payslip_body: "Veuillez trouver ci-joint votre bulletin de paie pour", err_email_invalid: "Saisissez une adresse e-mail valide.",
+  payslips_mail_help: "{n} personnes sur {total} ont une adresse e-mail. Chacune reçoit uniquement son propre bulletin.", payslips_mail_btn: "Envoyer les bulletins",
+  payslips_mailed: "Bulletins envoyés : {sent}. Sans adresse e-mail : {skipped}. Échecs : {failed}.",
 };
 
 export const dict = { en, fr } as const;

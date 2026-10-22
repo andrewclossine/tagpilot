@@ -10,11 +10,12 @@ import { addDays, daysBetween, round2, today } from "@/lib/format";
 import { ConfirmButton, DocLinesEditor, type DLine } from "./editors";
 import { Empty, ErrorNote, PageHead, Pill, Tabs } from "./ui";
 import { deleteDocDraft, payDocAction, saveDoc, voidDocAction } from "@/app/(app)/doc-actions";
+import { sendInvoiceEmail } from "@/app/(app)/send-actions";
 
 export const docBase = (kind: DocKind) => (kind === "invoice" ? "/sales/invoices" : "/purchases/bills");
 const statusKey = { draft: "st_draft", open: "st_open", partial: "st_partial", paid: "st_paid", void: "st_void" } as const;
 
-type DocRow = typeof schema.invoices.$inferSelect & Partial<Pick<typeof schema.bills.$inferSelect, "supplierRef" | "whtRate" | "attachmentId">>;
+type DocRow = Omit<typeof schema.invoices.$inferSelect, "sentAt" | "sentTo"> & Partial<Pick<typeof schema.invoices.$inferSelect, "sentAt" | "sentTo">> & Partial<Pick<typeof schema.bills.$inferSelect, "supplierRef" | "whtRate" | "attachmentId">>;
 
 async function loadDocs(kind: DocKind, companyId: string, statuses?: string[]) {
   const db = await getDb();
@@ -162,6 +163,23 @@ export async function DocView({ kind, ctx, doc, error }: { kind: DocKind; ctx: C
           </div>
           {doc.entryId ? <Link href={`/journal/${doc.entryId}`} className="small">{t("open_entry")} →</Link> : null}
           {doc.attachmentId ? <a href={`/api/files/${doc.attachmentId}`} target="_blank" rel="noopener" className="small">{t("attachment")} →</a> : null}
+          {kind === "invoice" && doc.status !== "void" ? (
+            <div className="stack" style={{ borderTop: "1px solid var(--line)", paddingTop: 12, gap: 10 }}>
+              <div className="row">
+                <h3 style={{ flex: 1 }}>{t("pdf_send_title")}</h3>
+                <a className="btn sm" href={`/api/pdf/invoice/${doc.id}`} target="_blank" rel="noopener">{t("pdf_download")}</a>
+              </div>
+              {doc.sentAt ? <div className="note ok small">{t("pdf_sent_to")} {doc.sentTo} · {doc.sentAt.toISOString().slice(0, 16).replace("T", " ")}</div> : null}
+              {ctx.can("sales", "write") ? (
+                <form action={sendInvoiceEmail} className="stack" style={{ gap: 8 }}>
+                  <input type="hidden" name="id" value={doc.id} />
+                  <label className="f">{t("email")}<input id="send-to" name="to" type="email" defaultValue={doc.sentTo || partner?.email || ""} required /></label>
+                  <label className="f">{t("pdf_message")}<textarea id="send-msg" name="message" rows={3} placeholder={t("pdf_message_default")} /></label>
+                  <div><button type="submit" className="btn">{t("pdf_send")}</button></div>
+                </form>
+              ) : null}
+            </div>
+          ) : null}
           {canPay ? (
             <form action={payDocAction} className="stack" style={{ borderTop: "1px solid var(--line)", paddingTop: 12 }}>
               <h3>{t(kind === "invoice" ? "receive_payment" : "pay_bill")}</h3>

@@ -9,6 +9,7 @@ import { payrollConfig, readPayslip } from "@/lib/payroll";
 import { ConfirmButton } from "@/components/editors";
 import { Empty, ErrorNote, PageHead, Pill, Tabs } from "@/components/ui";
 import { RulesEditor } from "./RulesEditor";
+import { sendPayslipsEmail } from "../send-actions";
 import { createRunFromEmployees, deletePayrollRun, loadRwandaPreset, saveEmployee, savePayrollRules, suggestRules, uploadPayroll } from "./actions";
 
 export const metadata = { title: "Payroll" };
@@ -55,13 +56,13 @@ export default async function PayrollPage({ searchParams }: { searchParams: Sear
               <tbody>
                 {rows.map((r, i) => (
                   <tr key={i}>
-                    <td><b>{r.name}</b>{r.position ? <div className="small muted">{r.position}</div> : null}</td><td>{projCode(r.projectId)}</td>
+                    <td><b>{r.name}</b><div className="small muted">{[r.position, r.email].filter(Boolean).join(" · ")}</div></td><td>{projCode(r.projectId)}</td>
                     <td className="num">{money(r.gross)}</td>
                     {empComps.map((c) => <td key={c.code} className="num">{money(r.deductions[c.code] ?? 0)}</td>)}
                     <td className="num">{r.otherDeduction ? money(r.otherDeduction) : ""}</td>
                     <td className="num"><b>{money(r.net)}</b></td>
                     {erComps.map((c) => <td key={c.code} className="num">{money(r.employer[c.code] ?? 0)}</td>)}
-                    <td><Link className="small" href={`/payroll/slip?run=${run.id}&row=${i}`} target="_blank">{t("payslip")}</Link></td>
+                    <td style={{ whiteSpace: "nowrap" }}><a className="small" href={`/api/pdf/payslip?run=${run.id}&row=${i}`} target="_blank" rel="noopener">PDF</a></td>
                   </tr>
                 ))}
                 <tr className="total"><td colSpan={2}>{t("total")}</td><td className="num">{money(sum((r) => r.gross))}</td>
@@ -71,11 +72,22 @@ export default async function PayrollPage({ searchParams }: { searchParams: Sear
               </tbody>
             </table></div>
             <div className="note ok small">{t("run_exists")}</div>
+            {q("mailed") ? (() => {
+              const [sent, skipped, failed] = q("mailed").split("/").map(Number);
+              return <div className={`note small ${failed ? "warn" : "ok"}`}>{t("payslips_mailed").replace("{sent}", String(sent)).replace("{skipped}", String(skipped)).replace("{failed}", String(failed))}</div>;
+            })() : null}
+            {canEdit ? (
+              <form action={sendPayslipsEmail} className="row">
+                <input type="hidden" name="runId" value={run.id} />
+                <span className="small muted" style={{ flex: 1 }}>{t("payslips_mail_help").replace("{n}", String(rows.filter((r) => r.email).length)).replace("{total}", String(rows.length))}</span>
+                <button type="submit" className="btn" disabled={!rows.some((r) => r.email)}>{t("payslips_mail_btn")}</button>
+              </form>
+            ) : null}
             <form className="row">
               {entry ? <><Link className="btn primary" href={`/journal/${entry.id}`}>{t("open_entry")}</Link><Pill kind={entry.status}>{t(entry.status === "posted" ? "st_posted" : "st_draft")}</Pill></> : null}
               <span className="spacer" />
               {canEdit && (!entry || entry.status === "draft" || entry.reversedById)
-                ? <ConfirmButton className="btn danger" formAction={deletePayrollRun} name="id" value={run.id} confirmLabel={t("confirm")}>{t("delete_run")}</ConfirmButton> : null}
+                ? <><input type="hidden" name="id" value={run.id} /><ConfirmButton className="btn danger" formAction={deletePayrollRun} confirmLabel={t("confirm")}>{t("delete_run")}</ConfirmButton></> : null}
             </form>
             {entry?.status === "posted" && !entry.reversedById ? <div className="small muted">{t("run_locked")}</div> : null}
           </div>
@@ -88,8 +100,8 @@ export default async function PayrollPage({ searchParams }: { searchParams: Sear
               <div className="small muted">{t("payroll_upload_help")}</div>
               <input type="hidden" name="month" value={month} />
               <input id="file" name="file" type="file" accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" required />
-              <table className="small"><thead><tr><th>Name</th><th>Position</th><th>Project</th><th className="num">Gross</th><th className="num">Advance</th></tr></thead>
-                <tbody><tr><td>Jane Doe</td><td>Accountant</td><td>GEN</td><td className="num">550000</td><td className="num">0</td></tr></tbody></table>
+              <div className="tbl-wrap"><table className="small"><thead><tr><th>Name</th><th>Position</th><th>Project</th><th className="num">Gross</th><th className="num">Advance</th><th>Email</th></tr></thead>
+                <tbody><tr><td>Jane Doe</td><td>Accountant</td><td>GEN</td><td className="num">550000</td><td className="num">0</td><td>jane@example.com</td></tr></tbody></table></div>
               <div><button type="submit" className="btn primary">{t("payroll_calculate")}</button></div>
             </form>
             <form action={createRunFromEmployees} className="panel stack">
@@ -132,6 +144,7 @@ export default async function PayrollPage({ searchParams }: { searchParams: Sear
             <div className="fields">
               <label className="f">{t("emp_name")}<input id="e-name" name="name" defaultValue={editing?.name} required /></label>
               <label className="f">{t("position")}<input id="e-pos" name="position" defaultValue={editing?.position} /></label>
+              <label className="f">{t("email")}<input id="e-email" name="email" type="email" defaultValue={editing?.email} /></label>
               <label className="f">{t("social_no")}<input id="e-rssb" name="rssbNo" defaultValue={editing?.rssbNo} /></label>
               <label className="f">{t("national_id")}<input id="e-nid" name="nationalId" defaultValue={editing?.nationalId} /></label>
               <label className="f">{t("project")}<select id="e-proj" name="projectId" defaultValue={editing?.projectId ?? ""}><option value="">{t("none")}</option>

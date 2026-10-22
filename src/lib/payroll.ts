@@ -51,7 +51,7 @@ export function readPayslip(r: PayslipRow | LegacyPayslipRow): PayslipRow {
   };
 }
 
-export type PayInput = { employeeId: string | null; name: string; position: string; projectId: string | null; gross: number; otherDeduction?: number };
+export type PayInput = { employeeId: string | null; name: string; position: string; projectId: string | null; email?: string; gross: number; otherDeduction?: number };
 
 /** Applies the company's payroll rules, in order, to one person's gross pay for the month. */
 export function payslip(p: PayInput, components: PayrollComponent[]): PayslipRow {
@@ -67,7 +67,7 @@ export function payslip(p: PayInput, components: PayrollComponent[]): PayslipRow
   const otherDeduction = round2(p.otherDeduction ?? 0);
   const totalDed = Object.values(deductions).reduce((s, v) => s + v, 0);
   return {
-    employeeId: p.employeeId, name: p.name, position: p.position, projectId: p.projectId, gross,
+    employeeId: p.employeeId, name: p.name, position: p.position, projectId: p.projectId, email: p.email ?? "", gross,
     deductions, employer, otherDeduction,
     net: round2(gross - totalDed - otherDeduction),
     employerTotal: Object.values(employer).reduce((s, v) => s + v, 0),
