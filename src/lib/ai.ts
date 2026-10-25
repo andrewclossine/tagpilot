@@ -44,6 +44,19 @@ function client() {
   return new Anthropic();
 }
 
+/** Turns API failures the user can act on (wrong key, no credit, service busy) into messages instead of a generic error. */
+async function call<T>(request: () => Promise<T>): Promise<T> {
+  try {
+    return await request();
+  } catch (e) {
+    if (e instanceof UserError) throw e;
+    if (e instanceof Anthropic.AuthenticationError || e instanceof Anthropic.PermissionDeniedError) throw new UserError("err_ai_key");
+    if (e instanceof Anthropic.APIError && (e.type === "billing_error" || /credit balance/i.test(e.message))) throw new UserError("err_ai_credit");
+    if (e instanceof Anthropic.RateLimitError || e instanceof Anthropic.InternalServerError || e instanceof Anthropic.APIConnectionError) throw new UserError("err_ai_busy");
+    throw e;
+  }
+}
+
 function contextText(c: BookContext): string {
   return `COMPANY: ${c.companyName} · country ${c.country || "-"} · tax number ${c.tin || "-"} · currency ${c.currency} · VAT registered: ${c.vatRegistered ? "yes" : "no"} · VAT rate ${c.vatRate}% · input VAT account ${c.vatIn} · output VAT account ${c.vatOut}
 
@@ -84,14 +97,14 @@ Rules:
 - If a value is hard to read, make your best reading, lower the confidence (0 to 1) and add a warning.
 - If the file is not a financial document, return no lines and explain why in warnings. Never invent account codes.`;
 
-  const res = await client().beta.messages.parse({
+  const res = await call(() => client().beta.messages.parse({
     model: MODEL,
     max_tokens: 16000,
     betas: ["server-side-fallback-2026-07-01"],
     fallbacks: "default",
     output_config: { effort: "medium", format: betaZodOutputFormat(Proposal) },
     messages: [{ role: "user", content: [doc, { type: "text", text: prompt }] }],
-  });
+  }));
   if (res.stop_reason === "refusal") throw new UserError("err_ai_refused");
   if (!res.parsed_output) throw new UserError("err_ai_failed");
   return res.parsed_output;
@@ -109,14 +122,14 @@ STATEMENT LINES - id | date | description | amount:
 ${lines.map((l) => `${l.id} | ${l.date} | ${l.description} | ${l.amount}`).join("\n")}
 
 Return one suggestion per line, using only account codes from the chart of accounts. Never suggest the bank account itself.`;
-  const res = await client().beta.messages.parse({
+  const res = await call(() => client().beta.messages.parse({
     model: MODEL,
     max_tokens: 16000,
     betas: ["server-side-fallback-2026-07-01"],
     fallbacks: "default",
     output_config: { effort: "low", format: betaZodOutputFormat(BankSuggestions) },
     messages: [{ role: "user", content: prompt }],
-  });
+  }));
   if (res.stop_reason === "refusal") throw new UserError("err_ai_refused");
   return new Map((res.parsed_output?.suggestions ?? []).map((s) => [s.id, s.account_code]));
 }
@@ -148,14 +161,14 @@ Each component is either deducted from the employee's gross pay ("employee") or 
 
 CHART OF ACCOUNTS - code | name | type:
 ${accounts.map((a) => `${a.code} | ${a.name} | ${a.type}`).join("\n")}`;
-  const res = await client().beta.messages.parse({
+  const res = await call(() => client().beta.messages.parse({
     model: MODEL,
     max_tokens: 16000,
     betas: ["server-side-fallback-2026-07-01"],
     fallbacks: "default",
     output_config: { effort: "high", format: betaZodOutputFormat(PayrollRules) },
     messages: [{ role: "user", content: prompt }],
-  });
+  }));
   if (res.stop_reason === "refusal") throw new UserError("err_ai_refused");
   if (!res.parsed_output) throw new UserError("err_ai_failed");
   return res.parsed_output;

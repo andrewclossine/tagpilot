@@ -202,6 +202,9 @@ const en = {
   mvk_opening: "Opening", mvk_purchase: "Purchase", mvk_sale: "Sale", mvk_adjustment: "Count adjustment", mvk_void: "Voided document",
   err_stock_insufficient: "Not enough stock for an item on this invoice. Record the purchase or a stock count first.", err_not_stock: "This item is a service and holds no stock.",
   err_login_locked: "Too many failed attempts. Wait 15 minutes, or reset your password.",
+  err_ai_key: "The Claude API key was not accepted. Create a new key at console.anthropic.com, copy it in full into ANTHROPIC_API_KEY in .env.local, and restart.",
+  err_ai_credit: "The Claude account has no credit left. Add credit at console.anthropic.com (Billing), then try again.",
+  err_ai_busy: "The AI service is busy or unreachable right now. Try again in a minute.",
 } as const;
 
 export type Key = keyof typeof en;
@@ -410,6 +413,9 @@ const fr: Record<Key, string> = {
   mvk_opening: "Ouverture", mvk_purchase: "Achat", mvk_sale: "Vente", mvk_adjustment: "Ajustement d'inventaire", mvk_void: "Pièce annulée",
   err_stock_insufficient: "Stock insuffisant pour un article de cette facture. Enregistrez d'abord l'achat ou un inventaire.", err_not_stock: "Cet article est un service et n'a pas de stock.",
   err_login_locked: "Trop de tentatives échouées. Patientez 15 minutes ou réinitialisez votre mot de passe.",
+  err_ai_key: "La clé API Claude n'a pas été acceptée. Créez une nouvelle clé sur console.anthropic.com, copiez-la entièrement dans ANTHROPIC_API_KEY du fichier .env.local, puis redémarrez.",
+  err_ai_credit: "Le compte Claude n'a plus de crédit. Ajoutez du crédit sur console.anthropic.com (Billing), puis réessayez.",
+  err_ai_busy: "Le service d'IA est occupé ou injoignable. Réessayez dans une minute.",
 };
 
 export const dict = { en, fr } as const;
