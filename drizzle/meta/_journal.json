@@ -43,6 +43,13 @@
       "when": 1792673272520,
       "tag": "0005_logo_inventory",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1792942909414,
+      "tag": "0006_login_failures",
+      "breakpoints": true
     }
   ]
 }

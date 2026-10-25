@@ -428,6 +428,13 @@ export const subscriptionPayments = pgTable("subscription_payments", {
   paidAt: timestamp("paid_at", { withTimezone: true }),
 }, (t) => [index("subscription_payments_company").on(t.companyId)]);
 
+/** Failed sign-ins, by login name and by network address, to slow down password guessing. */
+export const loginFailures = pgTable("login_failures", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  key: text("key").notNull(), // "u:<login>" or "ip:<address>"
+  at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index("login_failures_key_at").on(t.key, t.at)]);
+
 export const passwordResets = pgTable("password_resets", {
   id: text("id").primaryKey(), // sha-256 of the token sent by email
   userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),

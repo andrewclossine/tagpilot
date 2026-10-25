@@ -1,0 +1,14 @@
+node_modules
+.next
+data
+storage
+backups
+.git
+.claude
+.env
+.env.*
+!.env.example
+!.env.production.example
+*.log
+konti-ai.html
+tsconfig.tsbuildinfo

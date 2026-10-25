@@ -1,0 +1,59 @@
+# TAGPILOT on one server: the app, its PostgreSQL database and (optionally) Caddy for HTTPS.
+# Settings come from the .env file next to this one (copy .env.production.example to .env).
+#
+#   docker compose up -d --build                    app + database; use when the server already has a web server (nginx)
+#   docker compose --profile https up -d --build    also starts Caddy, which gets the HTTPS certificate by itself
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: tagpilot
+      POSTGRES_USER: tagpilot
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tagpilot -d tagpilot"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://tagpilot:${POSTGRES_PASSWORD}@db:5432/tagpilot
+      STORAGE_DIR: /app/storage
+      APP_URL: https://${DOMAIN:?Set DOMAIN in .env}
+    volumes:
+      - storage:/app/storage
+    # Only reachable from the server itself; the web server in front of it handles the internet.
+    ports:
+      - "127.0.0.1:${APP_PORT:-3001}:3000"
+
+  caddy:
+    image: caddy:2-alpine
+    profiles: ["https"]
+    restart: unless-stopped
+    depends_on: [app]
+    environment:
+      DOMAIN: ${DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  pgdata:
+  storage:
+  caddy_data:
+  caddy_config:

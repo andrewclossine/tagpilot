@@ -201,6 +201,7 @@ const en = {
   counted_qty: "Quantity counted", unit_cost_surplus: "Unit cost of a surplus", reason: "Reason", stock_count_btn: "Record the count", stock_moves: "Stock movements",
   mvk_opening: "Opening", mvk_purchase: "Purchase", mvk_sale: "Sale", mvk_adjustment: "Count adjustment", mvk_void: "Voided document",
   err_stock_insufficient: "Not enough stock for an item on this invoice. Record the purchase or a stock count first.", err_not_stock: "This item is a service and holds no stock.",
+  err_login_locked: "Too many failed attempts. Wait 15 minutes, or reset your password.",
 } as const;
 
 export type Key = keyof typeof en;
@@ -408,6 +409,7 @@ const fr: Record<Key, string> = {
   counted_qty: "Quantité comptée", unit_cost_surplus: "Coût unitaire d'un excédent", reason: "Motif", stock_count_btn: "Enregistrer le comptage", stock_moves: "Mouvements de stock",
   mvk_opening: "Ouverture", mvk_purchase: "Achat", mvk_sale: "Vente", mvk_adjustment: "Ajustement d'inventaire", mvk_void: "Pièce annulée",
   err_stock_insufficient: "Stock insuffisant pour un article de cette facture. Enregistrez d'abord l'achat ou un inventaire.", err_not_stock: "Cet article est un service et n'a pas de stock.",
+  err_login_locked: "Trop de tentatives échouées. Patientez 15 minutes ou réinitialisez votre mot de passe.",
 };
 
 export const dict = { en, fr } as const;
