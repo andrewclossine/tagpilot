@@ -3,6 +3,7 @@ import crypto from "node:crypto";
 import { headers } from "next/headers";
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
+import type { ModuleKey } from "@/db/schema";
 import { audit } from "./audit";
 import { round2 } from "./format";
 import { UserError } from "./ledger";
@@ -11,13 +12,21 @@ const FLW = "https://api.flutterwave.com/v3";
 
 export type Period = "monthly" | "yearly";
 
-/** The single plan's prices, set in the environment so they can change without a new release. */
-export function planPrices() {
+/** Monthly price of each module, set in the environment so they can change without a new release. */
+export function modulePrices(): Record<ModuleKey, number> {
   return {
-    currency: (process.env.SUBSCRIPTION_CURRENCY || "USD").toUpperCase(),
-    monthly: Number(process.env.SUBSCRIPTION_PRICE_MONTHLY || 30),
-    yearly: Number(process.env.SUBSCRIPTION_PRICE_YEARLY || 300),
+    accounting: Number(process.env.PRICE_ACCOUNTING_MONTHLY || 30),
+    projects: Number(process.env.PRICE_PROJECTS_MONTHLY || 20),
+    procurement: Number(process.env.PRICE_PROCUREMENT_MONTHLY || 25),
+    bidding: Number(process.env.PRICE_BIDDING_MONTHLY || 10),
   };
+}
+
+/** What the chosen modules cost together. A year costs ten months. */
+export function planPrices(modules: ModuleKey[]) {
+  const prices = modulePrices();
+  const monthly = round2(modules.reduce((sum, m) => sum + prices[m], 0));
+  return { currency: (process.env.SUBSCRIPTION_CURRENCY || "USD").toUpperCase(), monthly, yearly: round2(monthly * 10) };
 }
 
 export const paymentsConfigured = () => Boolean(process.env.FLW_SECRET_KEY);
@@ -42,12 +51,13 @@ async function flw<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 /** Opens a Flutterwave hosted checkout for one subscription period and returns its address. */
-export async function startCheckout(company: { id: string; name: string }, user: { id: string; name: string; email: string | null }, period: Period) {
-  const price = planPrices();
+export async function startCheckout(company: { id: string; name: string; modules: ModuleKey[] }, user: { id: string; name: string; email: string | null }, period: Period) {
+  const price = planPrices(company.modules);
   const amount = price[period];
+  if (!(amount > 0)) throw new UserError("err_payment_provider");
   const txRef = `TP-${company.id.slice(0, 8)}-${Date.now()}-${crypto.randomBytes(3).toString("hex")}`;
   const db = await getDb();
-  await db.insert(schema.subscriptionPayments).values({ companyId: company.id, txRef, period, amount, currency: price.currency, createdBy: user.id });
+  await db.insert(schema.subscriptionPayments).values({ companyId: company.id, txRef, period, modules: company.modules, amount, currency: price.currency, createdBy: user.id });
   const base = await appUrl();
   const res = await flw<{ status: string; data?: { link?: string } }>("/payments", {
     method: "POST",
@@ -90,7 +100,7 @@ export async function confirmPayment(transactionId: string): Promise<{ ok: boole
     if (p.period === "yearly") end.setFullYear(end.getFullYear() + 1); else end.setMonth(end.getMonth() + 1);
     await dbx.update(schema.subscriptionPayments).set({ status: "successful", providerTransactionId: String(tx.id), periodStart: start, periodEnd: end, paidAt: new Date() })
       .where(eq(schema.subscriptionPayments.id, p.id));
-    await dbx.update(schema.companies).set({ paidUntil: end, plan: "active" }).where(eq(schema.companies.id, p.companyId));
+    await dbx.update(schema.companies).set({ paidUntil: end, plan: "active", ...(p.modules.length ? { paidModules: p.modules } : {}) }).where(eq(schema.companies.id, p.companyId));
     await audit(dbx, p.companyId, p.createdBy, "subscription_paid", "subscription", p.txRef, { period: p.period, amount: p.amount, until: end.toISOString().slice(0, 10) });
     return { ok: true, companyId: p.companyId };
   });

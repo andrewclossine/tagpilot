@@ -177,6 +177,15 @@ export async function decideVoucher(tx: Tx, companyId: string, userId: string, i
   await audit(tx, companyId, userId, approve ? "approve" : "reject", "payment_voucher", v.number, { note });
 }
 
+/** Records that an approved voucher was paid, for an organisation that keeps its books elsewhere. */
+export async function markVoucherPaid(tx: Tx, companyId: string, userId: string, id: string, reference: string) {
+  const [v] = await tx.select().from(schema.paymentVouchers).where(and(eq(schema.paymentVouchers.id, id), eq(schema.paymentVouchers.companyId, companyId))).for("update");
+  if (!v) throw new UserError("err_not_found");
+  if (v.status !== "approved") throw new UserError("err_voucher_state");
+  await tx.update(schema.paymentVouchers).set({ status: "paid", paidBy: userId, paidAt: new Date(), paymentReference: reference }).where(eq(schema.paymentVouchers.id, id));
+  await audit(tx, companyId, userId, "pay", "payment_voucher", v.number, { reference });
+}
+
 /** Pays an approved voucher and posts it: debit the budget line's account, credit the money account. */
 export async function payVoucher(tx: Tx, companyId: string, userId: string, id: string, input: { date: string; moneyAccountId: string; expenseAccountId: string }): Promise<string> {
   const [v] = await tx.select().from(schema.paymentVouchers).where(and(eq(schema.paymentVouchers.id, id), eq(schema.paymentVouchers.companyId, companyId))).for("update");

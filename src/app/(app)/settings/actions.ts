@@ -23,8 +23,11 @@ export async function saveCompanySettings(fd: FormData) {
     name: str(fd, "name") || ctx.company.name, ...companyProfile(fd),
     currency: CURRENCIES.includes(str(fd, "currency")) ? str(fd, "currency") : ctx.company.currency,
     vatRegistered, vatRate: vatRegistered ? parseAmount(fd.get("vatRate")) : 0,
-    policies: String(fd.get("policies") ?? ""),
-    settings: { ...ctx.company.settings, arAccount: str(fd, "arAccount"), apAccount: str(fd, "apAccount"), vatIn: str(fd, "vatIn"), vatOut: str(fd, "vatOut"), whtAccount: str(fd, "whtAccount") },
+    // The accounts and policy are only on the form with the accounting module.
+    ...(ctx.has("accounting") ? {
+      policies: String(fd.get("policies") ?? ""),
+      settings: { ...ctx.company.settings, arAccount: str(fd, "arAccount"), apAccount: str(fd, "apAccount"), vatIn: str(fd, "vatIn"), vatOut: str(fd, "vatOut"), whtAccount: str(fd, "whtAccount") },
+    } : {}),
   }).where(eq(schema.companies.id, ctx.company.id));
   await audit(db, ctx.company.id, ctx.user.id, "update", "company", ctx.company.id);
   revalidatePath("/settings");

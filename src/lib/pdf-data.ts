@@ -10,7 +10,7 @@ import { isUuid } from "./format";
 import { readAttachment } from "./storage";
 
 /** The organisation as printed on documents, with its logo when it has one. */
-export async function printedCompany(ctx: Ctx) {
+export async function printedCompany(ctx: Pick<Ctx, "company">) {
   const db = await getDb();
   let logo: Buffer | null = null;
   if (ctx.company.logoAttachmentId) {

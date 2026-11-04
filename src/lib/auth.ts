@@ -6,8 +6,8 @@ import { redirect } from "next/navigation";
 import bcrypt from "bcryptjs";
 import { and, eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
-import type { Role } from "@/db/schema";
-import { can, homeOf, type Area } from "./roles";
+import type { ModuleKey, Role } from "@/db/schema";
+import { areaInModules, can, homeOf, type Area } from "./roles";
 
 const SESSION_COOKIE = "konti_session";
 const COMPANY_COOKIE = "konti_company";
@@ -67,6 +67,9 @@ export type Ctx = {
   trialDaysLeft: number | null;
   /** True when the trial has ended without a subscription: the books stay readable but cannot change. */
   locked: boolean;
+  /** The modules open right now: what was chosen, less anything added after the last payment and not yet paid for. */
+  modules: ModuleKey[];
+  has: (module: ModuleKey) => boolean;
   can: (area: Area, mode?: "read" | "write") => boolean;
 };
 
@@ -84,9 +87,11 @@ export const getCtx = cache(async (): Promise<Ctx> => {
   const paid = !!row.company.paidUntil && row.company.paidUntil.getTime() > Date.now();
   const trialDaysLeft = paid ? null : Math.max(0, Math.ceil((row.company.trialEndsAt.getTime() - Date.now()) / 86400000));
   const locked = !paid && trialDaysLeft === 0;
+  const modules = paid ? row.company.modules.filter((m) => row.company.paidModules.includes(m)) : row.company.modules;
   return {
     user, company: row.company, role: row.role, partnerId: row.partnerId, isAdmin: row.role === "admin", trialDaysLeft, locked,
-    can: (area, mode = "read") => (mode === "write" && locked ? false : can(row.role, area, mode)),
+    modules, has: (m) => modules.includes(m),
+    can: (area, mode = "read") => areaInModules(area, modules) && (mode === "write" && locked ? false : can(row.role, area, mode)),
   };
 });
 
@@ -100,14 +105,14 @@ export async function requireWrite(area: Area): Promise<Ctx> {
 /** For pages: the context, or the no-access page when the role may not see this area. */
 export async function requireView(area: Area): Promise<Ctx> {
   const ctx = await getCtx();
-  if (!ctx.can(area)) redirect(area === "dashboard" || ctx.role === "supplier" ? homeOf(ctx.role) : "/no-access");
+  if (!ctx.can(area)) redirect(area === "dashboard" || ctx.role === "supplier" ? homeOf(ctx.role, ctx.modules) : "/no-access");
   return ctx;
 }
 
 /** For the supplier portal: the context of a supplier's account, with the supplier it belongs to. */
 export async function requireSupplier(): Promise<Ctx & { partnerId: string }> {
   const ctx = await getCtx();
-  if (ctx.role !== "supplier" || !ctx.partnerId) redirect(homeOf(ctx.role));
+  if (ctx.role !== "supplier" || !ctx.partnerId) redirect(homeOf(ctx.role, ctx.modules));
   return { ...ctx, partnerId: ctx.partnerId };
 }
 

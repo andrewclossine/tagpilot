@@ -12,6 +12,7 @@ import { isUsername, parseAmount, str } from "@/lib/format";
 import { companyProfile, CURRENCIES, DEFAULT_POLICIES, DEFAULT_SETTINGS, PAYROLL_DEFAULTS } from "@/lib/template";
 import { ensureAssetCategories, ensureStarterAccounts } from "@/lib/setup";
 import { audit } from "@/lib/audit";
+import { MODULES } from "@/lib/roles";
 
 /** Starts a subscription: the person who signs up becomes the admin of the company they create next, on a free trial. */
 export async function signUp(fd: FormData) {
@@ -128,11 +129,13 @@ export async function createCompany(fd: FormData) {
   // One subscription, one organisation: users who already belong to one go straight to it.
   const [member] = await db.select().from(schema.memberships).where(eq(schema.memberships.userId, user.id)).limit(1);
   if (member) redirect("/dashboard");
+  const modules = MODULES.filter((m) => fd.getAll("modules").includes(m));
+  if (!modules.length) redirect("/onboarding?error=err_no_modules");
   const currency = CURRENCIES.includes(str(fd, "currency")) ? str(fd, "currency") : "USD";
   const vatRegistered = str(fd, "vat") === "1";
   const companyId = await db.transaction(async (tx) => {
     const [c] = await tx.insert(schema.companies).values({
-      name, ...companyProfile(fd), currency,
+      name, ...companyProfile(fd), currency, modules, paidModules: [],
       vatRegistered, vatRate: vatRegistered ? parseAmount(fd.get("vatRate")) : 0,
       policies: DEFAULT_POLICIES, settings: { ...DEFAULT_SETTINGS, payroll: { ...PAYROLL_DEFAULTS, country: str(fd, "country") } },
     }).returning({ id: schema.companies.id });
@@ -140,7 +143,7 @@ export async function createCompany(fd: FormData) {
     await ensureStarterAccounts(tx, c.id);
     await ensureAssetCategories(tx, c.id);
     await tx.insert(schema.projects).values({ companyId: c.id, code: "GEN", name: "General administration" });
-    await audit(tx, c.id, user.id, "create", "company", c.id, { name });
+    await audit(tx, c.id, user.id, "create", "company", c.id, { name, modules });
     return c.id;
   });
   await switchCompany(companyId);

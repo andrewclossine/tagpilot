@@ -48,7 +48,7 @@ export default async function ContractPage({ params, searchParams }: { params: P
       <div className="kpis">
         <div className="panel kpi"><div className="label">{t("ct_amount")}</div><div className="v">{money(c.amount, 2)}</div></div>
         <div className="panel kpi"><div className="label">{t("ct_current_amount")}</div><div className="v">{money(terms.amount, 2)}</div></div>
-        <div className="panel kpi"><div className="label">{t("ct_paid")}</div><div className="v">{money(Number(paid.total), 2)}</div></div>
+        {ctx.has("projects") ? <div className="panel kpi"><div className="label">{t("ct_paid")}</div><div className="v">{money(Number(paid.total), 2)}</div></div> : null}
         <div className="panel kpi"><div className="label">{t("ct_end")}</div><div className="v">{terms.endDate}</div></div>
       </div>
       <div className="panel stack">

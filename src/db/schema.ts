@@ -8,6 +8,8 @@ const money = (name: string) => numeric(name, { precision: 18, scale: 2, mode: "
 const created = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
 
 export type Role = "admin" | "accountant" | "sales" | "purchases" | "payroll" | "viewer" | "staff" | "procurement" | "supplier";
+/** The parts of the system an organisation subscribes to. "bidding" is for suppliers: see adverts and bid on them. */
+export type ModuleKey = "accounting" | "projects" | "procurement" | "bidding";
 export type AccountType = "asset" | "liability" | "equity" | "income" | "expense";
 /** Accounts with a subtype play a fixed role: money accounts appear in Banking, the rest are picked by documents. */
 export type AccountSubtype = "bank" | "cash" | "momo" | "ar" | "ap" | "vat_in" | "vat_out" | "wht" | null;
@@ -74,6 +76,9 @@ export const companies = pgTable("companies", {
   trialEndsAt: timestamp("trial_ends_at", { withTimezone: true }).notNull().default(sql`now() + interval '30 days'`),
   paidUntil: timestamp("paid_until", { withTimezone: true }), // end of the last paid subscription period
   logoAttachmentId: uuid("logo_attachment_id"), // shown on PDFs and in the sidebar
+  // What the organisation chose, and what its last payment covers. Organisations from before modules keep everything.
+  modules: jsonb("modules").$type<ModuleKey[]>().notNull().default(["accounting", "projects", "procurement"]),
+  paidModules: jsonb("paid_modules").$type<ModuleKey[]>().notNull().default(["accounting", "projects", "procurement"]),
   vatRegistered: boolean("vat_registered").notNull().default(true),
   vatRate: numeric("vat_rate", { precision: 5, scale: 2, mode: "number" }).notNull().default(18),
   policies: text("policies").notNull().default(""),
@@ -109,8 +114,9 @@ export const partners = pgTable("partners", {
   phone: text("phone").notNull().default(""),
   email: text("email").notNull().default(""),
   address: text("address").notNull().default(""),
+  linkedCompanyId: uuid("linked_company_id"), // a supplier organisation on TAGPILOT that bid on an advert
   createdAt: created(),
-}, (t) => [index("partners_company").on(t.companyId)]);
+}, (t) => [index("partners_company").on(t.companyId), uniqueIndex("partners_linked_company").on(t.companyId, t.linkedCompanyId)]);
 
 export const projects = pgTable("projects", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -460,6 +466,7 @@ export const paymentVouchers = pgTable("payment_vouchers", {
   decisionNote: text("decision_note").notNull().default(""),
   paidBy: uuid("paid_by").references(() => users.id),
   paidAt: timestamp("paid_at", { withTimezone: true }),
+  paymentReference: text("payment_reference").notNull().default(""), // for organisations without the accounting module
   entryId: uuid("entry_id").references(() => journalEntries.id),
   createdAt: created(),
 }, (t) => [uniqueIndex("vouchers_company_number").on(t.companyId, t.number), index("vouchers_budget_item").on(t.budgetItemId)]);
@@ -586,6 +593,7 @@ export const subscriptionPayments = pgTable("subscription_payments", {
   companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
   txRef: text("tx_ref").notNull().unique(),
   period: text("period").$type<"monthly" | "yearly">().notNull(),
+  modules: jsonb("modules").$type<ModuleKey[]>().notNull().default([]), // what this payment covers
   amount: money("amount"),
   currency: text("currency").notNull(),
   status: text("status").$type<"pending" | "successful" | "failed">().notNull().default("pending"),

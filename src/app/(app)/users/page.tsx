@@ -3,7 +3,7 @@ import { getDb, schema } from "@/db";
 import { requireView } from "@/lib/auth";
 import { getI18n } from "@/lib/i18n";
 import { sp, type SearchParams } from "@/lib/actions";
-import { ROLES } from "@/lib/roles";
+import { rolesFor } from "@/lib/roles";
 import { ConfirmButton } from "@/components/editors";
 import { ErrorNote, PageHead } from "@/components/ui";
 import { changeRole, createUser, removeUser, resetPassword } from "./actions";
@@ -18,7 +18,8 @@ export default async function UsersPage({ searchParams }: { searchParams: Search
   const members = await db.select({ m: schema.memberships, u: schema.users }).from(schema.memberships)
     .innerJoin(schema.users, eq(schema.users.id, schema.memberships.userId))
     .where(and(eq(schema.memberships.companyId, ctx.company.id), ne(schema.memberships.role, "supplier"))).orderBy(schema.users.name);
-  const roleOptions = ROLES.map((r) => <option key={r} value={r}>{t(`role_${r}`)}</option>);
+  const roles = rolesFor(ctx.modules);
+  const roleOptions = roles.map((r) => <option key={r} value={r}>{t(`role_${r}`)}</option>);
   return (
     <div className="stack">
       <PageHead title={t("nav_users")} />
@@ -70,13 +71,13 @@ export default async function UsersPage({ searchParams }: { searchParams: Search
           <label className="f">{t("username")}<input id="u-username" name="username" autoCapitalize="none" pattern="[a-zA-Z0-9._\-]{3,40}" required /></label>
           <label className="f">{t("password")}<input id="u-password" name="password" type="password" minLength={8} autoComplete="new-password" required /></label>
           <label className="f">{t("email_optional")}<input id="u-email" name="email" type="email" autoComplete="off" /></label>
-          <label className="f">{t("role")}<select id="u-role" name="role" defaultValue="accountant">{roleOptions}</select></label>
+          <label className="f">{t("role")}<select id="u-role" name="role" defaultValue={roles.includes("accountant") ? "accountant" : roles.includes("procurement") ? "procurement" : "viewer"}>{roleOptions}</select></label>
           <div><button type="submit" className="btn primary">{t("add_user")}</button></div>
         </form>
         <div className="panel stack">
           <h2>{t("roles_title")}</h2>
           <table><tbody>
-            {ROLES.map((r) => <tr key={r}><td><b>{t(`role_${r}`)}</b></td><td className="small">{t(`role_${r}_help`)}</td></tr>)}
+            {roles.map((r) => <tr key={r}><td><b>{t(`role_${r}`)}</b></td><td className="small">{t(`role_${r}_help`)}</td></tr>)}
           </tbody></table>
         </div>
       </div>

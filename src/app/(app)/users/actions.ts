@@ -7,11 +7,11 @@ import { hashPassword, requireWrite } from "@/lib/auth";
 import { fail } from "@/lib/actions";
 import { isUsername, str } from "@/lib/format";
 import { UserError } from "@/lib/ledger";
-import { ROLES } from "@/lib/roles";
+import { rolesFor } from "@/lib/roles";
 import { audit } from "@/lib/audit";
-import type { Role } from "@/db/schema";
+import type { ModuleKey, Role } from "@/db/schema";
 
-const roleOf = (fd: FormData): Role => ROLES.find((r) => r === str(fd, "role")) ?? "viewer";
+const pickRole = (fd: FormData, modules: ModuleKey[]): Role => rolesFor(modules).find((r) => r === str(fd, "role")) ?? "viewer";
 const done = () => { revalidatePath("/users"); redirect("/users?saved=1"); };
 
 /** The company admin creates a user who signs in with a username and the password the admin gives them. */
@@ -34,8 +34,9 @@ export async function createUser(fd: FormData) {
     await db.transaction(async (tx) => {
       const [u] = await tx.insert(schema.users).values({ username, name, email, passwordHash: await hashPassword(password), createdBy: ctx.user.id })
         .returning({ id: schema.users.id });
-      await tx.insert(schema.memberships).values({ companyId: ctx.company.id, userId: u.id, role: roleOf(fd) });
-      await audit(tx, ctx.company.id, ctx.user.id, "create", "user", username, { role: roleOf(fd) });
+      const role = pickRole(fd, ctx.modules);
+      await tx.insert(schema.memberships).values({ companyId: ctx.company.id, userId: u.id, role });
+      await audit(tx, ctx.company.id, ctx.user.id, "create", "user", username, { role });
     });
   } catch (e) { fail(e, "/users"); }
   done();
@@ -55,8 +56,9 @@ export async function changeRole(fd: FormData) {
     if (userId === ctx.user.id) throw new UserError("err_self_role");
     await memberOf(ctx.company.id, userId);
     const db = await getDb();
-    await db.update(schema.memberships).set({ role: roleOf(fd) }).where(and(eq(schema.memberships.companyId, ctx.company.id), eq(schema.memberships.userId, userId)));
-    await audit(db, ctx.company.id, ctx.user.id, "change_role", "user", userId, { role: roleOf(fd) });
+    const role = pickRole(fd, ctx.modules);
+    await db.update(schema.memberships).set({ role }).where(and(eq(schema.memberships.companyId, ctx.company.id), eq(schema.memberships.userId, userId)));
+    await audit(db, ctx.company.id, ctx.user.id, "change_role", "user", userId, { role });
   } catch (e) { fail(e, "/users"); }
   done();
 }

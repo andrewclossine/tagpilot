@@ -160,6 +160,17 @@ code.k { font-family: var(--f-num); font-size: 13px; }
 .steps li { font: 600 12px var(--f-body); padding: 4px 10px; border-radius: 12px; background: var(--surface-2); color: var(--muted); }
 .steps li.done { background: var(--ok-soft); color: var(--ok); }
 .steps li.now { background: var(--accent); color: var(--accent-ink); }
+.workspaces { display: flex; flex-direction: column; gap: 2px; background: var(--side-active); border-radius: var(--r); padding: 4px; }
+.workspace { color: var(--side-fg); text-decoration: none; font: 600 13px var(--f-body); padding: 6px 10px; border-radius: 4px; }
+.workspace:hover { color: #fff; }
+.workspace.on { background: var(--accent); color: #fff; }
+.workspace-title { font: 600 13px var(--f-body); color: #fff; padding: 6px 10px; background: var(--side-active); border-radius: var(--r); }
+.modules { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; border: 0; padding: 0; margin: 0; }
+.module { display: flex; gap: 10px; align-items: flex-start; border: 1px solid var(--line); border-radius: var(--r); padding: 12px; cursor: pointer; background: var(--surface); }
+.module:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+.module input { width: auto; margin-top: 3px; }
+.module > span { display: flex; flex-direction: column; gap: 4px; }
+.module .num { text-align: left; }
 tr.lf-goal td { font-weight: 700; background: var(--accent-soft); }
 tr.lf-outcome td { font-weight: 600; background: var(--surface-2); }
 tr.lf-output td { font-weight: 600; }

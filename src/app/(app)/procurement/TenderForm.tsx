@@ -22,11 +22,13 @@ export async function TenderForm({ ctx, kind, tender }: { ctx: Ctx; kind: "rfq" 
       <label className="f">{t("tn_requirements")}<textarea id="t-requirements" name="requirements" rows={6} defaultValue={tender?.requirements} /></label>
       <div className="fields">
         <label className="f">{t("tn_deadline")}<DeadlineInput id="t-deadline" name="deadline" defaultValue={tender?.deadline?.toISOString()} /></label>
-        <label className="f">{t("project")}
-          <select id="t-project" name="projectId" defaultValue={tender?.projectId ?? ""}>
-            <option value="">{t("none")}</option>
-            {projects.map((p) => <option key={p.id} value={p.id}>{p.code} · {p.name}</option>)}
-          </select></label>
+        {ctx.has("projects") ? (
+          <label className="f">{t("project")}
+            <select id="t-project" name="projectId" defaultValue={tender?.projectId ?? ""}>
+              <option value="">{t("none")}</option>
+              {projects.map((p) => <option key={p.id} value={p.id}>{p.code} · {p.name}</option>)}
+            </select></label>
+        ) : null}
         <label className="f">{t("tn_estimate")} ({ctx.company.currency})<input id="t-estimate" name="estimate" className="num" inputMode="decimal" defaultValue={tender?.estimate || ""} /></label>
         <label className="f">{t("tn_technical_weight")}<input id="t-weight" name="technicalWeight" className="num" type="number" min={0} max={100} defaultValue={tender?.technicalWeight ?? (kind === "rfq" ? 0 : 70)} /></label>
         <label className="f">{t("tn_standstill")}<input id="t-standstill" name="standstillDays" className="num" type="number" min={0} max={60} defaultValue={tender?.standstillDays ?? 7} /></label>

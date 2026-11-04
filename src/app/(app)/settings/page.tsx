@@ -14,7 +14,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Sea
   const ctx = await requireView("company");
   const { t, err, accName } = await getI18n();
   const q = await sp(searchParams);
-  const tab = q("tab") === "projects" ? "projects" : "company";
+  const tab = q("tab") === "projects" && ctx.has("accounting") ? "projects" : "company";
   const db = await getDb();
   const c = ctx.company, s = c.settings;
   const edit = ctx.can("company", "write");
@@ -50,16 +50,18 @@ export default async function SettingsPage({ searchParams }: { searchParams: Sea
       <form action={saveCompanySettings} className="panel stack">
         <fieldset disabled={!edit} style={{ border: 0, padding: 0, margin: 0 }} className="stack">
           <CompanyFields t={t} c={c} />
-          <div className="fields">
-            <label className="f">{t("acc_ar")}{accSelect("arAccount", s.arAccount)}</label>
-            <label className="f">{t("acc_ap")}{accSelect("apAccount", s.apAccount)}</label>
-            <label className="f">{t("acc_vat_in")}{accSelect("vatIn", s.vatIn)}</label>
-            <label className="f">{t("acc_vat_out")}{accSelect("vatOut", s.vatOut)}</label>
-            <label className="f">{t("acc_wht")}{accSelect("whtAccount", s.whtAccount)}</label>
-          </div>
-          <h2>{t("set_policy")}</h2>
-          <div className="small muted">{t("pol_help")}</div>
-          <textarea id="s-pol" name="policies" rows={12} defaultValue={c.policies} />
+          {ctx.has("accounting") ? <>
+            <div className="fields">
+              <label className="f">{t("acc_ar")}{accSelect("arAccount", s.arAccount)}</label>
+              <label className="f">{t("acc_ap")}{accSelect("apAccount", s.apAccount)}</label>
+              <label className="f">{t("acc_vat_in")}{accSelect("vatIn", s.vatIn)}</label>
+              <label className="f">{t("acc_vat_out")}{accSelect("vatOut", s.vatOut)}</label>
+              <label className="f">{t("acc_wht")}{accSelect("whtAccount", s.whtAccount)}</label>
+            </div>
+            <h2>{t("set_policy")}</h2>
+            <div className="small muted">{t("pol_help")}</div>
+            <textarea id="s-pol" name="policies" rows={12} defaultValue={c.policies} />
+          </> : null}
           {edit ? <div><button type="submit" className="btn primary">{t("save")}</button></div> : null}
         </fieldset>
       </form>
@@ -104,10 +106,12 @@ export default async function SettingsPage({ searchParams }: { searchParams: Sea
   return (
     <div className="stack">
       <PageHead title={t("set_title")} />
-      <Tabs current={tab} items={[
-        { key: "company", href: "/settings", label: t("set_company") },
-        { key: "projects", href: "/settings?tab=projects", label: t("set_projects") },
-      ]} />
+      {ctx.has("accounting") ? (
+        <Tabs current={tab} items={[
+          { key: "company", href: "/settings", label: t("set_company") },
+          { key: "projects", href: "/settings?tab=projects", label: t("set_projects") },
+        ]} />
+      ) : null}
       <ErrorNote message={err(q("error"))} />
       {q("saved") ? <div className="note ok small">{t("saved")}</div> : null}
       {body}

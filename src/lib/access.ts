@@ -46,13 +46,48 @@ export async function canReadAttachment(db: Db, ctx: Ctx, attachmentId: string):
   if (voucher && !supplier) return canSeeVoucher(ctx, voucher) || ctx.can("journal");
 
   // A file from a supplier that nothing points to any more, such as a bid they replaced, stays closed.
-  const [uploader] = await db.select({ role: schema.memberships.role }).from(schema.attachments)
-    .innerJoin(schema.memberships, and(eq(schema.memberships.userId, schema.attachments.uploadedBy), eq(schema.memberships.companyId, schema.attachments.companyId)))
+  const uploaders = await db.select({ role: schema.memberships.role, companyId: schema.memberships.companyId }).from(schema.attachments)
+    .innerJoin(schema.memberships, eq(schema.memberships.userId, schema.attachments.uploadedBy))
     .where(eq(schema.attachments.id, attachmentId));
-  if (uploader?.role === "supplier") return false;
+  if (uploaders.some((u) => u.role === "supplier" || u.companyId !== ctx.company.id)) return false;
 
   // Everything else is a supporting document of the books.
-  return !supplier && ctx.role !== "staff" && ctx.role !== "procurement";
+  return !supplier && ctx.role !== "staff" && ctx.role !== "procurement" && ctx.has("accounting");
+}
+
+/**
+ * A file held by another organisation, for a supplier organisation that bids to it: the document of an advert,
+ * its own bid, the notices it may read, and what belongs to a contract it won. Other bidders' files stay closed.
+ */
+export async function canReadAsBidder(db: Db, ctx: Ctx, attachmentId: string): Promise<boolean> {
+  if (!ctx.can("bidding")) return false;
+  const partners = await db.select({ id: schema.partners.id }).from(schema.partners).where(eq(schema.partners.linkedCompanyId, ctx.company.id));
+  const mine = (partnerId: string) => partners.some((p) => p.id === partnerId);
+
+  const [bid] = await db.select().from(schema.bids).where(eq(schema.bids.attachmentId, attachmentId));
+  if (bid) return mine(bid.partnerId);
+
+  const [tender] = await db.select().from(schema.tenders).where(eq(schema.tenders.attachmentId, attachmentId));
+  if (tender) {
+    if (tender.openToAll && tender.status !== "draft" && tender.status !== "cancelled") return true;
+    const bids = await db.select().from(schema.bids).where(eq(schema.bids.tenderId, tender.id));
+    return tender.status !== "draft" && bids.some((b) => mine(b.partnerId));
+  }
+
+  const [stage] = await db.select().from(schema.tenderStages).where(eq(schema.tenderStages.attachmentId, attachmentId));
+  if (stage) {
+    const bids = await db.select().from(schema.bids).where(eq(schema.bids.tenderId, stage.tenderId));
+    return supplierSeesStage(stage.stage as TenderStage, bids.find((b) => mine(b.partnerId)));
+  }
+
+  const [g] = await db.select({ contractId: schema.performanceGuarantees.contractId }).from(schema.performanceGuarantees).where(eq(schema.performanceGuarantees.attachmentId, attachmentId));
+  const [a] = await db.select({ contractId: schema.contractAmendments.contractId }).from(schema.contractAmendments).where(eq(schema.contractAmendments.attachmentId, attachmentId));
+  const [contract] = await db.select().from(schema.contracts).where(or(
+    eq(schema.contracts.attachmentId, attachmentId),
+    ...(g ? [eq(schema.contracts.id, g.contractId)] : []),
+    ...(a ? [eq(schema.contracts.id, a.contractId)] : []),
+  ));
+  return !!contract && mine(contract.partnerId);
 }
 
 /** Staff see their own requests; those who approve, pay or review see them all. */

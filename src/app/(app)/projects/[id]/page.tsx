@@ -131,11 +131,13 @@ export default async function ProjectPage({ params, searchParams }: { params: Pr
           {budgetEditable ? (
             <div className="fields">
               <label className="f">{t("budget")} ({ctx.company.currency})<input id="i-budget" name="budget" className="num" inputMode="decimal" defaultValue={editing?.budget || ""} /></label>
-              <label className="f">{t("prj_account")}
-                <select id="i-account" name="accountId" defaultValue={editing?.accountId ?? ""}>
-                  <option value="">{t("none")}</option>
-                  {accounts.map((a) => <option key={a.id} value={a.id}>{a.code} · {accName(a)}</option>)}
-                </select></label>
+              {ctx.has("accounting") ? (
+                <label className="f">{t("prj_account")}
+                  <select id="i-account" name="accountId" defaultValue={editing?.accountId ?? ""}>
+                    <option value="">{t("none")}</option>
+                    {accounts.map((a) => <option key={a.id} value={a.id}>{a.code} · {accName(a)}</option>)}
+                  </select></label>
+              ) : null}
             </div>
           ) : canBudget ? <div className="small muted">{t("prj_budget_from_children")}</div> : null}
           {canBudget && parent?.level === "activity" ? <div className="note info small">{t("prj_split_note")}</div> : null}

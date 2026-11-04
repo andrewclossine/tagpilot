@@ -4,6 +4,7 @@ import { getDb, schema } from "@/db";
 import type { TenderStage } from "@/db/schema";
 import type { Ctx } from "./auth";
 import { canSeeVoucher } from "./access";
+import { advertFor } from "./bidding";
 import { isUuid, money as fmtMoney } from "./format";
 import { getI18n } from "./i18n";
 import { UserError } from "./ledger";
@@ -52,13 +53,24 @@ export async function buildTenderPdf(ctx: Ctx, id: string, stageParam: string | 
   if (!isUuid(id)) throw new UserError("err_not_found");
   const { t, lang } = await getI18n();
   const db = await getDb();
-  const [tender] = await db.select().from(schema.tenders).where(and(eq(schema.tenders.id, id), eq(schema.tenders.companyId, ctx.company.id)));
+  const [tender] = await db.select().from(schema.tenders).where(eq(schema.tenders.id, id));
   if (!tender) throw new UserError("err_not_found");
-  const supplier = ctx.role === "supplier" ? ctx.partnerId : null;
-  if (ctx.role === "supplier" ? !supplier : !ctx.can("procurement")) throw new UserError("err_not_found");
-  const [mine] = supplier ? await db.select().from(schema.bids).where(and(eq(schema.bids.tenderId, id), eq(schema.bids.partnerId, supplier))) : [];
-  if (supplier && !mine && !(await supplierCanSee(db, tender, supplier))) throw new UserError("err_not_found");
-  const footer = t("pdf_footer"), company = await printedCompany(ctx);
+  // Three kinds of reader: the organisation's own people, its invited suppliers, and supplier organisations bidding on an advert.
+  const own = tender.companyId === ctx.company.id;
+  const supplier = own && ctx.role === "supplier" ? ctx.partnerId : null;
+  let mine: typeof schema.bids.$inferSelect | undefined;
+  let printed = ctx.company;
+  if (!own) {
+    const ad = ctx.can("bidding") ? await advertFor(db, ctx, id) : null;
+    if (!ad) throw new UserError("err_not_found");
+    mine = ad.bid; printed = ad.buyer;
+  } else if (ctx.role === "supplier") {
+    if (!supplier) throw new UserError("err_not_found");
+    [mine] = await db.select().from(schema.bids).where(and(eq(schema.bids.tenderId, id), eq(schema.bids.partnerId, supplier)));
+    if (!mine && !(await supplierCanSee(db, tender, supplier))) throw new UserError("err_not_found");
+  } else if (!ctx.can("procurement")) throw new UserError("err_not_found");
+  const outsider = !own || !!supplier;
+  const footer = t("pdf_footer"), company = await printedCompany({ company: printed });
   const stage = stageParam as TenderStage | null;
   const amount = (n: number) => fmtMoney(n, lang, 2).replace(/[  ]/g, " ");
 
@@ -72,13 +84,13 @@ export async function buildTenderPdf(ctx: Ctx, id: string, stageParam: string | 
   }
 
   const [st] = await db.select().from(schema.tenderStages).where(and(eq(schema.tenderStages.tenderId, id), eq(schema.tenderStages.stage, stage)));
-  if (!st || (supplier && !supplierSeesStage(stage, mine))) throw new UserError("err_not_found");
+  if (!st || (outsider && !supplierSeesStage(stage, mine))) throw new UserError("err_not_found");
   let columns: LetterPdfData["columns"], rows: LetterPdfData["rows"];
-  if (!supplier && (stage === "opening" || stage === "evaluation")) {
+  if (!outsider && (stage === "opening" || stage === "evaluation")) {
     const bids = await db.select({ b: schema.bids, name: schema.partners.name }).from(schema.bids)
       .innerJoin(schema.partners, eq(schema.partners.id, schema.bids.partnerId)).where(eq(schema.bids.tenderId, id));
     if (stage === "opening") {
-      columns = [{ label: t("supplier"), width: 345 }, { label: `${t("amount")} (${ctx.company.currency})`, width: 150, align: "right" }];
+      columns = [{ label: t("supplier"), width: 345 }, { label: `${t("amount")} (${printed.currency})`, width: 150, align: "right" }];
       rows = bids.sort((a, b) => a.name.localeCompare(b.name)).map(({ b, name }) => [name, amount(b.amount)]);
     } else {
       columns = [

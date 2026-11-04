@@ -3,11 +3,12 @@ import { getDb, schema } from "@/db";
 import { getCtx } from "@/lib/auth";
 import { getI18n } from "@/lib/i18n";
 import { sp, type SearchParams } from "@/lib/actions";
-import { paymentsConfigured, planPrices } from "@/lib/billing";
+import { modulePrices, paymentsConfigured, planPrices } from "@/lib/billing";
+import { ModulePicker } from "@/components/ModulePicker";
 import { money as fmt } from "@/lib/format";
 import { Empty, ErrorNote, PageHead, Pill } from "@/components/ui";
 import { redirect } from "next/navigation";
-import { subscribe } from "./actions";
+import { changeModules, subscribe } from "./actions";
 
 export const metadata = { title: "Subscription" };
 
@@ -16,7 +17,8 @@ export default async function BillingPage({ searchParams }: { searchParams: Sear
   if (!ctx.isAdmin) redirect("/no-access");
   const { t, err, lang } = await getI18n();
   const q = await sp(searchParams);
-  const price = planPrices();
+  const price = planPrices(ctx.company.modules);
+  const unpaid = ctx.company.modules.filter((m) => !ctx.has(m));
   const db = await getDb();
   const history = await db.select().from(schema.subscriptionPayments).where(eq(schema.subscriptionPayments.companyId, ctx.company.id))
     .orderBy(desc(schema.subscriptionPayments.createdAt)).limit(24);
@@ -37,6 +39,14 @@ export default async function BillingPage({ searchParams }: { searchParams: Sear
         </div>
         <div className="small muted">{t("billing_plan_help")}</div>
       </div>
+      {q("saved") ? <div className="note ok small">{t("saved")}</div> : null}
+      <form action={changeModules} className="panel stack">
+        <h2>{t("modules_title")}</h2>
+        <div className="small muted">{t("modules_change_help")}</div>
+        <ModulePicker t={t} lang={lang} prices={modulePrices()} currency={price.currency} selected={ctx.company.modules} />
+        {unpaid.length ? <div className="note warn small">{t("modules_unpaid")}: {unpaid.map((m) => t(`module_${m}`)).join(", ")}</div> : null}
+        <div><button type="submit" className="btn">{t("save")}</button></div>
+      </form>
       {!paymentsConfigured() ? <div className="note warn">{t("err_payments_off")}</div> : null}
       <div className="grid2">
         {(["monthly", "yearly"] as const).map((period) => (

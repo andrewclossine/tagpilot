@@ -1,17 +1,19 @@
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
-import { canReadAttachment } from "@/lib/access";
+import { canReadAsBidder, canReadAttachment } from "@/lib/access";
 import { getCtx } from "@/lib/auth";
+import { isUuid } from "@/lib/format";
 import { readAttachment } from "@/lib/storage";
 
-/** Serves a file to members of the company that owns it who may see it. */
+/** Serves a file to those who may see it: members of the organisation that holds it, or a supplier organisation bidding to it. */
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const ctx = await getCtx();
+  if (!isUuid(id)) return new Response("Not found", { status: 404 });
   const db = await getDb();
-  const [a] = await db.select().from(schema.attachments)
-    .where(and(eq(schema.attachments.id, id), eq(schema.attachments.companyId, ctx.company.id)));
-  if (!a || !(await canReadAttachment(db, ctx, a.id))) return new Response("Not found", { status: 404 });
+  const [a] = await db.select().from(schema.attachments).where(eq(schema.attachments.id, id));
+  const allowed = a && (a.companyId === ctx.company.id ? await canReadAttachment(db, ctx, a.id) : await canReadAsBidder(db, ctx, a.id));
+  if (!a || !allowed) return new Response("Not found", { status: 404 });
   const bytes = await readAttachment(a.storagePath);
   return new Response(new Uint8Array(bytes), {
     headers: {

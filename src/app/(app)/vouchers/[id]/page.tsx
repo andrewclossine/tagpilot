@@ -112,7 +112,21 @@ export default async function VoucherPage({ params, searchParams }: { params: Pr
         </form>
       ) : v.status === "submitted" && mine && ctx.can("voucher_approve", "write") ? <div className="note info small">{t("err_self_approval")}</div> : null}
 
-      {v.status === "approved" && canPay ? (
+      {v.status === "paid" && v.paymentReference ? <div className="panel small"><span className="label">{t("reference")}</span> {v.paymentReference}</div> : null}
+
+      {v.status === "approved" && canPay && !ctx.has("accounting") ? (
+        <form action={pay} className="panel stack">
+          <h2>{t("pv_mark_paid")}</h2>
+          <input type="hidden" name="id" value={v.id} />
+          <div className="fields">
+            <label className="f">{t("date")}<input id="p-date" name="date" type="date" required defaultValue={today()} /></label>
+            <label className="f">{t("reference")}<input id="p-reference" name="reference" /></label>
+          </div>
+          <div><button type="submit" className="btn primary">{t("pv_mark_paid")}</button></div>
+        </form>
+      ) : null}
+
+      {v.status === "approved" && canPay && ctx.has("accounting") ? (
         <form action={pay} className="panel stack">
           <h2>{t("pv_pay")}</h2>
           <input type="hidden" name="id" value={v.id} />

@@ -8,7 +8,7 @@ import { fail } from "@/lib/actions";
 import { isIsoDate, isUuid, parseAmount, str, today } from "@/lib/format";
 import { UserError } from "@/lib/ledger";
 import { nextNumber } from "@/lib/numbering";
-import { assertBudgetLine, decideVoucher, payVoucher, submitVoucher } from "@/lib/programs";
+import { assertBudgetLine, decideVoucher, markVoucherPaid, payVoucher, submitVoucher } from "@/lib/programs";
 import { optionalUpload } from "@/lib/upload";
 import { audit } from "@/lib/audit";
 
@@ -111,7 +111,9 @@ export async function pay(fd: FormData) {
   try {
     if (!isIsoDate(date)) throw new UserError("err_required");
     const db = await getDb();
-    await db.transaction((tx) => payVoucher(tx, ctx.company.id, ctx.user.id, id, { date, moneyAccountId: str(fd, "moneyAccountId"), expenseAccountId: str(fd, "expenseAccountId") }));
+    await db.transaction((tx) => ctx.has("accounting")
+      ? payVoucher(tx, ctx.company.id, ctx.user.id, id, { date, moneyAccountId: str(fd, "moneyAccountId"), expenseAccountId: str(fd, "expenseAccountId") }).then(() => undefined)
+      : markVoucherPaid(tx, ctx.company.id, ctx.user.id, id, str(fd, "reference")));
   } catch (e) { fail(e, `/vouchers/${id}`); }
   refresh(id);
   revalidatePath("/journal");

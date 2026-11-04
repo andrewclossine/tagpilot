@@ -15,7 +15,7 @@ Interface in English and French. Any home currency. IFRS presentation (IAS 16 fo
 
 1. Flutterwave dashboard > Settings > API keys: put the secret key in `FLW_SECRET_KEY` (test key first, live key in production).
 2. Flutterwave dashboard > Settings > Webhooks: URL `<APP_URL>/api/flutterwave/webhook`, choose a secret hash and put the same value in `FLW_SECRET_HASH`.
-3. Set the prices: `SUBSCRIPTION_CURRENCY`, `SUBSCRIPTION_PRICE_MONTHLY`, `SUBSCRIPTION_PRICE_YEARLY`.
+3. Set the prices: `SUBSCRIPTION_CURRENCY`, `PRICE_ACCOUNTING_MONTHLY`, `PRICE_PROJECTS_MONTHLY`, `PRICE_PROCUREMENT_MONTHLY`, `PRICE_BIDDING_MONTHLY`.
 4. Email: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM` from your mail provider. Without SMTP on your computer, reset links are printed in the terminal.
 
 ## Modules
