@@ -50,6 +50,13 @@
       "when": 1792942909414,
       "tag": "0006_login_failures",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1793791029269,
+      "tag": "0007_programs_procurement_contracts",
+      "breakpoints": true
     }
   ]
 }

@@ -53,7 +53,13 @@ export async function reverseJournal(fd: FormData) {
   let newId: string;
   try {
     const db = await getDb();
-    newId = await db.transaction((tx) => reverseEntry(tx, ctx.company.id, ctx.user.id, id, str(fd, "date") || today(), t("reverse_of")));
+    newId = await db.transaction(async (tx) => {
+      const reversal = await reverseEntry(tx, ctx.company.id, ctx.user.id, id, str(fd, "date") || today(), t("reverse_of"));
+      // Reversing a voucher's payment puts the voucher back to approved, so it can be paid again.
+      await tx.update(schema.paymentVouchers).set({ status: "approved", entryId: null, paidBy: null, paidAt: null })
+        .where(and(eq(schema.paymentVouchers.entryId, id), eq(schema.paymentVouchers.companyId, ctx.company.id)));
+      return reversal;
+    });
   } catch (e) { fail(e, `/journal/${id}`); }
   revalidatePath("/journal");
   redirect(`/journal/${newId}`);

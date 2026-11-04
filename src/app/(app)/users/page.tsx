@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { requireView } from "@/lib/auth";
 import { getI18n } from "@/lib/i18n";
@@ -17,7 +17,7 @@ export default async function UsersPage({ searchParams }: { searchParams: Search
   const db = await getDb();
   const members = await db.select({ m: schema.memberships, u: schema.users }).from(schema.memberships)
     .innerJoin(schema.users, eq(schema.users.id, schema.memberships.userId))
-    .where(eq(schema.memberships.companyId, ctx.company.id)).orderBy(schema.users.name);
+    .where(and(eq(schema.memberships.companyId, ctx.company.id), ne(schema.memberships.role, "supplier"))).orderBy(schema.users.name);
   const roleOptions = ROLES.map((r) => <option key={r} value={r}>{t(`role_${r}`)}</option>);
   return (
     <div className="stack">

@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { getCtx } from "@/lib/auth";
 import { getI18n } from "@/lib/i18n";
 import type { Area } from "@/lib/roles";
@@ -7,6 +8,7 @@ import { Logo } from "@/components/Logo";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const ctx = await getCtx();
+  if (ctx.role === "supplier") redirect("/portal");
   const { t, lang } = await getI18n();
   const link = (area: Area, href: string, label: string): NavItem[] => (ctx.can(area) ? [{ href, label }] : []);
   const group = (label: string, items: NavItem[]): NavItem[] => (items.length ? [{ group: label }, ...items] : []);
@@ -23,6 +25,15 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       ...link("assets", "/assets", t("nav_assets")),
       ...link("payroll", "/payroll", t("nav_payroll")),
       ...link("budgets", "/budgets", t("nav_budgets")),
+    ]),
+    ...group(t("nav_programs"), [
+      ...link("projects", "/projects", t("nav_projects")),
+      ...link("vouchers", "/vouchers", t("nav_vouchers")),
+    ]),
+    ...group(t("nav_procurement"), [
+      ...link("procurement", "/procurement", t("nav_tenders")),
+      ...link("procurement", "/procurement/suppliers", t("nav_supplier_accounts")),
+      ...link("contracts", "/contracts", t("nav_contracts")),
     ]),
     ...group(t("nav_reports"), [
       ...link("reports", "/reports", t("nav_reports")),

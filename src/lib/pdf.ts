@@ -54,8 +54,10 @@ function header(doc: PDFKit.PDFDocument, c: Company, title: string, lines: [stri
   for (const l of info) doc.text(l, { width: 280 });
   const leftEnd = doc.y; // the right-hand block moves doc.y, so remember where the company details end
   doc.font("Helvetica-Bold").fontSize(20).fillColor(BLUE).text(title.toUpperCase(), 330, top, { width: 215, align: "right" });
+  // A long title takes two lines; the number and date go below it.
+  const titleEnd = doc.y;
   doc.font("Helvetica").fontSize(9);
-  let y = top + 28;
+  let y = Math.max(top + 28, titleEnd + 6);
   for (const [k, v] of lines) {
     doc.fillColor(MUTED).text(k, 330, y, { width: 105, align: "right" });
     doc.fillColor(INK).font("Helvetica-Bold").text(v, 440, y, { width: 105, align: "right" }).font("Helvetica");
@@ -174,5 +176,60 @@ export function payslipPdf(d: PayslipPdfData): Promise<Buffer> {
       doc.font("Helvetica").fontSize(9).fillColor(MUTED).text(er.map((c) => `${c.name}: ${m(r.employer[c.code] ?? 0)}`).join("   ·   "), { width: 495 });
     }
     footer(doc, d.labels.footer);
+  });
+}
+
+export type VoucherPdfData = {
+  company: Company; lang: Lang;
+  labels: Record<"title" | "number" | "date" | "status" | "project" | "line" | "payee" | "amountRequested" | "activityBudget" | "previousExecution" | "totalExecution" | "balance" | "description" | "requestedBy" | "approvedBy" | "paidBy" | "signature" | "footer", string>;
+  voucher: { number: string; date: string; status: string; amount: number; activityBudget: number; previousExecution: number; description: string; payee: string };
+  project: string; line: string; requestedBy: string; approvedBy: string; paidBy: string;
+};
+
+/** The payment voucher: what is asked for, and where it leaves the budget line. */
+export function voucherPdf(d: VoucherPdfData): Promise<Buffer> {
+  const m = (n: number) => amount(n, d.lang);
+  const cur = d.company.currency, v = d.voucher, l = d.labels;
+  const total = v.previousExecution + v.amount;
+  return render((doc) => {
+    header(doc, d.company, l.title, [[l.number, v.number], [l.date, v.date], [l.status, v.status]]);
+    table(doc, [{ label: l.project, width: 150 }, { label: d.line ? l.line : "", width: 345 }], [[d.project, d.line]]);
+    if (v.payee) doc.font("Helvetica-Bold").fontSize(9.5).fillColor(INK).text(`${l.payee}: `, 50, doc.y, { continued: true }).font("Helvetica").text(v.payee).moveDown(0.8);
+    table(doc, [{ label: "", width: 345 }, { label: cur, width: 150, align: "right" }], [
+      [l.activityBudget, m(v.activityBudget)],
+      [l.previousExecution, m(v.previousExecution)],
+      [l.amountRequested, m(v.amount)],
+      [l.totalExecution, m(total)],
+    ]);
+    totals(doc, [{ label: `${l.balance} ${cur}`, value: m(v.activityBudget - total), strong: true }]);
+    doc.moveDown(0.5).font("Helvetica-Bold").fontSize(8).fillColor(MUTED).text(l.description.toUpperCase(), 50);
+    doc.font("Helvetica").fontSize(10).fillColor(INK).text(v.description, { width: 495 });
+    doc.moveDown(2.5);
+    const y = Math.min(doc.y, doc.page.height - 150);
+    [[l.requestedBy, d.requestedBy], [l.approvedBy, d.approvedBy], [l.paidBy, d.paidBy]].forEach(([k, who], i) => {
+      const x = 50 + i * 170;
+      doc.font("Helvetica-Bold").fontSize(8).fillColor(MUTED).text(k.toUpperCase(), x, y, { width: 155 });
+      doc.font("Helvetica").fontSize(9.5).fillColor(INK).text(who || " ", x, y + 13, { width: 155 });
+      doc.moveTo(x, y + 52).lineTo(x + 150, y + 52).lineWidth(0.5).strokeColor(LINE).stroke();
+      doc.font("Helvetica").fontSize(8).fillColor(MUTED).text(l.signature, x, y + 56, { width: 155 });
+    });
+    footer(doc, l.footer);
+  });
+}
+
+export type LetterPdfData = {
+  company: Company; title: string; lines: [string, string][]; subject: string; addressee?: string; body: string; footer: string;
+  columns?: { label: string; width: number; align?: "left" | "right" | "center" }[]; rows?: string[][];
+};
+
+/** A procurement document: the request for quotation or tender, an opening or evaluation record, a notification. */
+export function letterPdf(d: LetterPdfData): Promise<Buffer> {
+  return render((doc) => {
+    header(doc, d.company, d.title, d.lines);
+    if (d.addressee) doc.font("Helvetica").fontSize(10).fillColor(INK).text(d.addressee, 50).moveDown(0.8);
+    doc.font("Helvetica-Bold").fontSize(12).fillColor(INK).text(d.subject, 50, doc.y, { width: 495 }).moveDown(0.8);
+    if (d.body) doc.font("Helvetica").fontSize(10).fillColor(INK).text(d.body, 50, doc.y, { width: 495 }).moveDown(1);
+    if (d.columns && d.rows?.length) table(doc, d.columns, d.rows);
+    footer(doc, d.footer);
   });
 }

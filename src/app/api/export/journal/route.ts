@@ -1,13 +1,13 @@
 import { and, asc, eq, gte, lte } from "drizzle-orm";
 import { getDb, schema } from "@/db";
-import { getCtx } from "@/lib/auth";
+import { requireView } from "@/lib/auth";
 import { isIsoDate, today } from "@/lib/format";
 
 const cell = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
 
 /** The posted journal for a period, one row per line, as a CSV that Excel opens directly. */
 export async function GET(req: Request) {
-  const ctx = await getCtx();
+  const ctx = await requireView("journal");
   const url = new URL(req.url);
   const from = isIsoDate(url.searchParams.get("from")) ? url.searchParams.get("from")! : `${today().slice(0, 4)}-01-01`;
   const to = isIsoDate(url.searchParams.get("to")) ? url.searchParams.get("to")! : today();

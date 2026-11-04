@@ -7,7 +7,7 @@ import {
 const money = (name: string) => numeric(name, { precision: 18, scale: 2, mode: "number" }).notNull().default(0);
 const created = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
 
-export type Role = "admin" | "accountant" | "sales" | "purchases" | "payroll" | "viewer";
+export type Role = "admin" | "accountant" | "sales" | "purchases" | "payroll" | "viewer" | "staff" | "procurement" | "supplier";
 export type AccountType = "asset" | "liability" | "equity" | "income" | "expense";
 /** Accounts with a subtype play a fixed role: money accounts appear in Banking, the rest are picked by documents. */
 export type AccountSubtype = "bank" | "cash" | "momo" | "ar" | "ap" | "vat_in" | "vat_out" | "wht" | null;
@@ -85,6 +85,7 @@ export const memberships = pgTable("memberships", {
   companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
   userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   role: text("role").$type<Role>().notNull(),
+  partnerId: uuid("partner_id"), // role "supplier": the supplier this account belongs to
 }, (t) => [primaryKey({ columns: [t.companyId, t.userId] })]);
 
 // ---------- master data ----------
@@ -117,6 +118,7 @@ export const projects = pgTable("projects", {
   code: text("code").notNull(),
   name: text("name").notNull(),
   donor: text("donor").notNull().default(""),
+  kind: text("kind").$type<"project" | "cost_center">().notNull().default("project"),
   isActive: boolean("is_active").notNull().default(true),
 }, (t) => [uniqueIndex("projects_company_code").on(t.companyId, t.code)]);
 
@@ -137,7 +139,7 @@ export type AiInfo = {
   newPartner?: { name: string; tin: string; kind: "customer" | "supplier" } | null;
 };
 
-export type EntrySource = "manual" | "ai" | "invoice" | "invoice_payment" | "bill" | "bill_payment" | "payroll" | "bank" | "reversal";
+export type EntrySource = "manual" | "ai" | "invoice" | "invoice_payment" | "bill" | "bill_payment" | "payroll" | "bank" | "reversal" | "voucher";
 
 export const journalEntries = pgTable("journal_entries", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -410,6 +412,173 @@ export const assetMovements = pgTable("asset_movements", {
   notes: text("notes").notNull().default(""),
   createdAt: created(),
 }, (t) => [index("asset_movements_asset").on(t.assetId, t.date)]);
+
+// ---------- project management: logical framework and budget execution ----------
+export type LogframeLevel = "goal" | "outcome" | "output" | "activity" | "sub_activity";
+
+/** One row of a project's results framework. Activities and sub-activities with no children are its budget lines. */
+export const logframeItems = pgTable("logframe_items", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  projectId: uuid("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  parentId: uuid("parent_id"),
+  level: text("level").$type<LogframeLevel>().notNull(),
+  code: text("code").notNull(),
+  title: text("title").notNull(),
+  indicator: text("indicator").notNull().default(""),
+  target: text("target").notNull().default(""),
+  verification: text("verification").notNull().default(""), // means of verification
+  assumptions: text("assumptions").notNull().default(""),
+  accountId: uuid("account_id").references(() => accounts.id), // account debited when a voucher on this line is paid
+  budget: money("budget"),
+  createdAt: created(),
+}, (t) => [index("logframe_project").on(t.projectId), index("logframe_parent").on(t.parentId)]);
+
+export type VoucherStatus = "draft" | "submitted" | "approved" | "rejected" | "paid";
+
+/** A fund request or payment voucher charged to one budget line. Budget and execution are frozen when it is submitted. */
+export const paymentVouchers = pgTable("payment_vouchers", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  number: text("number").notNull(),
+  date: date("date", { mode: "string" }).notNull(),
+  projectId: uuid("project_id").notNull().references(() => projects.id),
+  budgetItemId: uuid("budget_item_id").notNull().references(() => logframeItems.id),
+  contractId: uuid("contract_id"),
+  partnerId: uuid("partner_id").references(() => partners.id),
+  payee: text("payee").notNull().default(""),
+  amount: money("amount"),
+  description: text("description").notNull(),
+  status: text("status").$type<VoucherStatus>().notNull().default("draft"),
+  activityBudget: money("activity_budget"),
+  previousExecution: money("previous_execution"),
+  attachmentId: uuid("attachment_id").references(() => attachments.id),
+  requestedBy: uuid("requested_by").notNull().references(() => users.id),
+  submittedAt: timestamp("submitted_at", { withTimezone: true }),
+  decidedBy: uuid("decided_by").references(() => users.id),
+  decidedAt: timestamp("decided_at", { withTimezone: true }),
+  decisionNote: text("decision_note").notNull().default(""),
+  paidBy: uuid("paid_by").references(() => users.id),
+  paidAt: timestamp("paid_at", { withTimezone: true }),
+  entryId: uuid("entry_id").references(() => journalEntries.id),
+  createdAt: created(),
+}, (t) => [uniqueIndex("vouchers_company_number").on(t.companyId, t.number), index("vouchers_budget_item").on(t.budgetItemId)]);
+
+// ---------- procurement ----------
+export type TenderKind = "rfq" | "tender";
+export type TenderStatus = "draft" | "published" | "opened" | "evaluated" | "provisional" | "final" | "negotiation" | "negotiated" | "draft_contract" | "signed" | "cancelled";
+/** Steps recorded after bids close. Each one holds the text and file of that document. */
+export type TenderStage = "opening" | "evaluation" | "provisional" | "final" | "negotiation" | "minutes" | "draft_contract" | "signed";
+
+export const tenders = pgTable("tenders", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  number: text("number").notNull(),
+  kind: text("kind").$type<TenderKind>().notNull(),
+  title: text("title").notNull(),
+  description: text("description").notNull().default(""),
+  requirements: text("requirements").notNull().default(""),
+  projectId: uuid("project_id").references(() => projects.id),
+  budgetItemId: uuid("budget_item_id").references(() => logframeItems.id),
+  estimate: money("estimate"),
+  deadline: timestamp("deadline", { withTimezone: true }),
+  openToAll: boolean("open_to_all").notNull().default(false), // every supplier with an account can bid, not only those invited
+  technicalWeight: integer("technical_weight").notNull().default(70), // percent; the rest is the financial score
+  standstillDays: integer("standstill_days").notNull().default(7), // days between provisional and final notification
+  attachmentId: uuid("attachment_id").references(() => attachments.id),
+  status: text("status").$type<TenderStatus>().notNull().default("draft"),
+  createdBy: uuid("created_by").references(() => users.id),
+  createdAt: created(),
+}, (t) => [uniqueIndex("tenders_company_number").on(t.companyId, t.number)]);
+
+export const tenderInvites = pgTable("tender_invites", {
+  tenderId: uuid("tender_id").notNull().references(() => tenders.id, { onDelete: "cascade" }),
+  partnerId: uuid("partner_id").notNull().references(() => partners.id, { onDelete: "cascade" }),
+}, (t) => [primaryKey({ columns: [t.tenderId, t.partnerId] })]);
+
+export const bids = pgTable("bids", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  tenderId: uuid("tender_id").notNull().references(() => tenders.id, { onDelete: "cascade" }),
+  partnerId: uuid("partner_id").notNull().references(() => partners.id),
+  amount: money("amount"),
+  note: text("note").notNull().default(""),
+  attachmentId: uuid("attachment_id").references(() => attachments.id),
+  submittedBy: uuid("submitted_by").references(() => users.id),
+  submittedAt: timestamp("submitted_at", { withTimezone: true }).notNull().defaultNow(),
+  responsive: boolean("responsive"), // null until evaluated
+  technicalScore: numeric("technical_score", { precision: 6, scale: 2, mode: "number" }),
+  financialScore: numeric("financial_score", { precision: 6, scale: 2, mode: "number" }),
+  totalScore: numeric("total_score", { precision: 6, scale: 2, mode: "number" }),
+  rank: integer("rank"),
+  evaluationNote: text("evaluation_note").notNull().default(""),
+  isWinner: boolean("is_winner").notNull().default(false),
+}, (t) => [uniqueIndex("bids_tender_partner").on(t.tenderId, t.partnerId)]);
+
+export const tenderStages = pgTable("tender_stages", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  tenderId: uuid("tender_id").notNull().references(() => tenders.id, { onDelete: "cascade" }),
+  stage: text("stage").$type<TenderStage>().notNull(),
+  date: date("date", { mode: "string" }).notNull(),
+  body: text("body").notNull().default(""),
+  attachmentId: uuid("attachment_id").references(() => attachments.id),
+  createdBy: uuid("created_by").references(() => users.id),
+  createdAt: created(),
+}, (t) => [uniqueIndex("tender_stages_unique").on(t.tenderId, t.stage)]);
+
+// ---------- contract management ----------
+export const contracts = pgTable("contracts", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  number: text("number").notNull(),
+  tenderId: uuid("tender_id").references(() => tenders.id),
+  partnerId: uuid("partner_id").notNull().references(() => partners.id),
+  title: text("title").notNull(),
+  scope: text("scope").notNull().default(""),
+  projectId: uuid("project_id").references(() => projects.id),
+  amount: money("amount"),                                // value when signed; approved amendments change it
+  signedDate: date("signed_date", { mode: "string" }).notNull(),
+  startDate: date("start_date", { mode: "string" }).notNull(),
+  endDate: date("end_date", { mode: "string" }).notNull(), // end when signed; approved amendments change it
+  status: text("status").$type<"active" | "completed" | "terminated">().notNull().default("active"),
+  attachmentId: uuid("attachment_id").references(() => attachments.id),
+  createdBy: uuid("created_by").references(() => users.id),
+  createdAt: created(),
+}, (t) => [uniqueIndex("contracts_company_number").on(t.companyId, t.number)]);
+
+export const performanceGuarantees = pgTable("performance_guarantees", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  contractId: uuid("contract_id").notNull().references(() => contracts.id, { onDelete: "cascade" }),
+  kind: text("kind").notNull().default(""),
+  issuer: text("issuer").notNull().default(""),
+  reference: text("reference").notNull().default(""),
+  amount: money("amount"),
+  issueDate: date("issue_date", { mode: "string" }).notNull(),
+  expiryDate: date("expiry_date", { mode: "string" }).notNull(),
+  status: text("status").$type<"active" | "released" | "called">().notNull().default("active"),
+  attachmentId: uuid("attachment_id").references(() => attachments.id),
+  createdAt: created(),
+}, (t) => [index("guarantees_contract").on(t.contractId)]);
+
+export const contractAmendments = pgTable("contract_amendments", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  contractId: uuid("contract_id").notNull().references(() => contracts.id, { onDelete: "cascade" }),
+  no: integer("no").notNull(), // 1 to 10
+  reason: text("reason").notNull(),
+  amountChange: money("amount_change"), // positive or negative
+  newEndDate: date("new_end_date", { mode: "string" }),
+  status: text("status").$type<"requested" | "approved" | "rejected">().notNull().default("requested"),
+  requestedBy: uuid("requested_by").references(() => users.id),
+  fromSupplier: boolean("from_supplier").notNull().default(false),
+  decidedBy: uuid("decided_by").references(() => users.id),
+  decidedAt: timestamp("decided_at", { withTimezone: true }),
+  decisionNote: text("decision_note").notNull().default(""),
+  attachmentId: uuid("attachment_id").references(() => attachments.id),
+  createdAt: created(),
+}, (t) => [index("amendments_contract").on(t.contractId)]);
 
 // ---------- subscription & account recovery ----------
 export const subscriptionPayments = pgTable("subscription_payments", {

@@ -205,6 +205,60 @@ const en = {
   err_ai_key: "The Claude API key was not accepted. Create a new key at console.anthropic.com, copy it in full into ANTHROPIC_API_KEY in .env.local, and restart.",
   err_ai_credit: "The Claude account has no credit left. Add credit at console.anthropic.com (Billing), then try again.",
   err_ai_busy: "The AI service is busy or unreachable right now. Try again in a minute.",
+
+  nav_programs: "Projects", nav_projects: "Projects & budgets", nav_vouchers: "Payment vouchers", nav_procurement: "Procurement", nav_tenders: "Tenders & RFQs", nav_supplier_accounts: "Supplier accounts", nav_contracts: "Contracts",
+  role_staff: "Staff", role_staff_help: "Sees project budgets and makes fund requests. Sees only their own requests.",
+  role_procurement: "Procurement officer", role_procurement_help: "Runs tenders and RFQs, supplier accounts and contracts. Sees project budgets.",
+  role_supplier: "Supplier", role_supplier_help: "Uses the supplier portal only: sends bids and sees their own results and contracts.",
+  src_voucher: "Payment voucher",
+
+  prj_title: "Projects & cost centers", prj_sub: "Each project or cost center has a results framework: goal, outcomes, outputs, activities and sub-activities. Activities carry the budget, and staff charge payment vouchers to them.",
+  prj_project: "Project", prj_cost_center: "Cost center", prj_add: "Add a project or cost center", prj_executed: "Budget execution", prj_paid: "Paid", balance_left: "Balance",
+  prj_budget_tab: "Budget & execution", prj_logframe_tab: "Logical framework", prj_result: "Result / activity", prj_indicator: "Indicator", prj_target: "Target", prj_verification: "Means of verification", prj_assumptions: "Assumptions",
+  prj_empty: "No results yet. Start by adding the goal.", prj_statement: "Statement", prj_account: "Account to charge when paid", prj_budget_from_children: "This budget is the total of the sub-activities under it.",
+  prj_split_note: "The budget of this activity moves to its sub-activities: enter the budget on each one.",
+  lv_goal: "Goal / impact", lv_outcome: "Outcome", lv_output: "Output", lv_activity: "Activity", lv_sub_activity: "Sub-activity",
+
+  pv_title: "Fund requests & payment vouchers", pv_new: "New fund request", pv_voucher: "Payment voucher", pv_budget_line: "Budget line", pv_amount_requested: "Amount requested", pv_payee: "Pay to",
+  pv_description: "Description of the activity", pv_support: "Supporting document", pv_submit: "Submit for approval", pv_requested_by: "Requested by", pv_approved_by: "Approved by", pv_paid_by: "Paid by", pv_signature: "Signature and date",
+  pv_activity_budget: "Activity budget", pv_previous_execution: "Previous budget execution", pv_total_execution: "Total budget execution", pv_journal_entry: "Journal entry",
+  pv_decision: "Decision", pv_decision_note: "Comment (required to refuse)", pv_approve: "Approve", pv_reject: "Refuse", pv_pay: "Pay and post", pv_pay_note: "Paying posts the entry: debit the account above, credit the money account.",
+  pv_no_lines: "No budget lines yet. Add activities with a budget to a project first.",
+  vs_draft: "Draft", vs_submitted: "Waiting for approval", vs_approved: "Approved", vs_rejected: "Refused", vs_paid: "Paid",
+
+  tn_title: "Tenders & requests for quotation", tn_rfq: "Request for quotation", tn_tender: "Tender", tn_new_rfq: "New request for quotation", tn_new_tender: "New tender", tn_subject: "Subject", tn_description: "Description", tn_requirements: "Requirements and specifications",
+  tn_deadline: "Deadline for bids", tn_estimate: "Estimated value", tn_technical_weight: "Technical weight (%)", tn_standstill: "Days between provisional and final notification", tn_open_to_all: "Open to every supplier with an account, not only those invited",
+  tn_document_file: "Tender document", tn_bids: "Bids", tn_invite: "Invite suppliers", tn_no_account: "no account yet", tn_publish: "Publish", tn_cancel: "Cancel this procurement",
+  tn_sealed: "Bids are sealed.", tn_sealed_help: "{n} received. Amounts and files stay closed to everyone until the opening is recorded after the deadline.", tn_ready_to_open: "The deadline has passed: the bids can be opened.",
+  tn_tech: "Technical", tn_fin: "Financial", tn_rank: "Rank", tn_responsive: "Responsive", tn_not_responsive: "Not responsive", tn_winner: "Winner", tn_bid_file: "Bid document", tn_file: "File",
+  tn_eval_help: "Give each responsive bid a technical score out of 100. The lowest price gets a financial score of 100, and the total counts technical at {w}%.", tn_winner_help: "Leave the winner empty to take the highest ranked bid. Explain in the report if you choose another.",
+  tn_eval_report: "Evaluation report", tn_save_evaluation: "Save evaluation result", tn_text: "Text of the document", tn_minutes_text: "Minutes of negotiation", tn_record: "Record", tn_skip_negotiation: "No negotiation needed: go straight to the draft contract.",
+  tn_standstill_wait: "The standstill period runs until {date}. The final notification can be sent from that day.",
+  stage_opening: "Bid opening", stage_evaluation: "Bid evaluation result", stage_provisional: "Provisional notification", stage_final: "Final notification", stage_negotiation: "Invitation for negotiation", stage_minutes: "Minutes of negotiation", stage_draft_contract: "Draft contract", stage_signed: "Signed contract",
+  ts_draft: "Draft", ts_published: "Published", ts_opened: "Bids opened", ts_evaluated: "Evaluated", ts_provisional: "Provisional notice", ts_final: "Final notice", ts_negotiation: "In negotiation", ts_negotiated: "Negotiated", ts_draft_contract: "Draft contract", ts_signed: "Contract signed", ts_cancelled: "Cancelled",
+  tpl_opening: "Bids received for {number}, {title}, were opened in the presence of:\n\n", tpl_provisional: "Following the evaluation of bids for {number}, {title}, we intend to award the contract to {winner} for {amount}. Unless a complaint changes this result, the award becomes final from {date}.",
+  tpl_final: "We confirm that {winner} is awarded {number}, {title}, for {amount}.", tpl_negotiation: "We invite you to negotiate {number}, {title}.\n\nDate and time:\nPlace:\nBring:", tpl_draft_contract: "Please find the draft contract for {number}, {title}, for your review.",
+  mail_tender_published: "A new procurement is open for bids in your supplier portal", mail_tender_update: "There is an update in your supplier portal",
+
+  sa_sub: "A supplier signs in with this account to see tenders, send bids and quotations, and follow results and contracts. It cannot see anything else.", sa_add: "Create a supplier account", sa_contact: "Contact person", sa_new_supplier: "New supplier (fill in the name)", sa_company_name: "Name of the new supplier",
+
+  ct_new: "New contract", ct_subject: "Subject", ct_scope: "Scope", ct_amount: "Contract amount", ct_current_amount: "Current amount", ct_paid: "Paid so far", ct_signed_date: "Date signed", ct_start: "Start date", ct_end: "End date", ct_signed_file: "Signed contract",
+  ct_complete: "Mark completed", ct_terminate: "Terminate", ct_reopen: "Reopen", cs_active: "Active", cs_completed: "Completed", cs_terminated: "Terminated",
+  ct_guarantees: "Performance guarantee", ct_issuer: "Issued by", ct_issue: "Issue date", ct_expiry: "Expiry date", ct_add_guarantee: "Add guarantee", ct_release: "Release", ct_call: "Call in", ct_bank_guarantee: "Bank guarantee", ct_insurance_bond: "Insurance bond",
+  gs_active: "Active", gs_released: "Released", gs_called: "Called in", ct_guarantees_expiring: "{n} performance guarantee(s) expire within 30 days or have expired.",
+  ct_amendments: "Amendments", ct_amendment_no: "Amendment", ct_request_amendment: "Request an amendment", ct_reason: "Reason", ct_amount_change: "Change in amount (+ or -)", ct_new_end: "New end date", ct_from_supplier: "Requested by the supplier",
+  as_requested: "Requested", as_approved: "Approved", as_rejected: "Refused",
+
+  portal_title: "Supplier portal", portal_tenders: "Tenders & RFQs", portal_sub: "Open requests you can respond to, and the ones you have bid on.", portal_none: "Nothing open for you right now.", portal_my_bid: "My bid", portal_open: "Open", portal_closed: "Closed",
+  portal_amount: "Total amount of your bid", portal_send_bid: "Send my bid", portal_update_bid: "Replace my bid", portal_bid_sent: "Your bid was received.", portal_sealed_note: "Nobody at the organisation can see your bid before the opening. You can replace it until the deadline.",
+
+  err_logframe_depth: "Sub-activities are the last level of the framework.", err_line_has_vouchers: "Vouchers or tenders already use this budget line, so it cannot be split or deleted.", err_logframe_has_children: "Delete the rows under this one first.",
+  err_budget_below_execution: "The budget cannot be lower than what has already been executed on this line.", err_not_budget_line: "Choose an activity or sub-activity with no rows under it.", err_voucher_state: "This cannot be done at its current status.",
+  err_voucher_not_yours: "Only the person who wrote this request can change it.", err_over_budget: "This request is more than the balance on the budget line.", err_self_approval: "You cannot approve your own request. Someone else must approve it.", err_reason_required: "Give the reason for refusing.",
+  err_tender_state: "This step is not possible at the current status of the procurement.", err_deadline: "Set a deadline in the future before publishing.", err_no_invites: "Invite at least one supplier, or open it to all suppliers.",
+  err_opening_early: "Bids cannot be opened before the deadline.", err_standstill: "The standstill period has not ended yet.", err_no_responsive_bid: "At least one bid must be responsive and have a price.", err_winner_not_responsive: "The winner must be a responsive bid.",
+  err_file_required: "Attach the document.", err_not_bidding: "Bidding is closed for this procurement.", err_contract_closed: "This contract is closed.", err_amendment_pending: "An amendment is already waiting for a decision.",
+  err_amendment_limit: "This contract has reached the limit of 10 amendments.", err_contract_dates: "The end date cannot be before the start date.",
 } as const;
 
 export type Key = keyof typeof en;
@@ -416,6 +470,60 @@ const fr: Record<Key, string> = {
   err_ai_key: "La clé API Claude n'a pas été acceptée. Créez une nouvelle clé sur console.anthropic.com, copiez-la entièrement dans ANTHROPIC_API_KEY du fichier .env.local, puis redémarrez.",
   err_ai_credit: "Le compte Claude n'a plus de crédit. Ajoutez du crédit sur console.anthropic.com (Billing), puis réessayez.",
   err_ai_busy: "Le service d'IA est occupé ou injoignable. Réessayez dans une minute.",
+
+  nav_programs: "Projets", nav_projects: "Projets et budgets", nav_vouchers: "Pièces de paiement", nav_procurement: "Passation de marchés", nav_tenders: "Appels d'offres et devis", nav_supplier_accounts: "Comptes fournisseurs", nav_contracts: "Contrats",
+  role_staff: "Personnel", role_staff_help: "Voit les budgets des projets et fait des demandes de fonds. Ne voit que ses propres demandes.",
+  role_procurement: "Chargé des marchés", role_procurement_help: "Gère les appels d'offres, les demandes de devis, les comptes fournisseurs et les contrats. Voit les budgets des projets.",
+  role_supplier: "Fournisseur", role_supplier_help: "Utilise uniquement le portail fournisseur : envoie ses offres, voit ses résultats et ses contrats.",
+  src_voucher: "Pièce de paiement",
+
+  prj_title: "Projets et centres de coût", prj_sub: "Chaque projet ou centre de coût a un cadre de résultats : objectif, effets, produits, activités et sous-activités. Les activités portent le budget, et le personnel y impute les pièces de paiement.",
+  prj_project: "Projet", prj_cost_center: "Centre de coût", prj_add: "Ajouter un projet ou un centre de coût", prj_executed: "Exécution budgétaire", prj_paid: "Payé", balance_left: "Solde",
+  prj_budget_tab: "Budget et exécution", prj_logframe_tab: "Cadre logique", prj_result: "Résultat / activité", prj_indicator: "Indicateur", prj_target: "Cible", prj_verification: "Moyens de vérification", prj_assumptions: "Hypothèses",
+  prj_empty: "Aucun résultat pour l'instant. Commencez par ajouter l'objectif.", prj_statement: "Énoncé", prj_account: "Compte à imputer au paiement", prj_budget_from_children: "Ce budget est le total des sous-activités qui en dépendent.",
+  prj_split_note: "Le budget de cette activité passe à ses sous-activités : saisissez le budget de chacune.",
+  lv_goal: "Objectif / impact", lv_outcome: "Effet", lv_output: "Produit", lv_activity: "Activité", lv_sub_activity: "Sous-activité",
+
+  pv_title: "Demandes de fonds et pièces de paiement", pv_new: "Nouvelle demande de fonds", pv_voucher: "Pièce de paiement", pv_budget_line: "Ligne budgétaire", pv_amount_requested: "Montant demandé", pv_payee: "Payer à",
+  pv_description: "Description de l'activité", pv_support: "Pièce justificative", pv_submit: "Soumettre pour approbation", pv_requested_by: "Demandé par", pv_approved_by: "Approuvé par", pv_paid_by: "Payé par", pv_signature: "Signature et date",
+  pv_activity_budget: "Budget de l'activité", pv_previous_execution: "Exécution budgétaire antérieure", pv_total_execution: "Exécution budgétaire totale", pv_journal_entry: "Écriture comptable",
+  pv_decision: "Décision", pv_decision_note: "Commentaire (obligatoire en cas de refus)", pv_approve: "Approuver", pv_reject: "Refuser", pv_pay: "Payer et comptabiliser", pv_pay_note: "Le paiement comptabilise l'écriture : débit du compte ci-dessus, crédit du compte de trésorerie.",
+  pv_no_lines: "Aucune ligne budgétaire. Ajoutez d'abord des activités avec un budget à un projet.",
+  vs_draft: "Brouillon", vs_submitted: "En attente d'approbation", vs_approved: "Approuvée", vs_rejected: "Refusée", vs_paid: "Payée",
+
+  tn_title: "Appels d'offres et demandes de devis", tn_rfq: "Demande de devis", tn_tender: "Appel d'offres", tn_new_rfq: "Nouvelle demande de devis", tn_new_tender: "Nouvel appel d'offres", tn_subject: "Objet", tn_description: "Description", tn_requirements: "Exigences et spécifications",
+  tn_deadline: "Date limite des offres", tn_estimate: "Valeur estimée", tn_technical_weight: "Poids technique (%)", tn_standstill: "Jours entre la notification provisoire et la notification définitive", tn_open_to_all: "Ouvert à tout fournisseur ayant un compte, pas seulement aux invités",
+  tn_document_file: "Dossier d'appel d'offres", tn_bids: "Offres", tn_invite: "Inviter des fournisseurs", tn_no_account: "pas encore de compte", tn_publish: "Publier", tn_cancel: "Annuler cette procédure",
+  tn_sealed: "Les offres sont scellées.", tn_sealed_help: "{n} reçue(s). Les montants et les fichiers restent fermés à tous jusqu'à l'ouverture enregistrée après la date limite.", tn_ready_to_open: "La date limite est passée : les offres peuvent être ouvertes.",
+  tn_tech: "Technique", tn_fin: "Financier", tn_rank: "Rang", tn_responsive: "Conforme", tn_not_responsive: "Non conforme", tn_winner: "Attributaire", tn_bid_file: "Document de l'offre", tn_file: "Fichier",
+  tn_eval_help: "Donnez à chaque offre conforme une note technique sur 100. Le prix le plus bas obtient une note financière de 100, et le total compte la note technique à {w} %.", tn_winner_help: "Laissez l'attributaire vide pour retenir l'offre la mieux classée. Justifiez dans le rapport si vous en choisissez une autre.",
+  tn_eval_report: "Rapport d'évaluation", tn_save_evaluation: "Enregistrer le résultat d'évaluation", tn_text: "Texte du document", tn_minutes_text: "Procès-verbal de négociation", tn_record: "Enregistrer", tn_skip_negotiation: "Pas de négociation : passer directement au projet de contrat.",
+  tn_standstill_wait: "Le délai d'attente court jusqu'au {date}. La notification définitive peut être envoyée à partir de ce jour.",
+  stage_opening: "Ouverture des offres", stage_evaluation: "Résultat de l'évaluation", stage_provisional: "Notification provisoire", stage_final: "Notification définitive", stage_negotiation: "Invitation à négocier", stage_minutes: "Procès-verbal de négociation", stage_draft_contract: "Projet de contrat", stage_signed: "Contrat signé",
+  ts_draft: "Brouillon", ts_published: "Publié", ts_opened: "Offres ouvertes", ts_evaluated: "Évalué", ts_provisional: "Avis provisoire", ts_final: "Avis définitif", ts_negotiation: "En négociation", ts_negotiated: "Négocié", ts_draft_contract: "Projet de contrat", ts_signed: "Contrat signé", ts_cancelled: "Annulé",
+  tpl_opening: "Les offres reçues pour {number}, {title}, ont été ouvertes en présence de :\n\n", tpl_provisional: "À l'issue de l'évaluation des offres pour {number}, {title}, nous avons l'intention d'attribuer le marché à {winner} pour {amount}. Sauf réclamation modifiant ce résultat, l'attribution devient définitive à partir du {date}.",
+  tpl_final: "Nous confirmons que {number}, {title}, est attribué à {winner} pour {amount}.", tpl_negotiation: "Nous vous invitons à négocier {number}, {title}.\n\nDate et heure :\nLieu :\nÀ apporter :", tpl_draft_contract: "Veuillez trouver le projet de contrat pour {number}, {title}, pour examen.",
+  mail_tender_published: "Une nouvelle procédure est ouverte aux offres dans votre portail fournisseur", mail_tender_update: "Il y a du nouveau dans votre portail fournisseur",
+
+  sa_sub: "Le fournisseur se connecte avec ce compte pour voir les appels d'offres, envoyer ses offres et devis, et suivre les résultats et les contrats. Il ne voit rien d'autre.", sa_add: "Créer un compte fournisseur", sa_contact: "Personne de contact", sa_new_supplier: "Nouveau fournisseur (saisir le nom)", sa_company_name: "Nom du nouveau fournisseur",
+
+  ct_new: "Nouveau contrat", ct_subject: "Objet", ct_scope: "Étendue", ct_amount: "Montant du contrat", ct_current_amount: "Montant actuel", ct_paid: "Payé à ce jour", ct_signed_date: "Date de signature", ct_start: "Date de début", ct_end: "Date de fin", ct_signed_file: "Contrat signé",
+  ct_complete: "Marquer terminé", ct_terminate: "Résilier", ct_reopen: "Rouvrir", cs_active: "Actif", cs_completed: "Terminé", cs_terminated: "Résilié",
+  ct_guarantees: "Garantie de bonne exécution", ct_issuer: "Émise par", ct_issue: "Date d'émission", ct_expiry: "Date d'expiration", ct_add_guarantee: "Ajouter une garantie", ct_release: "Libérer", ct_call: "Appeler", ct_bank_guarantee: "Garantie bancaire", ct_insurance_bond: "Caution d'assurance",
+  gs_active: "Active", gs_released: "Libérée", gs_called: "Appelée", ct_guarantees_expiring: "{n} garantie(s) de bonne exécution expirent dans les 30 jours ou ont expiré.",
+  ct_amendments: "Avenants", ct_amendment_no: "Avenant", ct_request_amendment: "Demander un avenant", ct_reason: "Motif", ct_amount_change: "Variation du montant (+ ou -)", ct_new_end: "Nouvelle date de fin", ct_from_supplier: "Demandé par le fournisseur",
+  as_requested: "Demandé", as_approved: "Approuvé", as_rejected: "Refusé",
+
+  portal_title: "Portail fournisseur", portal_tenders: "Appels d'offres et devis", portal_sub: "Les demandes ouvertes auxquelles vous pouvez répondre, et celles où vous avez fait une offre.", portal_none: "Rien d'ouvert pour vous en ce moment.", portal_my_bid: "Mon offre", portal_open: "Ouvert", portal_closed: "Clôturé",
+  portal_amount: "Montant total de votre offre", portal_send_bid: "Envoyer mon offre", portal_update_bid: "Remplacer mon offre", portal_bid_sent: "Votre offre a été reçue.", portal_sealed_note: "Personne au sein de l'organisation ne peut voir votre offre avant l'ouverture. Vous pouvez la remplacer jusqu'à la date limite.",
+
+  err_logframe_depth: "Les sous-activités sont le dernier niveau du cadre.", err_line_has_vouchers: "Des pièces ou des appels d'offres utilisent déjà cette ligne : elle ne peut être ni divisée ni supprimée.", err_logframe_has_children: "Supprimez d'abord les lignes qui en dépendent.",
+  err_budget_below_execution: "Le budget ne peut pas être inférieur à ce qui est déjà exécuté sur cette ligne.", err_not_budget_line: "Choisissez une activité ou sous-activité sans ligne en dessous.", err_voucher_state: "Impossible à ce statut.",
+  err_voucher_not_yours: "Seul l'auteur de la demande peut la modifier.", err_over_budget: "Cette demande dépasse le solde de la ligne budgétaire.", err_self_approval: "Vous ne pouvez pas approuver votre propre demande. Une autre personne doit l'approuver.", err_reason_required: "Indiquez le motif du refus.",
+  err_tender_state: "Cette étape n'est pas possible au statut actuel de la procédure.", err_deadline: "Fixez une date limite future avant de publier.", err_no_invites: "Invitez au moins un fournisseur, ou ouvrez à tous les fournisseurs.",
+  err_opening_early: "Les offres ne peuvent pas être ouvertes avant la date limite.", err_standstill: "Le délai d'attente n'est pas terminé.", err_no_responsive_bid: "Au moins une offre doit être conforme et avoir un prix.", err_winner_not_responsive: "L'attributaire doit être une offre conforme.",
+  err_file_required: "Joignez le document.", err_not_bidding: "Les offres sont closes pour cette procédure.", err_contract_closed: "Ce contrat est clôturé.", err_amendment_pending: "Un avenant attend déjà une décision.",
+  err_amendment_limit: "Ce contrat a atteint la limite de 10 avenants.", err_contract_dates: "La date de fin ne peut pas précéder la date de début.",
 };
 
 export const dict = { en, fr } as const;

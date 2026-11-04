@@ -7,7 +7,7 @@ import bcrypt from "bcryptjs";
 import { and, eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import type { Role } from "@/db/schema";
-import { can, type Area } from "./roles";
+import { can, homeOf, type Area } from "./roles";
 
 const SESSION_COOKIE = "konti_session";
 const COMPANY_COOKIE = "konti_company";
@@ -60,6 +60,8 @@ export type Ctx = {
   user: NonNullable<Awaited<ReturnType<typeof getCurrentUser>>>;
   company: typeof schema.companies.$inferSelect;
   role: Role;
+  /** For a supplier's account: the supplier it belongs to. */
+  partnerId: string | null;
   isAdmin: boolean;
   /** Days left in the free trial, or null on a paid plan. */
   trialDaysLeft: number | null;
@@ -72,7 +74,7 @@ export type Ctx = {
 export const getCtx = cache(async (): Promise<Ctx> => {
   const user = await requireUser();
   const db = await getDb();
-  const rows = await db.select({ company: schema.companies, role: schema.memberships.role })
+  const rows = await db.select({ company: schema.companies, role: schema.memberships.role, partnerId: schema.memberships.partnerId })
     .from(schema.memberships).innerJoin(schema.companies, eq(schema.companies.id, schema.memberships.companyId))
     .where(eq(schema.memberships.userId, user.id));
   if (!rows.length) redirect("/onboarding");
@@ -83,7 +85,7 @@ export const getCtx = cache(async (): Promise<Ctx> => {
   const trialDaysLeft = paid ? null : Math.max(0, Math.ceil((row.company.trialEndsAt.getTime() - Date.now()) / 86400000));
   const locked = !paid && trialDaysLeft === 0;
   return {
-    user, company: row.company, role: row.role, isAdmin: row.role === "admin", trialDaysLeft, locked,
+    user, company: row.company, role: row.role, partnerId: row.partnerId, isAdmin: row.role === "admin", trialDaysLeft, locked,
     can: (area, mode = "read") => (mode === "write" && locked ? false : can(row.role, area, mode)),
   };
 });
@@ -98,8 +100,15 @@ export async function requireWrite(area: Area): Promise<Ctx> {
 /** For pages: the context, or the no-access page when the role may not see this area. */
 export async function requireView(area: Area): Promise<Ctx> {
   const ctx = await getCtx();
-  if (!ctx.can(area)) redirect("/no-access");
+  if (!ctx.can(area)) redirect(area === "dashboard" || ctx.role === "supplier" ? homeOf(ctx.role) : "/no-access");
   return ctx;
+}
+
+/** For the supplier portal: the context of a supplier's account, with the supplier it belongs to. */
+export async function requireSupplier(): Promise<Ctx & { partnerId: string }> {
+  const ctx = await getCtx();
+  if (ctx.role !== "supplier" || !ctx.partnerId) redirect(homeOf(ctx.role));
+  return { ...ctx, partnerId: ctx.partnerId };
 }
 
 export async function listMyCompanies(userId: string) {

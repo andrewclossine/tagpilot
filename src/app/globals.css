@@ -151,3 +151,15 @@ code.k { font-family: var(--f-num); font-size: 13px; }
 .delta.down { background: var(--bad-soft); color: var(--bad); }
 .hbar { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; align-items: center; font-size: 14px; }
 .hbar .bar { grid-column: 1 / -1; height: 8px; border-radius: 4px; background: var(--chart-1); }
+
+/* Project, voucher and procurement statuses */
+.pill.submitted, .pill.published, .pill.requested, .pill.provisional, .pill.negotiation, .pill.negotiated, .pill.draft_contract, .pill.opened, .pill.evaluated { background: var(--warn-soft); color: var(--warn); }
+.pill.approved, .pill.signed, .pill.final, .pill.active, .pill.released, .pill.completed { background: var(--ok-soft); color: var(--ok); }
+.pill.rejected, .pill.cancelled, .pill.terminated, .pill.called { background: var(--bad-soft); color: var(--bad); }
+.steps { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; margin: 0; padding: 0; }
+.steps li { font: 600 12px var(--f-body); padding: 4px 10px; border-radius: 12px; background: var(--surface-2); color: var(--muted); }
+.steps li.done { background: var(--ok-soft); color: var(--ok); }
+.steps li.now { background: var(--accent); color: var(--accent-ink); }
+tr.lf-goal td { font-weight: 700; background: var(--accent-soft); }
+tr.lf-outcome td { font-weight: 600; background: var(--surface-2); }
+tr.lf-output td { font-weight: 600; }
