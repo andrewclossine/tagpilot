@@ -108,7 +108,9 @@ export async function deleteProject(fd: FormData) {
   try {
     const db = await getDb();
     const [{ n }] = await db.select({ n: sql<number>`count(*)` }).from(schema.journalLines).where(eq(schema.journalLines.projectId, id));
-    if (Number(n)) throw new UserError("err_in_use");
+    // A project with a results framework keeps its budget: deleting it would silently delete every row of the framework.
+    const [{ m }] = await db.select({ m: sql<number>`count(*)` }).from(schema.logframeItems).where(eq(schema.logframeItems.projectId, id));
+    if (Number(n) || Number(m)) throw new UserError("err_in_use");
     await db.delete(schema.projects).where(and(eq(schema.projects.id, id), eq(schema.projects.companyId, ctx.company.id)));
   } catch (e) { fail(e, "/settings?tab=projects"); }
   revalidatePath("/settings");

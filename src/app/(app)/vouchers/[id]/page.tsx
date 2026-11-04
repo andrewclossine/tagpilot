@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { canSeeVoucher } from "@/lib/access";
 import { requireView } from "@/lib/auth";
@@ -49,8 +49,9 @@ export default async function VoucherPage({ params, searchParams }: { params: Pr
   const [accounts, money_, names] = await Promise.all([
     db.select().from(schema.accounts).where(and(eq(schema.accounts.companyId, ctx.company.id), eq(schema.accounts.isActive, true))).orderBy(schema.accounts.code),
     moneyAccounts(db, ctx.company.id),
+    // By the people named on the voucher, so someone who has since left is still shown.
     db.select({ id: schema.users.id, name: schema.users.name }).from(schema.users)
-      .innerJoin(schema.memberships, eq(schema.memberships.userId, schema.users.id)).where(eq(schema.memberships.companyId, ctx.company.id)),
+      .where(inArray(schema.users.id, [v.requestedBy, v.decidedBy, v.paidBy].filter((u): u is string => !!u))),
   ]);
   const who = (uid: string | null) => names.find((n) => n.id === uid)?.name ?? "";
   const canDecide = ctx.can("voucher_approve", "write") && (ctx.isAdmin || !mine);

@@ -39,7 +39,8 @@ async function deletePartner(fd: FormData) {
     const [used] = await db.select({ n: sql<number>`count(*)` }).from(schema.journalLines)
       .where(and(eq(schema.journalLines.companyId, ctx.company.id), eq(schema.journalLines.partnerId, id)));
     const [docs] = await db.select({ n: sql<number>`(select count(*) from invoices where partner_id = ${id}) + (select count(*) from bills where partner_id = ${id})` }).from(schema.companies).limit(1);
-    if (Number(used.n) || Number(docs?.n)) throw new UserError("err_in_use");
+    const [procurement] = await db.select({ n: sql<number>`(select count(*) from bids where partner_id = ${id}) + (select count(*) from contracts where partner_id = ${id}) + (select count(*) from memberships where partner_id = ${id})` }).from(schema.companies).limit(1);
+    if (Number(used.n) || Number(docs?.n) || Number(procurement?.n)) throw new UserError("err_in_use");
     await db.delete(schema.partners).where(and(eq(schema.partners.id, id), eq(schema.partners.companyId, ctx.company.id)));
   } catch (e) { fail(e, "/partners"); }
   revalidatePath("/partners");

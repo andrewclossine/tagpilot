@@ -1,5 +1,5 @@
 import "server-only";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import type { TenderStage } from "@/db/schema";
 import type { Ctx } from "./auth";
@@ -23,8 +23,9 @@ export async function buildVoucherPdf(ctx: Ctx, id: string) {
     .where(and(eq(schema.paymentVouchers.id, id), eq(schema.paymentVouchers.companyId, ctx.company.id)));
   if (!row || !canSeeVoucher(ctx, row.v)) throw new UserError("err_not_found");
   const { v, project, line } = row;
+  // By the people named on the voucher, so someone who has since left is still shown.
   const names = await db.select({ id: schema.users.id, name: schema.users.name }).from(schema.users)
-    .innerJoin(schema.memberships, eq(schema.memberships.userId, schema.users.id)).where(eq(schema.memberships.companyId, ctx.company.id));
+    .where(inArray(schema.users.id, [v.requestedBy, v.decidedBy, v.paidBy].filter((u): u is string => !!u)));
   const who = (uid: string | null) => names.find((n) => n.id === uid)?.name ?? "";
   // A draft shows the line as it stands now; from submission on, the figures frozen on the voucher.
   const draft = v.status === "draft";

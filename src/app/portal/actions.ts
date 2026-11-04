@@ -31,8 +31,8 @@ export async function submitBid(fd: FormData) {
           target: [schema.bids.tenderId, schema.bids.partnerId],
           set: { amount, note, submittedBy: ctx.user.id, submittedAt: new Date(), ...(attachmentId ? { attachmentId } : {}) },
         });
-      // The amount stays out of the audit trail while bids are sealed.
-      await audit(tx, ctx.company.id, ctx.user.id, "submit", "bid", tender.number);
+      // While bids are sealed the audit trail says neither who bid nor how much; the bid itself records who sent it.
+      await audit(tx, ctx.company.id, null, "submit", "bid", tender.number);
     });
   } catch (e) { fail(e, back); }
   revalidatePath(back);

@@ -83,11 +83,16 @@ export default async function ContractPage({ params, searchParams }: { params: P
                 <td style={{ color: g.status === "active" && g.expiryDate <= soon ? "var(--bad)" : undefined }}>{g.expiryDate}</td>
                 <td><Pill kind={g.status}>{t(`gs_${g.status}`)}</Pill></td>
                 <td>{write && g.status === "active" ? (
-                  <form action={setGuaranteeStatus} className="row" style={{ gap: 4 }}>
-                    <input type="hidden" name="id" value={g.id} /><input type="hidden" name="contractId" value={c.id} />
-                    <button type="submit" name="status" value="released" className="btn ghost sm">{t("ct_release")}</button>
-                    <ConfirmButton className="btn ghost sm danger" confirmLabel={t("confirm")} name="status" value="called">{t("ct_call")}</ConfirmButton>
-                  </form>
+                  <div className="row" style={{ gap: 4 }}>
+                    <form action={setGuaranteeStatus}>
+                      <input type="hidden" name="id" value={g.id} /><input type="hidden" name="contractId" value={c.id} /><input type="hidden" name="status" value="released" />
+                      <button type="submit" className="btn ghost sm">{t("ct_release")}</button>
+                    </form>
+                    <form action={setGuaranteeStatus}>
+                      <input type="hidden" name="id" value={g.id} /><input type="hidden" name="contractId" value={c.id} /><input type="hidden" name="status" value="called" />
+                      <ConfirmButton className="btn ghost sm danger" confirmLabel={t("confirm")}>{t("ct_call")}</ConfirmButton>
+                    </form>
+                  </div>
                 ) : null}</td>
               </tr>
             ))}</tbody>

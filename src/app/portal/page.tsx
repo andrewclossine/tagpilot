@@ -39,7 +39,9 @@ export default async function PortalPage() {
                 <td><Link className="rowlink" href={`/portal/tenders/${x.id}`}>{x.title}</Link></td>
                 <td><LocalTime value={x.deadline?.toISOString() ?? null} /></td>
                 <td className="num">{bid ? money(bid.amount, 2) : ""}</td>
-                <td><Pill kind={biddingOpen(x) ? "published" : "opened"}>{t(biddingOpen(x) ? "portal_open" : "portal_closed")}</Pill></td>
+                <td>{x.status === "cancelled"
+                  ? <Pill kind="cancelled">{t("ts_cancelled")}</Pill>
+                  : <Pill kind={biddingOpen(x) ? "published" : "opened"}>{t(biddingOpen(x) ? "portal_open" : "portal_closed")}</Pill>}</td>
               </tr>
             ))}</tbody>
           </table></div>

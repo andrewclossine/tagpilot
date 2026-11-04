@@ -7,6 +7,7 @@ export function fail(e: unknown, path: string): never {
   const code = (e as { code?: string; cause?: { code?: string } })?.cause?.code ?? (e as { code?: string })?.code;
   if (e instanceof UserError) redirect(withParam(path, "error", e.message));
   if (code === "23505") redirect(withParam(path, "error", "err_duplicate_code"));
+  if (code === "23503") redirect(withParam(path, "error", "err_in_use")); // something else still points to this record
   throw e;
 }
 

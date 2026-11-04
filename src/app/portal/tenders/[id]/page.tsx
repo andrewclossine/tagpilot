@@ -36,7 +36,9 @@ export default async function PortalTenderPage({ params, searchParams }: { param
       <PageHead title={`${tender.number} · ${tender.title}`}>
         <Link className="btn" href="/portal">{t("back")}</Link>
         <a className="btn" href={`/api/pdf/tender/${id}`} target="_blank" rel="noreferrer">PDF</a>
-        <Pill kind={biddingOpen(tender) ? "published" : "opened"}>{t(biddingOpen(tender) ? "portal_open" : "portal_closed")}</Pill>
+        {tender.status === "cancelled"
+          ? <Pill kind="cancelled">{t("ts_cancelled")}</Pill>
+          : <Pill kind={biddingOpen(tender) ? "published" : "opened"}>{t(biddingOpen(tender) ? "portal_open" : "portal_closed")}</Pill>}
       </PageHead>
       <ErrorNote message={err(q("error"))} />
       {q("sent") ? <div className="note ok small">{t("portal_bid_sent")}</div> : null}

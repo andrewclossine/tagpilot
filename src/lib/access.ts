@@ -42,7 +42,14 @@ export async function canReadAttachment(db: Db, ctx: Ctx, attachmentId: string):
   if (contract) return supplier ? contract.partnerId === supplier : ctx.can("contracts");
 
   const [voucher] = await db.select().from(schema.paymentVouchers).where(eq(schema.paymentVouchers.attachmentId, attachmentId));
-  if (voucher && !supplier) return canSeeVoucher(ctx, voucher);
+  // A paid voucher's document is also the support of its journal entry.
+  if (voucher && !supplier) return canSeeVoucher(ctx, voucher) || ctx.can("journal");
+
+  // A file from a supplier that nothing points to any more, such as a bid they replaced, stays closed.
+  const [uploader] = await db.select({ role: schema.memberships.role }).from(schema.attachments)
+    .innerJoin(schema.memberships, and(eq(schema.memberships.userId, schema.attachments.uploadedBy), eq(schema.memberships.companyId, schema.attachments.companyId)))
+    .where(eq(schema.attachments.id, attachmentId));
+  if (uploader?.role === "supplier") return false;
 
   // Everything else is a supporting document of the books.
   return !supplier && ctx.role !== "staff" && ctx.role !== "procurement";
