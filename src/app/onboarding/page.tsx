@@ -19,7 +19,7 @@ export default async function OnboardingPage({ searchParams }: { searchParams: S
   const user = await requireUser();
   const db = await getDb();
   const [member] = await db.select().from(schema.memberships).where(eq(schema.memberships.userId, user.id)).limit(1);
-  if (member) redirect("/dashboard");
+  if (member) redirect("/apps");
   const { t, err, lang } = await getI18n();
   const q = await sp(searchParams);
   const wanted = q("module");

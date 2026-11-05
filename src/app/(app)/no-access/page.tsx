@@ -9,7 +9,7 @@ export default async function NoAccess() {
     <div className="panel stack" style={{ maxWidth: 520 }}>
       <h1>{t("no_access_title")}</h1>
       <p className="muted" style={{ margin: 0 }}>{t("no_access_text")}</p>
-      <div><Link className="btn" href="/dashboard">{t("nav_dashboard")}</Link></div>
+      <div><Link className="btn" href="/apps">{t("nav_all_apps")}</Link></div>
     </div>
   );
 }

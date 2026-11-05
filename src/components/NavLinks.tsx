@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { AppIcon, type AppKey } from "./AppIcon";
 
 export type NavItem = { href: string; label: string } | { group: string };
 export type Workspace = { key: string; label: string; items: NavItem[] };
@@ -23,10 +24,10 @@ export function NavLinks({ items }: { items: NavItem[] }) {
 }
 
 /**
- * The sidebar: one tab per module, and only the links of the open one. A page that belongs to no module, such as
- * Settings, leaves the last module open. A page in two modules stays in the one the person came from.
+ * The sidebar: the links of the open app, and a way back to all the apps. A page that belongs to no app, such as
+ * Settings, leaves the last app open. A page in two apps stays in the one the person came from.
  */
-export function WorkspaceNav({ workspaces, common }: { workspaces: Workspace[]; common: NavItem[] }) {
+export function WorkspaceNav({ workspaces, common, allAppsLabel }: { workspaces: Workspace[]; common: NavItem[]; allAppsLabel: string }) {
   const path = usePathname();
   const [last, setLast] = useState<string | null>(null);
   const matching = workspaces.filter((w) => hrefs(w.items).some((h) => within(path, h)));
@@ -45,17 +46,13 @@ export function WorkspaceNav({ workspaces, common }: { workspaces: Workspace[]; 
 
   return (
     <>
-      {workspaces.length > 1 ? (
-        <div className="workspaces" role="tablist">
-          {workspaces.map((w) => {
-            const first = hrefs(w.items)[0];
-            return (
-              <Link key={w.key} href={first} role="tab" aria-selected={w.key === active?.key} onClick={() => setLast(w.key)}
-                className={w.key === active?.key ? "workspace on" : "workspace"}>{w.label}</Link>
-            );
-          })}
+      <Link href="/apps" className="all-apps">← {allAppsLabel}</Link>
+      {active ? (
+        <div className="workspace-title">
+          <AppIcon app={active.key as AppKey} size={26} />
+          {active.label}
         </div>
-      ) : workspaces.length === 1 ? <div className="workspace-title">{workspaces[0].label}</div> : null}
+      ) : null}
       {active ? <NavLinks items={active.items} /> : null}
       {common.length ? <NavLinks items={common} /> : null}
     </>

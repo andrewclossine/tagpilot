@@ -54,7 +54,7 @@ export async function signIn(fd: FormData) {
   }
   await db.delete(schema.loginFailures).where(eq(schema.loginFailures.key, keys.login));
   await startSession(u.id);
-  redirect("/dashboard");
+  redirect("/apps");
 }
 
 const resetHash = (token: string) => crypto.createHash("sha256").update(token).digest("hex");
@@ -117,7 +117,7 @@ export async function setLang(fd: FormData) {
 
 export async function changeCompany(fd: FormData) {
   await switchCompany(str(fd, "companyId"));
-  redirect("/dashboard");
+  redirect("/apps");
 }
 
 /** Creates a company with the starter chart of accounts, asset classes, a general project and an example policy. */
@@ -128,7 +128,7 @@ export async function createCompany(fd: FormData) {
   const db = await getDb();
   // One subscription, one organisation: users who already belong to one go straight to it.
   const [member] = await db.select().from(schema.memberships).where(eq(schema.memberships.userId, user.id)).limit(1);
-  if (member) redirect("/dashboard");
+  if (member) redirect("/apps");
   const modules = MODULES.filter((m) => fd.getAll("modules").includes(m));
   if (!modules.length) redirect("/onboarding?error=err_no_modules");
   const currency = CURRENCIES.includes(str(fd, "currency")) ? str(fd, "currency") : "USD";
@@ -147,5 +147,5 @@ export async function createCompany(fd: FormData) {
     return c.id;
   });
   await switchCompany(companyId);
-  redirect("/dashboard");
+  redirect("/apps");
 }
