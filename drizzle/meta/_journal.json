@@ -85,6 +85,13 @@
       "when": 1793876820366,
       "tag": "0011_project_import_notes",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1793887038173,
+      "tag": "0012_report_tax_lines_adjusting",
+      "breakpoints": true
     }
   ]
 }

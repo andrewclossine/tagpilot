@@ -108,7 +108,7 @@ export async function deleteDocDraft(fd: FormData) {
         await tx.update(schema.supplierBills).set({ status: "received", billId: null }).where(eq(schema.supplierBills.billId, id));
         await tx.delete(schema.bills).where(eq(schema.bills.id, id));
       }
-      await audit(tx, ctx.company.id, ctx.user.id, "delete_draft", kind, id, { number: d.number });
+      await audit(tx, ctx.company.id, ctx.user.id, "delete_draft", kind, id, { number: d.number, amount: d.total });
     });
   } catch (e) { fail(e, `${base}/${id}`); }
   revalidatePath(base);

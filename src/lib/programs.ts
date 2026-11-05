@@ -275,7 +275,7 @@ export async function cancelVoucher(tx: Tx, companyId: string, userId: string, i
   if (v.status === "paid" || v.status === "rejected") throw new UserError("err_voucher_state");
   await tx.update(schema.paymentVouchers).set({ status: "rejected", decidedBy: userId, decidedAt: new Date(), decisionNote: note }).where(eq(schema.paymentVouchers.id, id));
   await sign(tx, companyId, id, "cancelled", userId, note);
-  await audit(tx, companyId, userId, "cancel", "payment_voucher", v.number, { note });
+  await audit(tx, companyId, userId, "cancel", "payment_voucher", v.number, { note, amount: v.amount });
 }
 
 /** Records that an authorized request was paid, for an organisation that keeps its books elsewhere. */

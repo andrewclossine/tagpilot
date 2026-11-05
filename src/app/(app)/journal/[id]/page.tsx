@@ -9,7 +9,7 @@ import { today } from "@/lib/format";
 import { ConfirmButton } from "@/components/editors";
 import { ErrorNote, PageHead, Pill } from "@/components/ui";
 import { EntryForm } from "../EntryForm";
-import { addPartnerFromAi, reverseJournal } from "../actions";
+import { addPartnerFromAi, reverseJournal, setAdjusting } from "../actions";
 
 export const metadata = { title: "Journal entry" };
 
@@ -84,6 +84,14 @@ export default async function EntryPage({ params, searchParams }: { params: Prom
       <div className="small muted">
         {creator ? `${t("created_by")} ${creator.name}` : ""}{poster ? ` · ${t("posted_by")} ${poster.name} · ${e.postedAt?.toISOString().slice(0, 16).replace("T", " ")}` : ""}
       </div>
+      {e.isAdjusting ? <div className="small"><Pill kind="">{t("adjusting_entry")}</Pill></div> : null}
+      {ctx.can("journal", "write") ? (
+        <form action={setAdjusting} className="row">
+          <input type="hidden" name="id" value={e.id} />
+          <input type="hidden" name="value" value={e.isAdjusting ? "0" : "1"} />
+          <button type="submit" className="btn sm">{t(e.isAdjusting ? "adjusting_unmark" : "adjusting_mark")}</button>
+        </form>
+      ) : null}
       {e.reversedById ? <div className="small"><Link href={`/journal/${e.reversedById}`}>{t("reversed_by")} →</Link></div> : null}
       {e.reversesId ? <div className="small"><Link href={`/journal/${e.reversesId}`}>{t("reverse_of")} →</Link></div> : null}
       {e.status === "posted" && ctx.can("journal", "write") && !e.reversedById ? (

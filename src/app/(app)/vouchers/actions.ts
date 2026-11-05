@@ -96,7 +96,7 @@ export async function deleteVoucher(fd: FormData) {
     if (v.status !== "draft") throw new UserError("err_voucher_state");
     if (v.requestedBy !== ctx.user.id) throw new UserError("err_voucher_not_yours");
     await db.delete(schema.paymentVouchers).where(eq(schema.paymentVouchers.id, id));
-    await audit(db, ctx.company.id, ctx.user.id, "delete", "payment_voucher", v.number);
+    await audit(db, ctx.company.id, ctx.user.id, "delete", "payment_voucher", v.number, { amount: v.amount });
   } catch (e) { fail(e, `/vouchers/${id}`); }
   revalidatePath("/vouchers");
   redirect("/vouchers");

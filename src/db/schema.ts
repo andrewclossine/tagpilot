@@ -102,6 +102,7 @@ export const accounts = pgTable("accounts", {
   nameFr: text("name_fr").notNull().default(""),
   type: text("type").$type<AccountType>().notNull(),
   subtype: text("subtype").$type<AccountSubtype>(),
+  taxLine: text("tax_line"), // income tax working paper line; empty uses the default for the account
   isActive: boolean("is_active").notNull().default(true),
 }, (t) => [uniqueIndex("accounts_company_code").on(t.companyId, t.code)]);
 
@@ -167,6 +168,7 @@ export const journalEntries = pgTable("journal_entries", {
   ai: jsonb("ai").$type<AiInfo | null>(),
   reversesId: uuid("reverses_id"),
   reversedById: uuid("reversed_by_id"),
+  isAdjusting: boolean("is_adjusting").notNull().default(false), // depreciation, accruals and other period-end corrections
   createdBy: uuid("created_by").references(() => users.id),
   postedBy: uuid("posted_by").references(() => users.id),
   createdAt: created(),

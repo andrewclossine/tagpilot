@@ -23,6 +23,7 @@ export type EntryInput = {
   attachmentId?: string | null;
   ai?: AiInfo | null;
   reversesId?: string | null;
+  isAdjusting?: boolean;
 };
 
 export function cleanLines(lines: LineInput[]): LineInput[] {
@@ -60,6 +61,7 @@ export async function saveEntry(tx: Tx, companyId: string, userId: string, input
     partnerId: input.partnerId || null, projectId: input.projectId || null,
     source: input.source ?? "manual", sourceId: input.sourceId ?? null,
     attachmentId: input.attachmentId ?? null, ai: input.ai ?? null, reversesId: input.reversesId ?? null,
+    isAdjusting: input.isAdjusting ?? false,
   };
   if (id) {
     const [old] = await tx.select().from(schema.journalEntries)
@@ -115,7 +117,7 @@ export async function reverseEntry(tx: Tx, companyId: string, userId: string, id
   const lines = await tx.select().from(schema.journalLines).where(eq(schema.journalLines.entryId, id)).orderBy(schema.journalLines.lineNo);
   const newId = await saveEntry(tx, companyId, userId, {
     date, reference: e.reference, memo: `${memoPrefix} #${e.number}: ${e.memo}`, partnerId: e.partnerId, projectId: e.projectId,
-    source: "reversal", sourceId: e.id, reversesId: e.id, attachmentId: e.attachmentId,
+    source: "reversal", sourceId: e.id, reversesId: e.id, attachmentId: e.attachmentId, isAdjusting: e.isAdjusting,
     lines: lines.map((l) => ({ accountId: l.accountId, debit: l.credit, credit: l.debit, description: l.description, projectId: l.projectId, partnerId: l.partnerId })),
   }, true);
   await tx.update(schema.journalEntries).set({ reversedById: newId }).where(eq(schema.journalEntries.id, id));
@@ -127,8 +129,9 @@ export async function deleteDraft(tx: Tx, companyId: string, userId: string, id:
     .where(and(eq(schema.journalEntries.id, id), eq(schema.journalEntries.companyId, companyId)));
   if (!e) return;
   if (e.status === "posted") throw new UserError("err_posted_locked");
+  const lines = await tx.select({ debit: schema.journalLines.debit }).from(schema.journalLines).where(eq(schema.journalLines.entryId, id));
   await tx.delete(schema.journalEntries).where(eq(schema.journalEntries.id, id));
-  await audit(tx, companyId, userId, "delete_draft", "journal_entry", id, { memo: e.memo });
+  await audit(tx, companyId, userId, "delete_draft", "journal_entry", id, { memo: e.memo, amount: round2(lines.reduce((s, l) => s + l.debit, 0)) });
 }
 
 export async function accountIdByCode(db: Db | Tx, companyId: string, code: string): Promise<string> {

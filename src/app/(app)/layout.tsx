@@ -20,7 +20,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     ...link("company", "/settings", t("nav_settings")),
     ...link("users", "/users", t("nav_users")),
     ...(ctx.isAdmin ? [{ href: "/billing", label: t("billing_title") }] : []),
-    ...link("audit", "/audit", t("nav_audit")),
+    // With the accountant reports when the company has them; otherwise it stays here.
+    ...(ctx.can("reports") ? [] : link("audit", "/reports/audit", t("nav_audit"))),
   ]);
   const brand = (
     <div className="brand-block">

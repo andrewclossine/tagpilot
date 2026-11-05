@@ -6,6 +6,7 @@ import { getDb, schema } from "@/db";
 import { requireWrite } from "@/lib/auth";
 import { fail } from "@/lib/actions";
 import { isIsoDate, str, today } from "@/lib/format";
+import { audit } from "@/lib/audit";
 import { deleteDraft, postDraft, reverseEntry, saveEntry, UserError } from "@/lib/ledger";
 import { getI18n } from "@/lib/i18n";
 import { parseJournalLines } from "@/lib/parse";
@@ -28,11 +29,26 @@ export async function saveJournal(fd: FormData) {
       id, date, reference: str(fd, "reference"), memo: str(fd, "memo"),
       partnerId: str(fd, "partnerId") || null, projectId: str(fd, "projectId") || null,
       source: old?.source ?? "manual", sourceId: old?.sourceId, attachmentId: old?.attachmentId, ai: old?.ai,
+      isAdjusting: fd.get("isAdjusting") === "on",
       lines,
     }, post));
   } catch (e) { fail(e, back); }
   revalidatePath("/journal");
   redirect(`/journal/${savedId}?saved=1`);
+}
+
+/** Marks an entry as adjusting or not. It changes no amounts, so a posted entry can be marked too. */
+export async function setAdjusting(fd: FormData) {
+  const ctx = await requireWrite("journal");
+  const id = str(fd, "id");
+  const value = str(fd, "value") === "1";
+  const db = await getDb();
+  await db.transaction(async (tx) => {
+    await tx.update(schema.journalEntries).set({ isAdjusting: value }).where(and(eq(schema.journalEntries.id, id), eq(schema.journalEntries.companyId, ctx.company.id)));
+    await audit(tx, ctx.company.id, ctx.user.id, value ? "mark_adjusting" : "unmark_adjusting", "journal_entry", id);
+  });
+  revalidatePath(`/journal/${id}`);
+  redirect(`/journal/${id}?saved=1`);
 }
 
 export async function postJournal(fd: FormData) {

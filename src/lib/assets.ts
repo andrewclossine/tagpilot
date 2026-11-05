@@ -62,7 +62,7 @@ export async function runDepreciation(tx: Tx, companyId: string, userId: string,
   const total = round2(charged.reduce((s, p) => s + p.amount, 0));
   let entryId: string | null = null;
   if (total > 0) {
-    entryId = await saveEntry(tx, companyId, userId, { date: end, reference: `DEP-${month}`, memo, lines: [...grouped.values()] }, true);
+    entryId = await saveEntry(tx, companyId, userId, { date: end, reference: `DEP-${month}`, memo, lines: [...grouped.values()], isAdjusting: true }, true);
     await tx.insert(schema.assetMovements).values(charged.map(({ a, amount }) => ({
       companyId, assetId: a.id, date: end, type: "depreciation" as const, depreciation: amount, entryId, notes: memo,
     })));
@@ -144,7 +144,7 @@ export async function recordMovement(tx: Tx, companyId: string, userId: string, 
     move = { cost: -b.cost, depreciation: -b.accum, proceeds: amount, gainLoss: gain };
   }
   const entryId = await saveEntry(tx, companyId, userId, {
-    date: m.date, reference: a.code, memo: `${kind} - ${a.code} ${a.name}${m.notes ? ` - ${m.notes}` : ""}`, projectId: a.projectId,
+    date: m.date, reference: a.code, memo: `${kind} - ${a.code} ${a.name}${m.notes ? ` - ${m.notes}` : ""}`, projectId: a.projectId, isAdjusting: kind === "impairment" || kind === "revaluation",
     lines: lines.map((l) => ({ ...l, projectId: a.projectId })),
   }, true);
   await tx.insert(schema.assetMovements).values({ companyId, assetId: id, date: m.date, type: kind, ...move, entryId, notes: m.notes });

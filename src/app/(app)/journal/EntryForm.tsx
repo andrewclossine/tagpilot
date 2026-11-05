@@ -5,7 +5,7 @@ import { today } from "@/lib/format";
 import { ConfirmButton, JournalLinesEditor, type JLine } from "@/components/editors";
 import { deleteJournal, saveJournal } from "./actions";
 
-type Entry = { id: string; date: string; reference: string; memo: string; partnerId: string | null; projectId: string | null };
+type Entry = { id: string; date: string; reference: string; memo: string; partnerId: string | null; projectId: string | null; isAdjusting: boolean };
 
 /** The editable journal entry: header fields, the lines editor, and save / post / delete buttons. */
 export async function EntryForm({ ctx, entry, lines }: { ctx: Ctx; entry?: Entry; lines?: JLine[] }) {
@@ -31,6 +31,7 @@ export async function EntryForm({ ctx, entry, lines }: { ctx: Ctx; entry?: Entry
         </label>
       </div>
       <label className="f">{t("memo")}<input id="memo" name="memo" defaultValue={entry?.memo} /></label>
+      <label className="row small" style={{ gap: 6 }}><input type="checkbox" name="isAdjusting" defaultChecked={entry?.isAdjusting} style={{ width: "auto" }} />{t("adjusting_entry")}</label>
       <JournalLinesEditor accounts={o.accountOpts} projects={o.projectOpts} initial={lines ?? []} labels={journalLabels(t)} />
       <div className="row">
         <button type="submit" name="intent" value="post" className="btn primary">{t("post")}</button>

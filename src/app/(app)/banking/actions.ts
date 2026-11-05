@@ -96,8 +96,10 @@ export async function ignoreLine(fd: FormData) {
   const ctx = await requireWrite("banking");
   const back = `/banking/${str(fd, "accountId")}`;
   const db = await getDb();
-  await db.update(schema.bankLines).set({ status: "ignored" })
-    .where(and(eq(schema.bankLines.id, str(fd, "id")), eq(schema.bankLines.companyId, ctx.company.id), eq(schema.bankLines.status, "open")));
+  const changed = await db.update(schema.bankLines).set({ status: "ignored" })
+    .where(and(eq(schema.bankLines.id, str(fd, "id")), eq(schema.bankLines.companyId, ctx.company.id), eq(schema.bankLines.status, "open")))
+    .returning({ id: schema.bankLines.id });
+  if (changed.length) await audit(db, ctx.company.id, ctx.user.id, "ignore", "bank_line", changed[0].id);
   revalidatePath(back);
   redirect(back);
 }
