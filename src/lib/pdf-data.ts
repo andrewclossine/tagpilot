@@ -20,6 +20,27 @@ export async function printedCompany(ctx: Pick<Ctx, "company">) {
   return { ...ctx.company, logo };
 }
 
+/** A proforma as a PDF: laid out like an invoice, and clearly not one. */
+export async function buildProformaPdf(ctx: Ctx, id: string) {
+  if (!isUuid(id)) throw new UserError("err_not_found");
+  const { t, lang } = await getI18n();
+  const db = await getDb();
+  const [p] = await db.select().from(schema.proformas).where(and(eq(schema.proformas.id, id), eq(schema.proformas.companyId, ctx.company.id)));
+  if (!p) throw new UserError("err_not_found");
+  const [customer] = await db.select().from(schema.partners).where(eq(schema.partners.id, p.partnerId));
+  const lines = await db.select().from(schema.proformaLines).where(eq(schema.proformaLines.proformaId, id)).orderBy(schema.proformaLines.lineNo);
+  const pdf = await invoicePdf({
+    company: await printedCompany(ctx), lang, vatRate: ctx.company.vatRegistered ? ctx.company.vatRate : 0,
+    labels: {
+      title: t("pf_proforma"), number: t("number"), date: t("date"), due: t("pf_valid_until"), billTo: t("pdf_bill_to"), description: t("description"),
+      qty: t("qty"), price: t("unit_price"), vat: t("vat"), amount: t("amount"), subtotal: t("subtotal"), total: t("total"),
+      paid: t("amount_paid"), balance: t("balance_due"), notes: t("notes"), footer: t("pf_pdf_note"), tin: t("tin"),
+    },
+    invoice: { number: p.number, date: p.date, dueDate: p.validUntil, subtotal: p.subtotal, vat: p.vat, total: p.total, amountPaid: 0, notes: p.notes }, customer, lines,
+  });
+  return { pdf, filename: `${p.number}.pdf` };
+}
+
 /** The invoice as a PDF, with the data needed to email it. */
 export async function buildInvoicePdf(ctx: Ctx, id: string) {
   if (!isUuid(id)) throw new UserError("err_not_found");

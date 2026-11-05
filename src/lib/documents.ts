@@ -80,12 +80,22 @@ export async function postDoc(tx: Tx, kind: DocKind, companyId: string, userId: 
   const moveIds: (string | null)[] = [];
   const cogs: LineInput[] = [];
   const stockItems = new Map<string, Awaited<ReturnType<typeof loadItem>>>();
+  // A bill for a delivery already received moves no stock: it clears what the delivery booked as goods received.
+  const [receipt] = kind === "bill" && d.goodsReceiptId
+    ? await tx.select().from(schema.goodsReceipts).where(and(eq(schema.goodsReceipts.id, d.goodsReceiptId), eq(schema.goodsReceipts.companyId, companyId))).for("update")
+    : [];
+  if (receipt && receipt.status !== "received") throw new UserError("err_receipt_billed");
+  const grni = receipt ? await accountIdByCode(tx, companyId, "2150") : "";
+  let received = 0;
   for (const l of docLines) {
     if (!l.itemId) continue;
     const it = stockItems.get(l.itemId) ?? await loadItem(tx, companyId, l.itemId);
     stockItems.set(l.itemId, it);
     if (it.kind !== "stock" || !l.quantity) continue;
-    if (kind === "bill") {
+    if (receipt) {
+      l.accountId = grni;
+      received = round2(received + l.amount);
+    } else if (kind === "bill") {
       l.accountId = await accountIdByCode(tx, companyId, it.inventoryAccount);
       const m = await moveStock(tx, companyId, { itemId: it.id, date: d.date, kind: "purchase", quantity: l.quantity, unitCost: l.amount / l.quantity, sourceType: "bill", sourceId: d.id, notes: d.number });
       moveIds.push(m.moveId);
@@ -99,6 +109,9 @@ export async function postDoc(tx: Tx, kind: DocKind, companyId: string, userId: 
       );
     }
   }
+
+  // A different total would leave an amount in goods received with no stock or bill behind it.
+  if (receipt && received !== receipt.value) throw new UserError("err_bill_receipt_mismatch");
 
   // One ledger line per account and project, plus VAT and the partner's balance.
   const grouped = new Map<string, LineInput>();
@@ -128,6 +141,7 @@ export async function postDoc(tx: Tx, kind: DocKind, companyId: string, userId: 
   }, true);
   await linkMoves(tx, moveIds, entryId);
   await tx.update(t.doc).set({ status: "open", entryId }).where(eq(t.doc.id, id));
+  if (receipt) await tx.update(schema.goodsReceipts).set({ status: "billed", billId: id }).where(eq(schema.goodsReceipts.id, receipt.id));
   await audit(tx, companyId, userId, kind === "invoice" ? "issue" : "approve", kind, id, { total: d.total });
 }
 
@@ -178,5 +192,9 @@ export async function voidDoc(tx: Tx, kind: DocKind, companyId: string, userId: 
     await reverseDocumentStock(tx, companyId, kind, id, date);
   }
   await tx.update(t.doc).set({ status: "void" }).where(eq(t.doc.id, id));
+  if (kind === "bill") {
+    await tx.update(schema.goodsReceipts).set({ status: "received", billId: null }).where(eq(schema.goodsReceipts.billId, id));
+    await tx.update(schema.supplierBills).set({ status: "received", billId: null }).where(eq(schema.supplierBills.billId, id));
+  }
   await audit(tx, companyId, userId, "void", kind, id);
 }

@@ -145,7 +145,7 @@ export type AiInfo = {
   newPartner?: { name: string; tin: string; kind: "customer" | "supplier" } | null;
 };
 
-export type EntrySource = "manual" | "ai" | "invoice" | "invoice_payment" | "bill" | "bill_payment" | "payroll" | "bank" | "reversal" | "voucher";
+export type EntrySource = "manual" | "ai" | "invoice" | "invoice_payment" | "bill" | "bill_payment" | "payroll" | "bank" | "reversal" | "voucher" | "receipt";
 
 export const journalEntries = pgTable("journal_entries", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -235,10 +235,60 @@ export const bills = pgTable("bills", {
   ...documentColumns(),
   supplierRef: text("supplier_ref").notNull().default(""),
   whtRate: numeric("wht_rate", { precision: 5, scale: 2, mode: "number" }).notNull().default(0),
+  goodsReceiptId: uuid("goods_receipt_id"), // the delivery this bill is for: its stock is already in inventory
 }, (t) => [uniqueIndex("bills_company_number").on(t.companyId, t.number)]);
 export const billLines = pgTable("bill_lines", {
   ...docLineColumns(),
   billId: uuid("bill_id").notNull().references(() => bills.id, { onDelete: "cascade" }),
+});
+
+/** A quotation to a customer. Nothing is booked until it becomes an invoice. */
+export const proformas = pgTable("proformas", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  number: text("number").notNull(),
+  partnerId: uuid("partner_id").notNull().references(() => partners.id),
+  date: date("date", { mode: "string" }).notNull(),
+  validUntil: date("valid_until", { mode: "string" }).notNull(),
+  status: text("status").$type<"open" | "converted" | "cancelled">().notNull().default("open"),
+  notes: text("notes").notNull().default(""),
+  projectId: uuid("project_id").references(() => projects.id),
+  subtotal: money("subtotal"),
+  vat: money("vat"),
+  total: money("total"),
+  invoiceId: uuid("invoice_id").references(() => invoices.id),
+  createdAt: created(),
+}, (t) => [uniqueIndex("proformas_company_number").on(t.companyId, t.number)]);
+export const proformaLines = pgTable("proforma_lines", {
+  ...docLineColumns(),
+  proformaId: uuid("proforma_id").notNull().references(() => proformas.id, { onDelete: "cascade" }),
+});
+
+/** Goods that arrived with a supplier's delivery note: in inventory now, owed to the supplier until the bill comes. */
+export const goodsReceipts = pgTable("goods_receipts", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  number: text("number").notNull(),
+  partnerId: uuid("partner_id").notNull().references(() => partners.id),
+  date: date("date", { mode: "string" }).notNull(),
+  deliveryNote: text("delivery_note").notNull().default(""),
+  notes: text("notes").notNull().default(""),
+  value: money("value"),
+  status: text("status").$type<"received" | "billed" | "void">().notNull().default("received"),
+  entryId: uuid("entry_id").references(() => journalEntries.id),
+  billId: uuid("bill_id"),
+  attachmentId: uuid("attachment_id").references(() => attachments.id),
+  createdBy: uuid("created_by").references(() => users.id),
+  createdAt: created(),
+}, (t) => [uniqueIndex("goods_receipts_company_number").on(t.companyId, t.number)]);
+export const goodsReceiptLines = pgTable("goods_receipt_lines", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  receiptId: uuid("receipt_id").notNull().references(() => goodsReceipts.id, { onDelete: "cascade" }),
+  lineNo: integer("line_no").notNull(),
+  itemId: uuid("item_id").notNull().references(() => items.id),
+  quantity: numeric("quantity", { precision: 18, scale: 3, mode: "number" }).notNull(),
+  unitCost: numeric("unit_cost", { precision: 18, scale: 4, mode: "number" }).notNull(),
+  amount: money("amount"),
 });
 
 export const payments = pgTable("payments", {
@@ -361,7 +411,7 @@ export const stockMoves = pgTable("stock_moves", {
   value: money("value"),                      // quantity x unit cost, signed
   qtyAfter: qty("qty_after"),
   avgCostAfter: numeric("avg_cost_after", { precision: 18, scale: 4, mode: "number" }).notNull().default(0),
-  sourceType: text("source_type").$type<"invoice" | "bill" | "adjustment" | "item">(),
+  sourceType: text("source_type").$type<"invoice" | "bill" | "adjustment" | "item" | "receipt">(),
   sourceId: uuid("source_id"),
   entryId: uuid("entry_id").references(() => journalEntries.id),
   notes: text("notes").notNull().default(""),
@@ -586,6 +636,25 @@ export const contractAmendments = pgTable("contract_amendments", {
   attachmentId: uuid("attachment_id").references(() => attachments.id),
   createdAt: created(),
 }, (t) => [index("amendments_contract").on(t.contractId)]);
+
+/** A bill a supplier sends through TAGPILOT against its contract, waiting for the buyer to accept it into the books. */
+export const supplierBills = pgTable("supplier_bills", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }), // the buyer
+  contractId: uuid("contract_id").notNull().references(() => contracts.id),
+  partnerId: uuid("partner_id").notNull().references(() => partners.id),
+  reference: text("reference").notNull(), // the supplier's own bill number
+  date: date("date", { mode: "string" }).notNull(),
+  dueDate: date("due_date", { mode: "string" }).notNull(),
+  amount: money("amount"), // before VAT
+  description: text("description").notNull(),
+  attachmentId: uuid("attachment_id").references(() => attachments.id),
+  status: text("status").$type<"received" | "accepted" | "rejected">().notNull().default("received"),
+  decisionNote: text("decision_note").notNull().default(""),
+  billId: uuid("bill_id"),
+  submittedBy: uuid("submitted_by").references(() => users.id),
+  createdAt: created(),
+}, (t) => [index("supplier_bills_company").on(t.companyId), index("supplier_bills_contract").on(t.contractId)]);
 
 // ---------- subscription & account recovery ----------
 export const subscriptionPayments = pgTable("subscription_payments", {

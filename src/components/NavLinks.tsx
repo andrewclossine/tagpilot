@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-export type NavItem = { href: string; label: string } | { group: string };
+export type NavItem = { href: string; label: string; top?: boolean } | { group: string };
 export type Workspace = { key: string; label: string; items: NavItem[] };
 
 const hrefs = (items: NavItem[]) => items.flatMap((i) => ("href" in i ? [i.href] : []));

@@ -95,7 +95,7 @@ export async function DocForm({ kind, ctx, doc, lines, error }: { kind: DocKind;
         <Link className="btn ghost" href={docBase(kind)}>{t("back")}</Link>
       </PageHead>
       <ErrorNote message={error} />
-      {!partners.length ? <div className="note warn small"><Link href="/partners">{t("nav_partners")} →</Link></div> : null}
+      {!partners.length ? <div className="note warn small"><Link href={kind === "invoice" ? "/sales/customers" : "/purchases/suppliers"}>{t(kind === "invoice" ? "nav_customers" : "nav_suppliers")} →</Link></div> : null}
       <form action={saveDoc} className="panel stack">
         <input type="hidden" name="kind" value={kind} />
         {doc ? <input type="hidden" name="id" value={doc.id} /> : null}

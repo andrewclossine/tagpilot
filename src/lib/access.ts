@@ -32,6 +32,9 @@ export async function canReadAttachment(db: Db, ctx: Ctx, attachmentId: string):
     return supplierSeesStage(stage.stage as TenderStage, mine);
   }
 
+  const [bill] = await db.select().from(schema.supplierBills).where(eq(schema.supplierBills.attachmentId, attachmentId));
+  if (bill) return supplier ? bill.partnerId === supplier : ctx.can("purchases") || ctx.can("journal") || ctx.can("contracts");
+
   const [g] = await db.select({ contractId: schema.performanceGuarantees.contractId }).from(schema.performanceGuarantees).where(eq(schema.performanceGuarantees.attachmentId, attachmentId));
   const [a] = await db.select({ contractId: schema.contractAmendments.contractId }).from(schema.contractAmendments).where(eq(schema.contractAmendments.attachmentId, attachmentId));
   const [contract] = await db.select().from(schema.contracts).where(or(
@@ -79,6 +82,9 @@ export async function canReadAsBidder(db: Db, ctx: Ctx, attachmentId: string): P
     const bids = await db.select().from(schema.bids).where(eq(schema.bids.tenderId, stage.tenderId));
     return supplierSeesStage(stage.stage as TenderStage, bids.find((b) => mine(b.partnerId)));
   }
+
+  const [bill] = await db.select().from(schema.supplierBills).where(eq(schema.supplierBills.attachmentId, attachmentId));
+  if (bill) return mine(bill.partnerId);
 
   const [g] = await db.select({ contractId: schema.performanceGuarantees.contractId }).from(schema.performanceGuarantees).where(eq(schema.performanceGuarantees.attachmentId, attachmentId));
   const [a] = await db.select({ contractId: schema.contractAmendments.contractId }).from(schema.contractAmendments).where(eq(schema.contractAmendments.attachmentId, attachmentId));

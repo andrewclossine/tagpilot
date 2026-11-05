@@ -8,7 +8,8 @@ import { sp, type SearchParams } from "@/lib/actions";
 import { isUuid } from "@/lib/format";
 import { currentTerms, MAX_AMENDMENTS } from "@/lib/procurement";
 import { ErrorNote, PageHead, Pill } from "@/components/ui";
-import { supplierAmendment } from "../../actions";
+import { SupplierBillPanel } from "@/components/SupplierBillPanel";
+import { sendPortalBill, supplierAmendment } from "../../actions";
 
 export const metadata = { title: "Contract" };
 
@@ -41,6 +42,7 @@ export default async function PortalContractPage({ params, searchParams }: { par
         <div className="panel kpi"><div className="label">{t("ct_end")}</div><div className="v">{terms.endDate}</div></div>
       </div>
       {c.attachmentId ? <div className="panel">{file(c.attachmentId, t("ct_signed_file"))}</div> : null}
+      <SupplierBillPanel contractId={c.id} currency={ctx.company.currency} canSend={c.status === "active" && !ctx.locked} action={sendPortalBill} />
       {guarantees.length ? (
         <div className="panel stack">
           <h2>{t("ct_guarantees")}</h2>

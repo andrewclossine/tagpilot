@@ -9,6 +9,7 @@ import { isIsoDate, isUuid, parseAmount, str } from "@/lib/format";
 import { UserError } from "@/lib/ledger";
 import { myPartners, placeBid } from "@/lib/bidding";
 import { biddingOpen, requestAmendment } from "@/lib/procurement";
+import { submitSupplierBill } from "@/lib/purchasing";
 import { optionalUpload } from "@/lib/upload";
 
 /** Sends or replaces this organisation's bid on an advert. The deadline is checked on the server, against its clock. */
@@ -30,6 +31,25 @@ export async function submitAdvertBid(fd: FormData) {
   revalidatePath(back);
   revalidatePath("/my-bids");
   redirect(`${back}?sent=1`);
+}
+
+/** Sends a bill against a contract this organisation won; the buyer accepts it into its books. */
+export async function sendContractBill(fd: FormData) {
+  const ctx = await requireWrite("bidding");
+  const contractId = str(fd, "contractId"), back = `/my-contracts/${contractId}`;
+  try {
+    if (!isUuid(contractId)) throw new UserError("err_not_found");
+    const date = str(fd, "date"), dueDate = str(fd, "dueDate");
+    if (!isIsoDate(date) || !isIsoDate(dueDate)) throw new UserError("err_required");
+    const db = await getDb();
+    const partners = await myPartners(db, ctx.company.id);
+    const [c] = partners.length ? await db.select().from(schema.contracts).where(and(eq(schema.contracts.id, contractId), inArray(schema.contracts.partnerId, partners.map((p) => p.id)))) : [];
+    if (!c) throw new UserError("err_not_found");
+    const attachmentId = await optionalUpload(c.companyId, ctx.user.id, fd);
+    await db.transaction((tx) => submitSupplierBill(tx, c, ctx.user.id, { reference: str(fd, "reference"), date, dueDate, amount: parseAmount(fd.get("amount")), description: str(fd, "description"), attachmentId }));
+  } catch (e) { fail(e, back); }
+  revalidatePath(back);
+  redirect(back);
 }
 
 /** Asks for a change to a contract this organisation won; the buyer decides. */

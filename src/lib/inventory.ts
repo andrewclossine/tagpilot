@@ -27,7 +27,7 @@ export async function loadItem(db: Db | Tx, companyId: string, id: string) {
  */
 export async function moveStock(tx: Tx, companyId: string, m: {
   itemId: string; date: string; kind: MoveKind; quantity: number; unitCost?: number;
-  sourceType?: "invoice" | "bill" | "adjustment" | "item"; sourceId?: string | null; entryId?: string | null; notes?: string; allowNegative?: boolean;
+  sourceType?: "invoice" | "bill" | "adjustment" | "item" | "receipt"; sourceId?: string | null; entryId?: string | null; notes?: string; allowNegative?: boolean;
 }) {
   const it = await loadItem(tx, companyId, m.itemId);
   const none = { value: 0, unitCost: 0, moveId: null as string | null };
@@ -43,6 +43,9 @@ export async function moveStock(tx: Tx, companyId: string, m: {
   } else {
     if (onHand + q < -0.0005 && !m.allowNegative) throw new UserError("err_stock_insufficient");
     unitCost = r4(m.unitCost ?? it.avgCost);
+    // Undoing a receipt takes out what it put in, so the average returns to what it would have been without it.
+    const after = onHand + q;
+    if (m.kind === "void" && m.unitCost !== undefined && after > 0) newAvg = r4((onHand * it.avgCost + q * unitCost) / after);
   }
   const qtyAfter = r3(onHand + q), value = round2(q * unitCost);
   const [row] = await tx.insert(schema.stockMoves).values({
@@ -59,8 +62,8 @@ export async function linkMoves(tx: Tx, moveIds: (string | null)[], entryId: str
   if (ids.length) await tx.update(schema.stockMoves).set({ entryId }).where(inArray(schema.stockMoves.id, ids));
 }
 
-/** Undoes the stock movements of a voided invoice or bill, at the cost they were booked at. */
-export async function reverseDocumentStock(tx: Tx, companyId: string, sourceType: "invoice" | "bill", sourceId: string, date: string) {
+/** Undoes the stock movements of a voided invoice, bill or delivery, at the cost they were booked at. */
+export async function reverseDocumentStock(tx: Tx, companyId: string, sourceType: "invoice" | "bill" | "receipt", sourceId: string, date: string) {
   const moves = await tx.select().from(schema.stockMoves)
     .where(and(eq(schema.stockMoves.companyId, companyId), eq(schema.stockMoves.sourceType, sourceType), eq(schema.stockMoves.sourceId, sourceId)));
   for (const mv of moves.filter((x) => x.kind !== "void")) {

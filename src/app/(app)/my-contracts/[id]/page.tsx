@@ -9,7 +9,8 @@ import { isUuid } from "@/lib/format";
 import { myPartners } from "@/lib/bidding";
 import { currentTerms, MAX_AMENDMENTS } from "@/lib/procurement";
 import { ErrorNote, PageHead, Pill } from "@/components/ui";
-import { requestContractChange } from "../../adverts/actions";
+import { SupplierBillPanel } from "@/components/SupplierBillPanel";
+import { requestContractChange, sendContractBill } from "../../adverts/actions";
 
 export const metadata = { title: "Contract" };
 
@@ -48,6 +49,7 @@ export default async function MyContractPage({ params, searchParams }: { params:
         <div className="panel kpi"><div className="label">{t("ct_end")}</div><div className="v">{terms.endDate}</div></div>
       </div>
       {c.attachmentId ? <div className="panel"><a href={`/api/files/${c.attachmentId}`} target="_blank" rel="noreferrer">{t("ct_signed_file")}</a></div> : null}
+      <SupplierBillPanel contractId={c.id} currency={currency} canSend={write && c.status === "active"} action={sendContractBill} />
       {guarantees.length ? (
         <div className="panel stack">
           <h2>{t("ct_guarantees")}</h2>

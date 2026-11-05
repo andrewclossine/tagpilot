@@ -13,6 +13,7 @@ export const STARTER_ACCOUNTS: StarterAccount[] = [
   { code: "1510", type: "asset", en: "Staff advances", fr: "Avances au personnel" },
   ...FIXED_ASSET_ACCOUNTS(),
   { code: "2100", type: "liability", subtype: "ap", en: "Accounts payable", fr: "Fournisseurs" },
+  { code: "2150", type: "liability", en: "Goods received not invoiced", fr: "Marchandises reçues non facturées" },
   { code: "2200", type: "liability", subtype: "vat_out", en: "VAT payable (output VAT)", fr: "TVA collectée" },
   { code: "2300", type: "liability", en: "Income tax on salaries payable", fr: "Impôt sur salaires à payer" },
   { code: "2310", type: "liability", en: "Social security contributions payable", fr: "Cotisations sociales à payer" },

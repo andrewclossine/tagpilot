@@ -8,6 +8,7 @@ import { fail } from "@/lib/actions";
 import { isIsoDate, parseAmount, str } from "@/lib/format";
 import { UserError } from "@/lib/ledger";
 import { biddingOpen, requestAmendment, supplierCanSee } from "@/lib/procurement";
+import { submitSupplierBill } from "@/lib/purchasing";
 import { optionalUpload } from "@/lib/upload";
 import { audit } from "@/lib/audit";
 
@@ -37,6 +38,24 @@ export async function submitBid(fd: FormData) {
   } catch (e) { fail(e, back); }
   revalidatePath(back);
   redirect(`${back}?sent=1`);
+}
+
+/** The supplier sends a bill against its own contract; the organisation accepts it into its books. */
+export async function sendPortalBill(fd: FormData) {
+  const ctx = await requireSupplier();
+  const contractId = str(fd, "contractId"), back = `/portal/contracts/${contractId}`;
+  try {
+    if (ctx.locked) throw new UserError("err_contract_closed");
+    const date = str(fd, "date"), dueDate = str(fd, "dueDate");
+    if (!isIsoDate(date) || !isIsoDate(dueDate)) throw new UserError("err_required");
+    const db = await getDb();
+    const [c] = await db.select().from(schema.contracts).where(and(eq(schema.contracts.id, contractId), eq(schema.contracts.companyId, ctx.company.id), eq(schema.contracts.partnerId, ctx.partnerId)));
+    if (!c) throw new UserError("err_not_found");
+    const attachmentId = await optionalUpload(ctx.company.id, ctx.user.id, fd);
+    await db.transaction((tx) => submitSupplierBill(tx, c, ctx.user.id, { reference: str(fd, "reference"), date, dueDate, amount: parseAmount(fd.get("amount")), description: str(fd, "description"), attachmentId }));
+  } catch (e) { fail(e, back); }
+  revalidatePath(back);
+  redirect(back);
 }
 
 /** The supplier asks for a change to their own contract; the organisation decides. */

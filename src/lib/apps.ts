@@ -11,8 +11,9 @@ export const APPS: AppKey[] = ["accounting", "projects", "procurement"];
 export function appWorkspaces(ctx: Ctx, t: T): (Workspace & { key: AppKey })[] {
   const link = (area: Area, href: string, label: string): NavItem[] => (ctx.can(area) ? [{ href, label }] : []);
   const group = (label: string, items: NavItem[]): NavItem[] => (items.length ? [{ group: label }, ...items] : []);
-  // Customers and suppliers belong to accounting for anyone who works in the books; procurement has its own way in.
-  const booksRole = ctx.can("sales") || ctx.can("purchases") || ctx.can("journal");
+  // A link of its own in the menu bar, not inside the dropdown before it.
+  const top = (area: Area, href: string, label: string): NavItem[] => (ctx.can(area) ? [{ href, label, top: true }] : []);
+  const scan: NavItem[] = ctx.can("journal", "write") ? [{ href: "/scan", label: t("nav_ai") }] : [];
   const buying: NavItem[] = [
     ...link("procurement", "/procurement", t("nav_tenders")),
     ...link("procurement", "/procurement/suppliers", t("nav_supplier_accounts")),
@@ -27,17 +28,41 @@ export function appWorkspaces(ctx: Ctx, t: T): (Workspace & { key: AppKey })[] {
   const all: (Workspace & { key: AppKey })[] = [
     {
       key: "accounting", label: t("module_accounting"), items: [
-        ...link("dashboard", "/dashboard", t("nav_dashboard")),
-        ...group(t("nav_sales"), [...link("sales", "/sales/invoices", t("nav_invoices")), ...(booksRole ? link("partners", "/partners", t("nav_partners")) : [])]),
-        ...group(t("nav_purchases"), link("purchases", "/purchases/bills", t("nav_bills"))),
-        ...group(t("nav_accounting"), [
-          ...(ctx.can("journal", "write") ? [{ href: "/scan", label: t("nav_ai") }] : []),
+        ...top("dashboard", "/dashboard", t("nav_dashboard")),
+        ...group(t("nav_sales"), ctx.can("sales") ? [
+          ...link("sales", "/sales/invoices", t("nav_invoices")),
+          ...link("sales", "/sales/proformas", t("nav_proforma")),
+          ...link("sales", "/sales/payments", t("nav_receive_payments")),
+          ...link("partners", "/sales/customers", t("nav_customers")),
+          ...scan,
+        ] : []),
+        ...group(t("nav_purchases"), ctx.can("purchases") ? [
+          ...link("purchases", "/purchases/bills", t("nav_bills")),
+          ...(ctx.has("procurement") ? link("purchases", "/purchases/received-bills", t("nav_receive_bill")) : []),
+          ...link("purchases", "/purchases/receive-items", t("nav_receive_items")),
+          ...link("partners", "/purchases/suppliers", t("nav_suppliers")),
+          ...(ctx.has("procurement") ? link("purchases", "/purchases/tenders", t("nav_tender_report")) : []),
+          ...scan,
+        ] : []),
+        ...top("banking", "/banking", t("nav_banking")),
+        ...group(t("nav_inventory"), ctx.can("inventory") ? [
+          ...link("inventory", "/inventory", t("nav_items")),
+          ...link("assets", "/assets/depreciation", t("nav_depreciation")),
+          ...link("assets", "/assets/dispose", t("nav_dispose_asset")),
+        ] : []),
+        ...group(t("nav_assets"), [
+          ...link("assets", "/assets", t("nav_asset_register")),
+          ...link("assets", "/assets/depreciation", t("nav_depreciation")),
+          ...link("assets", "/assets/schedule", t("asset_schedule")),
+          ...link("assets", "/assets/dispose", t("nav_dispose_asset")),
+        ]),
+        ...group(t("nav_employees"), [
+          ...link("payroll", "/payroll?tab=employees", t("nav_employees")),
+          ...link("payroll", "/payroll", t("nav_payroll")),
+        ]),
+        ...group(t("nav_accountant"), [
           ...link("journal", "/journal", t("nav_journal")),
           ...link("accounts", "/accounts", t("nav_coa")),
-          ...link("banking", "/banking", t("nav_banking")),
-          ...link("inventory", "/inventory", t("nav_inventory")),
-          ...link("assets", "/assets", t("nav_assets")),
-          ...link("payroll", "/payroll", t("nav_payroll")),
           ...link("budgets", "/budgets", t("nav_budgets")),
           ...link("reports", "/reports", t("nav_reports")),
         ]),

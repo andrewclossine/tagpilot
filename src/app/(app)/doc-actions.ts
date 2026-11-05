@@ -102,7 +102,12 @@ export async function deleteDocDraft(fd: FormData) {
       const d = await getDoc(tx, kind, ctx.company.id, id);
       if (d.status !== "draft") throw new UserError("err_posted_locked");
       if (kind === "invoice") await tx.delete(schema.invoices).where(eq(schema.invoices.id, id));
-      else await tx.delete(schema.bills).where(eq(schema.bills.id, id));
+      else {
+        // The delivery or supplier's bill it came from can be billed again.
+        await tx.update(schema.goodsReceipts).set({ billId: null }).where(eq(schema.goodsReceipts.billId, id));
+        await tx.update(schema.supplierBills).set({ status: "received", billId: null }).where(eq(schema.supplierBills.billId, id));
+        await tx.delete(schema.bills).where(eq(schema.bills.id, id));
+      }
       await audit(tx, ctx.company.id, ctx.user.id, "delete_draft", kind, id, { number: d.number });
     });
   } catch (e) { fail(e, `${base}/${id}`); }

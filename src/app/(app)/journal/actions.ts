@@ -54,6 +54,10 @@ export async function reverseJournal(fd: FormData) {
   try {
     const db = await getDb();
     newId = await db.transaction(async (tx) => {
+      // These entries have a document and stock behind them: voiding the document undoes all of it together.
+      const [entry] = await tx.select({ source: schema.journalEntries.source }).from(schema.journalEntries)
+        .where(and(eq(schema.journalEntries.id, id), eq(schema.journalEntries.companyId, ctx.company.id)));
+      if (entry && ["invoice", "bill", "receipt"].includes(entry.source)) throw new UserError("err_use_void");
       const reversal = await reverseEntry(tx, ctx.company.id, ctx.user.id, id, str(fd, "date") || today(), t("reverse_of"));
       // Reversing a voucher's payment puts the voucher back to approved, so it can be paid again.
       await tx.update(schema.paymentVouchers).set({ status: "approved", entryId: null, paidBy: null, paidAt: null })

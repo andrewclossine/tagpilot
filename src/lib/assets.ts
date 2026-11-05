@@ -72,6 +72,29 @@ export async function runDepreciation(tx: Tx, companyId: string, userId: string,
   return { entryId, total };
 }
 
+export type PlanYear = { year: number; opening: number; charge: number; closing: number };
+
+/**
+ * The depreciation still to come on an asset, year by year, using the same monthly charge as the books (IAS 16.50-62).
+ * Starts after the last month booked, from today's carrying amount.
+ */
+export function depreciationPlan(a: Asset, carrying: number): PlanYear[] {
+  const years = new Map<number, PlanYear>();
+  let bal = carrying;
+  const start = Math.max(monthIndex(a.availableDate), a.depreciatedTo ? monthIndex(a.depreciatedTo) + 1 : 0);
+  // Reducing balance never quite reaches the residual value, so the plan stops after a long life.
+  for (let m = start; m < start + 1200; m++) {
+    const charge = monthCharge(a, bal, m);
+    if (charge <= 0) break;
+    const year = Math.floor(m / 12);
+    const row = years.get(year) ?? { year, opening: bal, charge: 0, closing: bal };
+    bal = round2(bal - charge);
+    row.charge = round2(row.charge + charge); row.closing = bal;
+    years.set(year, row);
+  }
+  return [...years.values()];
+}
+
 export async function loadAsset(db: Db | Tx, companyId: string, id: string): Promise<{ a: Asset; cat: Category }> {
   const [row] = await db.select({ a: schema.fixedAssets, cat: schema.assetCategories }).from(schema.fixedAssets)
     .innerJoin(schema.assetCategories, eq(schema.assetCategories.id, schema.fixedAssets.categoryId))

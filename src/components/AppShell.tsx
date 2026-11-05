@@ -6,7 +6,10 @@ import { AppIcon, type AppKey } from "./AppIcon";
 import { NavLinks, type NavItem, type Workspace } from "./NavLinks";
 
 const hrefs = (items: NavItem[]) => items.flatMap((i) => ("href" in i ? [i.href] : []));
-const within = (path: string, href: string) => path === href || path.startsWith(href + "/");
+const within = (path: string, href: string) => { const h = href.split("?")[0]; return path === h || path.startsWith(h + "/"); };
+/** The link for this page: the most specific address wins, and a plain address before one with a query. */
+const currentOf = (items: NavItem[], path: string) => hrefs(items).filter((h) => within(path, h))
+  .sort((a, b) => b.split("?")[0].length - a.split("?")[0].length || a.length - b.length)[0];
 
 type Menu = { label: string; href?: string; links: { href: string; label: string }[] };
 
@@ -16,6 +19,7 @@ function toMenus(items: NavItem[]): Menu[] {
   let open: Menu | null = null;
   for (const i of items) {
     if ("group" in i) { open = { label: i.group, links: [] }; menus.push(open); }
+    else if (i.top) { open = null; menus.push({ label: i.label, href: i.href, links: [] }); }
     else if (open) open.links.push(i);
     else menus.push({ label: i.label, href: i.href, links: [] });
   }
@@ -28,7 +32,7 @@ function TopMenu({ items }: { items: NavItem[] }) {
   const [open, setOpen] = useState<string | null>(null);
   const bar = useRef<HTMLElement>(null);
   const menus = toMenus(items);
-  const current = hrefs(items).filter((h) => within(path, h)).sort((a, b) => b.length - a.length)[0];
+  const current = currentOf(items, path);
 
   useEffect(() => setOpen(null), [path]);
   useEffect(() => {
