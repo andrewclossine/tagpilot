@@ -45,6 +45,14 @@ export async function canReadAttachment(db: Db, ctx: Ctx, attachmentId: string):
   if (contract) return supplier ? contract.partnerId === supplier : ctx.can("contracts");
 
   const [voucher] = await db.select().from(schema.paymentVouchers).where(eq(schema.paymentVouchers.attachmentId, attachmentId));
+  const [vdoc] = await db.select({ voucherId: schema.voucherDocuments.voucherId }).from(schema.voucherDocuments).where(eq(schema.voucherDocuments.attachmentId, attachmentId));
+  if (vdoc && !supplier) {
+    const [owner] = await db.select().from(schema.paymentVouchers).where(eq(schema.paymentVouchers.id, vdoc.voucherId));
+    return !!owner && canSeeVoucher(ctx, owner);
+  }
+  const [done] = await db.select({ id: schema.achievements.id }).from(schema.achievements).where(eq(schema.achievements.attachmentId, attachmentId));
+  if (done) return !supplier && ctx.can("achievements");
+
   // A paid voucher's document is also the support of its journal entry.
   if (voucher && !supplier) return canSeeVoucher(ctx, voucher) || ctx.can("journal");
 

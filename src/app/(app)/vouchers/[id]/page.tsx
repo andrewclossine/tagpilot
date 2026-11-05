@@ -8,13 +8,16 @@ import { getI18n } from "@/lib/i18n";
 import { sp, type SearchParams } from "@/lib/actions";
 import { isUuid, today } from "@/lib/format";
 import { moneyAccounts } from "@/lib/ledger";
-import { executionOn } from "@/lib/programs";
+import { DOC_TYPES, executionOn, NEXT_STEP } from "@/lib/programs";
 import { ConfirmButton } from "@/components/editors";
 import { ErrorNote, PageHead, Pill } from "@/components/ui";
-import { decide, deleteVoucher, pay, submitDraft } from "../actions";
+import type { VoucherStep } from "@/db/schema";
+import { decide, deleteVoucher, pay, saveDocuments, submitDraft } from "../actions";
 import { VoucherForm } from "../VoucherForm";
 
-export const metadata = { title: "Payment voucher" };
+export const metadata = { title: "Fund request" };
+
+const SIGNATURES: VoucherStep[] = ["prepared", "reviewed", "approved", "authorized"];
 
 export default async function VoucherPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: SearchParams }) {
   const ctx = await requireView("vouchers");
@@ -23,41 +26,49 @@ export default async function VoucherPage({ params, searchParams }: { params: Pr
   if (!isUuid(id)) notFound();
   const q = await sp(searchParams);
   const db = await getDb();
-  const [row] = await db.select({ v: schema.paymentVouchers, project: schema.projects, line: schema.logframeItems })
-    .from(schema.paymentVouchers)
+  const [row] = await db.select({ v: schema.paymentVouchers, project: schema.projects }).from(schema.paymentVouchers)
     .innerJoin(schema.projects, eq(schema.projects.id, schema.paymentVouchers.projectId))
-    .innerJoin(schema.logframeItems, eq(schema.logframeItems.id, schema.paymentVouchers.budgetItemId))
     .where(and(eq(schema.paymentVouchers.id, id), eq(schema.paymentVouchers.companyId, ctx.company.id)));
   if (!row || !canSeeVoucher(ctx, row.v)) notFound();
-  const { v, project, line } = row;
+  const { v, project } = row;
   const mine = v.requestedBy === ctx.user.id;
+  const lines = await db.select({ l: schema.voucherLines, item: schema.logframeItems }).from(schema.voucherLines)
+    .innerJoin(schema.logframeItems, eq(schema.logframeItems.id, schema.voucherLines.budgetItemId))
+    .where(eq(schema.voucherLines.voucherId, id)).orderBy(schema.voucherLines.lineNo);
 
   if (q("edit") && v.status === "draft" && mine && ctx.can("vouchers", "write")) {
     return (
       <div className="stack">
         <PageHead title={`${t("edit")}: ${v.number}`} />
         <ErrorNote message={err(q("error"))} />
-        <VoucherForm ctx={ctx} voucher={v} />
+        <VoucherForm ctx={ctx} voucher={v} lines={lines.map((x) => x.l)} />
       </div>
     );
   }
 
-  // A draft shows the budget line as it stands now; from submission on, the figures frozen on the voucher.
-  const budget = v.status === "draft" ? line.budget : v.activityBudget;
-  const previous = v.status === "draft" ? await executionOn(db, v.budgetItemId, v.id) : v.previousExecution;
-  const total = previous + v.amount;
-  const [accounts, money_, names] = await Promise.all([
+  // A draft shows each budget line as it stands now; from preparation on, the figures frozen on the request.
+  const figures = await Promise.all(lines.map(async ({ l, item }) => {
+    const budget = v.status === "draft" ? item.budget : l.activityBudget;
+    const previous = v.status === "draft" ? await executionOn(db, l.budgetItemId, v.id) : l.previousExecution;
+    return { l, item, budget, previous, total: previous + l.amount };
+  }));
+  const [accounts, moneyAccs, steps, docs] = await Promise.all([
     db.select().from(schema.accounts).where(and(eq(schema.accounts.companyId, ctx.company.id), eq(schema.accounts.isActive, true))).orderBy(schema.accounts.code),
     moneyAccounts(db, ctx.company.id),
-    // By the people named on the voucher, so someone who has since left is still shown.
-    db.select({ id: schema.users.id, name: schema.users.name }).from(schema.users)
-      .where(inArray(schema.users.id, [v.requestedBy, v.decidedBy, v.paidBy].filter((u): u is string => !!u))),
+    db.select({ s: schema.voucherSteps, name: schema.users.name }).from(schema.voucherSteps).innerJoin(schema.users, eq(schema.users.id, schema.voucherSteps.userId))
+      .where(eq(schema.voucherSteps.voucherId, id)).orderBy(schema.voucherSteps.at),
+    db.select({ d: schema.voucherDocuments }).from(schema.voucherDocuments).where(eq(schema.voucherDocuments.voucherId, id)),
   ]);
-  const who = (uid: string | null) => names.find((n) => n.id === uid)?.name ?? "";
-  const canDecide = ctx.can("voucher_approve", "write") && (ctx.isAdmin || !mine);
+  const next = NEXT_STEP[v.status];
+  const signed = steps.map((x) => x.s).filter((s) => SIGNATURES.includes(s.step));
+  const canSign = !!next && ctx.can(next.area, "write");
+  const alreadySigned = signed.some((s) => s.userId === ctx.user.id) && !ctx.isAdmin;
   const canPay = ctx.can("voucher_pay", "write");
   const expense = accounts.filter((a) => a.type === "expense" || a.type === "asset");
-
+  const needsAccount = lines.some((x) => !x.item.accountId);
+  const docOf = (type: string) => docs.find((x) => x.d.docType === type)?.d;
+  const canDocs = ctx.can("vouchers", "write") && (ctx.role !== "staff" || mine);
+  const over = figures.some((f) => f.total > f.budget + 0.01);
   return (
     <div className="stack">
       <PageHead title={`${t("pv_voucher")} ${v.number}`}>
@@ -66,30 +77,51 @@ export default async function VoucherPage({ params, searchParams }: { params: Pr
         <Pill kind={v.status}>{t(`vs_${v.status}`)}</Pill>
       </PageHead>
       <ErrorNote message={err(q("error"))} />
-      <div className="grid2">
-        <div className="panel stack">
-          <div className="fields">
-            <div><div className="label">{t("date")}</div>{v.date}</div>
-            <div><div className="label">{t("project")}</div>{project.code} · {project.name}</div>
-            <div><div className="label">{t("pv_requested_by")}</div>{who(v.requestedBy)}</div>
-            {v.payee ? <div><div className="label">{t("pv_payee")}</div>{v.payee}</div> : null}
-          </div>
-          <div><div className="label">{t("pv_budget_line")}</div><code className="k">{line.code}</code> {line.title}</div>
-          <div><div className="label">{t("pv_description")}</div><div style={{ whiteSpace: "pre-wrap" }}>{v.description}</div></div>
-          {v.attachmentId ? <div><a href={`/api/files/${v.attachmentId}`} target="_blank" rel="noreferrer">{t("pv_support")}</a></div> : null}
-          {v.decidedBy ? <div className={`note ${v.status === "rejected" ? "bad" : "info"} small`}><b>{t(v.status === "rejected" ? "vs_rejected" : "vs_approved")}</b> · {who(v.decidedBy)}{v.decisionNote ? <div>{v.decisionNote}</div> : null}</div> : null}
-          {v.entryId ? <div className="small"><Link href={`/journal/${v.entryId}`}>{t("pv_journal_entry")} →</Link></div> : null}
+      {q("saved") ? <div className="note ok small">{t("saved")}</div> : null}
+
+      <div className="panel stack">
+        <div className="fields">
+          <div><div className="label">{t("date")}</div>{v.date}</div>
+          <div><div className="label">{t("project")}</div><Link href={`/projects/${project.id}`}>{project.code} · {project.name}</Link></div>
+          {v.payee ? <div><div className="label">{t("pv_payee")}</div>{v.payee}</div> : null}
+          {v.paymentReference ? <div><div className="label">{t("pv_cheque")}</div>{v.paymentReference}</div> : null}
         </div>
-        <div className="panel">
-          <table><tbody>
-            <tr><td>{t("pv_activity_budget")}</td><td className="num">{money(budget, 2)}</td></tr>
-            <tr><td>{t("pv_previous_execution")}</td><td className="num">{money(previous, 2)}</td></tr>
-            <tr><td>{t("pv_amount_requested")}</td><td className="num"><b>{money(v.amount, 2)}</b></td></tr>
-            <tr><td>{t("pv_total_execution")}</td><td className="num">{money(total, 2)}</td></tr>
-            <tr className="total"><td>{t("balance_left")}</td><td className="num" style={{ color: budget - total < 0 ? "var(--bad)" : undefined }}>{money(budget - total, 2)}</td></tr>
-          </tbody></table>
-          {v.status === "draft" && budget - total < 0 ? <div className="note bad small" style={{ marginTop: 10 }}>{t("err_over_budget")}</div> : null}
-        </div>
+        <div><div className="label">{t("pv_description")}</div><div style={{ whiteSpace: "pre-wrap" }}>{v.description}</div></div>
+        {v.attachmentId ? <div><a href={`/api/files/${v.attachmentId}`} target="_blank" rel="noreferrer">{t("pv_support")}</a></div> : null}
+        {v.entryId ? <div className="small"><Link href={`/journal/${v.entryId}`}>{t("pv_journal_entry")} →</Link></div> : null}
+        <div className="tbl-wrap"><table>
+          <thead><tr><th>{t("pv_budget_line")}</th><th className="num">{t("pv_activity_budget")}</th><th className="num">{t("pv_previous_execution")}</th><th className="num">{t("pv_amount_requested")}</th><th className="num">{t("pv_total_execution")}</th><th className="num">{t("balance_left")}</th></tr></thead>
+          <tbody>
+            {figures.map(({ l, item, budget, previous, total }) => (
+              <tr key={l.id}>
+                <td><code className="k">{item.taskCode || item.code}</code> {item.title}{l.description ? <div className="small muted">{l.description}</div> : null}</td>
+                <td className="num">{money(budget, 2)}</td><td className="num">{money(previous, 2)}</td><td className="num"><b>{money(l.amount, 2)}</b></td><td className="num">{money(total, 2)}</td>
+                <td className="num" style={{ color: budget - total < -0.01 ? "var(--bad)" : undefined }}>{money(budget - total, 2)}</td>
+              </tr>
+            ))}
+            <tr className="total"><td colSpan={3}>{t("total")}</td><td className="num">{money(v.amount, 2)}</td><td colSpan={2} /></tr>
+          </tbody>
+        </table></div>
+        {v.status === "draft" && over ? <div className="note bad small">{t("err_over_budget")}</div> : null}
+      </div>
+
+      <div className="panel stack">
+        <h2>{t("pv_signatures")}</h2>
+        <ol className="sign-steps">
+          {SIGNATURES.map((s) => {
+            const done = signed.find((x) => x.step === s);
+            const who = steps.find((x) => x.s.id === done?.id)?.name;
+            return (
+              <li key={s} className={done ? "done" : next?.step === s ? "now" : ""}>
+                <b>{t(`step_${s}`)}</b>
+                <span className="small">{done ? who : "—"}</span>
+                <span className="small muted">{done ? done.at.toISOString().slice(0, 16).replace("T", " ") : ""}</span>
+                {done?.note ? <span className="small muted">{done.note}</span> : null}
+              </li>
+            );
+          })}
+        </ol>
+        {v.decisionNote && (v.status === "draft" || v.status === "rejected") ? <div className="note bad small">{v.decisionNote}</div> : null}
       </div>
 
       {v.status === "draft" && mine && ctx.can("vouchers", "write") ? (
@@ -100,53 +132,77 @@ export default async function VoucherPage({ params, searchParams }: { params: Pr
         </div>
       ) : null}
 
-      {(v.status === "submitted" || v.status === "approved") && canDecide ? (
-        <form action={decide} className="panel stack">
-          <h2>{t("pv_decision")}</h2>
-          <input type="hidden" name="id" value={v.id} />
-          <label className="f">{t("pv_decision_note")}<input id="v-note" name="note" /></label>
-          <div className="row">
-            {v.status === "submitted" ? <button type="submit" name="decision" value="approve" className="btn primary">{t("pv_approve")}</button> : null}
-            <button type="submit" name="decision" value="reject" className="btn danger">{t("pv_reject")}</button>
-          </div>
-        </form>
-      ) : v.status === "submitted" && mine && ctx.can("voucher_approve", "write") ? <div className="note info small">{t("err_self_approval")}</div> : null}
+      {next && canSign ? (
+        alreadySigned ? <div className="note info small">{t("err_self_approval")}</div> : (
+          <form action={decide} className="panel stack">
+            <h2>{t(`step_do_${next.step}` as "step_do_reviewed")}</h2>
+            <input type="hidden" name="id" value={v.id} />
+            <label className="f">{t("pv_decision_note")}<input id="v-note" name="note" /></label>
+            <div className="row">
+              <button type="submit" name="decision" value="sign" className="btn primary">{t(`step_do_${next.step}` as "step_do_reviewed")}</button>
+              <button type="submit" name="decision" value="return" className="btn">{t("pv_return")}</button>
+              <button type="submit" name="decision" value="cancel" className="btn danger">{t("pv_reject")}</button>
+            </div>
+          </form>
+        )
+      ) : next ? <div className="note info small">{t("pv_waiting_for")}: {t(`step_${next.step}`)}</div> : null}
 
-      {v.status === "paid" && v.paymentReference ? <div className="panel small"><span className="label">{t("reference")}</span> {v.paymentReference}</div> : null}
-
-      {v.status === "approved" && canPay && !ctx.has("accounting") ? (
+      {v.status === "authorized" && canPay && !ctx.has("accounting") ? (
         <form action={pay} className="panel stack">
           <h2>{t("pv_mark_paid")}</h2>
           <input type="hidden" name="id" value={v.id} />
           <div className="fields">
             <label className="f">{t("date")}<input id="p-date" name="date" type="date" required defaultValue={today()} /></label>
-            <label className="f">{t("reference")}<input id="p-reference" name="reference" /></label>
+            <label className="f">{t("pv_cheque")}<input id="p-reference" name="reference" /></label>
           </div>
           <div><button type="submit" className="btn primary">{t("pv_mark_paid")}</button></div>
         </form>
       ) : null}
 
-      {v.status === "approved" && canPay && ctx.has("accounting") ? (
+      {v.status === "authorized" && canPay && ctx.has("accounting") ? (
         <form action={pay} className="panel stack">
           <h2>{t("pv_pay")}</h2>
           <input type="hidden" name="id" value={v.id} />
           <div className="fields">
             <label className="f">{t("date")}<input id="p-date" name="date" type="date" required defaultValue={today()} /></label>
+            <label className="f">{t("pv_cheque")}<input id="p-reference" name="reference" /></label>
             <label className="f">{t("paid_from")}
               <select id="p-money" name="moneyAccountId" required defaultValue="">
                 <option value="" disabled>{t("none")}</option>
-                {money_.map((a) => <option key={a.id} value={a.id}>{a.code} · {accName(a)}</option>)}
+                {moneyAccs.map((a) => <option key={a.id} value={a.id}>{a.code} · {accName(a)}</option>)}
               </select></label>
-            <label className="f">{t("expense_account")}
-              <select id="p-expense" name="expenseAccountId" required defaultValue={line.accountId ?? ""}>
-                <option value="" disabled>{t("none")}</option>
-                {expense.map((a) => <option key={a.id} value={a.id}>{a.code} · {accName(a)}</option>)}
-              </select></label>
+            {needsAccount ? (
+              <label className="f">{t("expense_account")}
+                <select id="p-expense" name="expenseAccountId" required defaultValue="">
+                  <option value="" disabled>{t("none")}</option>
+                  {expense.map((a) => <option key={a.id} value={a.id}>{a.code} · {accName(a)}</option>)}
+                </select></label>
+            ) : null}
           </div>
           <div className="small muted">{t("pv_pay_note")}</div>
           <div><button type="submit" className="btn primary">{t("pv_pay")}</button></div>
         </form>
       ) : null}
+
+      <form action={saveDocuments} className="panel stack">
+        <h2>{t("pv_documents")}</h2>
+        <input type="hidden" name="id" value={v.id} />
+        <div className="tbl-wrap"><table>
+          <tbody>{DOC_TYPES.map((d) => {
+            const doc = docOf(d);
+            return (
+              <tr key={d}>
+                <td>{t(`doc_${d}`)}{doc?.attachmentId ? <> · <a className="small" href={`/api/files/${doc.attachmentId}`} target="_blank" rel="noreferrer">{t("tn_file")}</a></> : null}</td>
+                <td style={{ width: 170 }}><select id={`doc-${d}`} name={`doc_${d}`} defaultValue={doc?.status ?? "na"} disabled={!canDocs} aria-label={t(`doc_${d}`)}>
+                  <option value="na">{t("pv_doc_na")}</option><option value="pending">{t("pv_doc_pending")}</option><option value="submitted">{t("pv_doc_submitted")}</option>
+                </select></td>
+                {canDocs ? <td style={{ width: 260 }}><input id={`docf-${d}`} name={`file_${d}`} type="file" accept="image/*,application/pdf" aria-label={t("tn_file")} /></td> : null}
+              </tr>
+            );
+          })}</tbody>
+        </table></div>
+        {canDocs ? <div><button type="submit" className="btn">{t("save")}</button></div> : null}
+      </form>
     </div>
   );
 }

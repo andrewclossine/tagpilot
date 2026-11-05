@@ -1,0 +1,1 @@
+ALTER TABLE "projects" ADD COLUMN "import_notes" jsonb DEFAULT '[]'::jsonb NOT NULL;

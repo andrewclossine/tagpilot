@@ -7,7 +7,7 @@ import {
 const money = (name: string) => numeric(name, { precision: 18, scale: 2, mode: "number" }).notNull().default(0);
 const created = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
 
-export type Role = "admin" | "accountant" | "sales" | "purchases" | "payroll" | "viewer" | "staff" | "procurement" | "supplier";
+export type Role = "admin" | "accountant" | "sales" | "purchases" | "payroll" | "viewer" | "staff" | "procurement" | "supplier" | "project_manager" | "authorizer";
 /** The parts of the system an organisation subscribes to. "bidding" is for suppliers: see adverts and bid on them. */
 export type ModuleKey = "accounting" | "projects" | "procurement" | "bidding";
 export type AccountType = "asset" | "liability" | "equity" | "income" | "expense";
@@ -125,6 +125,10 @@ export const projects = pgTable("projects", {
   name: text("name").notNull(),
   donor: text("donor").notNull().default(""),
   kind: text("kind").$type<"project" | "cost_center">().notNull().default("project"),
+  description: text("description").notNull().default(""),
+  startDate: date("start_date", { mode: "string" }),
+  endDate: date("end_date", { mode: "string" }),
+  importNotes: jsonb("import_notes").$type<string[]>().notNull().default([]), // what did not add up in the file it was imported from
   isActive: boolean("is_active").notNull().default(true),
 }, (t) => [uniqueIndex("projects_company_code").on(t.companyId, t.code)]);
 
@@ -471,6 +475,10 @@ export const assetMovements = pgTable("asset_movements", {
 
 // ---------- project management: logical framework and budget execution ----------
 export type LogframeLevel = "goal" | "outcome" | "output" | "activity" | "sub_activity";
+/** Planned quantity and amount by quarter, keyed "Y1Q1". */
+export type BudgetPlan = Record<string, { qty: number; amount: number }>;
+/** A milestone of an indicator: what was planned for that period and what was achieved. */
+export type Milestone = { label: string; planned: number | null; achieved: number | null };
 
 /** One row of a project's results framework. Activities and sub-activities with no children are its budget lines. */
 export const logframeItems = pgTable("logframe_items", {
@@ -487,10 +495,27 @@ export const logframeItems = pgTable("logframe_items", {
   assumptions: text("assumptions").notNull().default(""),
   accountId: uuid("account_id").references(() => accounts.id), // account debited when a voucher on this line is paid
   budget: money("budget"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  // A budget line: what it buys, how many, and when, as on the project's activity-based budget.
+  taskCode: text("task_code").notNull().default(""),
+  category: text("category").notNull().default(""), // goods, service, works
+  unit: text("unit").notNull().default(""),
+  quantity: numeric("quantity", { precision: 18, scale: 3, mode: "number" }).notNull().default(0),
+  unitCost: numeric("unit_cost", { precision: 18, scale: 4, mode: "number" }).notNull().default(0),
+  ownContribution: money("own_contribution"), // the rest of the budget comes from the donor
+  plan: jsonb("plan").$type<BudgetPlan>().notNull().default({}),
+  // The workplan.
+  responsible: text("responsible").notNull().default(""),
+  startDate: date("start_date", { mode: "string" }),
+  endDate: date("end_date", { mode: "string" }),
+  // What was already done or spent before the project came into TAGPILOT.
+  baselineQty: numeric("baseline_qty", { precision: 18, scale: 3, mode: "number" }).notNull().default(0),
+  baselineSpent: money("baseline_spent"),
   createdAt: created(),
 }, (t) => [index("logframe_project").on(t.projectId), index("logframe_parent").on(t.parentId)]);
 
-export type VoucherStatus = "draft" | "submitted" | "approved" | "rejected" | "paid";
+/** draft, then the four signatures: submitted (prepared), reviewed, approved, authorized; then paid. "rejected" means cancelled. */
+export type VoucherStatus = "draft" | "submitted" | "reviewed" | "approved" | "authorized" | "rejected" | "paid";
 
 /** A fund request or payment voucher charged to one budget line. Budget and execution are frozen when it is submitted. */
 export const paymentVouchers = pgTable("payment_vouchers", {
@@ -520,6 +545,81 @@ export const paymentVouchers = pgTable("payment_vouchers", {
   entryId: uuid("entry_id").references(() => journalEntries.id),
   createdAt: created(),
 }, (t) => [uniqueIndex("vouchers_company_number").on(t.companyId, t.number), index("vouchers_budget_item").on(t.budgetItemId)]);
+
+/** One line of a fund request: a request can draw on several budget lines. Budget and execution are frozen when it is submitted. */
+export const voucherLines = pgTable("voucher_lines", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  voucherId: uuid("voucher_id").notNull().references(() => paymentVouchers.id, { onDelete: "cascade" }),
+  lineNo: integer("line_no").notNull().default(1),
+  budgetItemId: uuid("budget_item_id").notNull().references(() => logframeItems.id),
+  description: text("description").notNull().default(""),
+  amount: money("amount"),
+  activityBudget: money("activity_budget"),
+  previousExecution: money("previous_execution"),
+}, (t) => [index("voucher_lines_voucher").on(t.voucherId), index("voucher_lines_item").on(t.budgetItemId)]);
+
+export type VoucherStep = "prepared" | "reviewed" | "approved" | "authorized" | "paid" | "returned" | "cancelled";
+
+/** Who signed each step of a fund request, and when. */
+export const voucherSteps = pgTable("voucher_steps", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  voucherId: uuid("voucher_id").notNull().references(() => paymentVouchers.id, { onDelete: "cascade" }),
+  step: text("step").$type<VoucherStep>().notNull(),
+  userId: uuid("user_id").notNull().references(() => users.id),
+  note: text("note").notNull().default(""),
+  at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index("voucher_steps_voucher").on(t.voucherId)]);
+
+export type DocStatusValue = "submitted" | "pending" | "na";
+
+/** The supporting documents a fund request needs, tracked one by one as on the register. */
+export const voucherDocuments = pgTable("voucher_documents", {
+  voucherId: uuid("voucher_id").notNull().references(() => paymentVouchers.id, { onDelete: "cascade" }),
+  docType: text("doc_type").notNull(),
+  status: text("status").$type<DocStatusValue>().notNull().default("na"),
+  attachmentId: uuid("attachment_id").references(() => attachments.id),
+}, (t) => [primaryKey({ columns: [t.voucherId, t.docType] })]);
+
+/** What was actually done on a budget line. Set against its budget, this is the activity execution. */
+export const achievements = pgTable("achievements", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  projectId: uuid("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  budgetItemId: uuid("budget_item_id").notNull().references(() => logframeItems.id),
+  date: date("date", { mode: "string" }).notNull(),
+  quantity: numeric("quantity", { precision: 18, scale: 3, mode: "number" }).notNull(),
+  description: text("description").notNull().default(""),
+  attachmentId: uuid("attachment_id").references(() => attachments.id),
+  enteredBy: uuid("entered_by").references(() => users.id),
+  createdAt: created(),
+}, (t) => [index("achievements_item").on(t.budgetItemId), index("achievements_project").on(t.projectId)]);
+
+/** An indicator of a result in the logical framework, with its milestones. */
+export const indicators = pgTable("indicators", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  itemId: uuid("item_id").notNull().references(() => logframeItems.id, { onDelete: "cascade" }),
+  sortOrder: integer("sort_order").notNull().default(0),
+  name: text("name").notNull(),
+  baseline: numeric("baseline", { precision: 18, scale: 3, mode: "number" }),
+  target: numeric("target", { precision: 18, scale: 3, mode: "number" }),
+  source: text("source").notNull().default(""),
+  assumptions: text("assumptions").notNull().default(""),
+  milestones: jsonb("milestones").$type<Milestone[]>().notNull().default([]),
+}, (t) => [index("indicators_item").on(t.itemId)]);
+
+/** Money received for a project, set against what has been requested. */
+export const projectFunds = pgTable("project_funds", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  projectId: uuid("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  date: date("date", { mode: "string" }).notNull(),
+  amount: money("amount"),
+  reference: text("reference").notNull().default(""),
+  createdAt: created(),
+}, (t) => [index("project_funds_project").on(t.projectId)]);
 
 // ---------- procurement ----------
 export type TenderKind = "rfq" | "tender";

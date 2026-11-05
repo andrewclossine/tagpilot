@@ -23,7 +23,7 @@ export default async function ProjectsPage({ searchParams }: { searchParams: Sea
   }));
   return (
     <div className="stack">
-      <PageHead title={t("prj_title")} />
+      <PageHead title={t("prj_title")}>{ctx.can("projects", "write") ? <Link className="btn" href="/projects/import">{t("im_title")}</Link> : null}</PageHead>
       <p className="muted" style={{ margin: 0, maxWidth: "70ch" }}>{t("prj_sub")}</p>
       <ErrorNote message={err(q("error"))} />
       <div className="panel">
@@ -56,6 +56,8 @@ export default async function ProjectsPage({ searchParams }: { searchParams: Sea
             <label className="f">{t("code")}<input id="p-code" name="code" required /></label>
             <label className="f">{t("name")}<input id="p-name" name="name" required /></label>
             <label className="f">{t("donor")}<input id="p-donor" name="donor" /></label>
+            <label className="f">{t("wp_start")}<input id="p-start" name="startDate" type="date" /></label>
+            <label className="f">{t("wp_end")}<input id="p-end" name="endDate" type="date" /></label>
           </div>
           <div><button type="submit" className="btn primary">{t("add")}</button></div>
         </form>

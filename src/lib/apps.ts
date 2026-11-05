@@ -72,6 +72,7 @@ export function appWorkspaces(ctx: Ctx, t: T): (Workspace & { key: AppKey })[] {
       key: "projects", label: t("module_projects"), items: [
         ...link("projects", "/projects", t("nav_projects")),
         ...link("vouchers", "/vouchers", t("nav_vouchers")),
+        ...(ctx.can("projects", "write") ? [{ href: "/projects/import", label: t("im_title") }] : []),
       ],
     },
     {

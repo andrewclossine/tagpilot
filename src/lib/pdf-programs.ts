@@ -13,39 +13,41 @@ import { printedCompany } from "./pdf-data";
 import { executionOn } from "./programs";
 import { supplierCanSee, supplierSeesStage } from "./procurement";
 
-/** The payment voucher as a PDF. Staff can only print their own. */
+/** The fund request as a PDF. Staff can only print their own. */
 export async function buildVoucherPdf(ctx: Ctx, id: string) {
   if (!isUuid(id)) throw new UserError("err_not_found");
   const { t, lang } = await getI18n();
   const db = await getDb();
-  const [row] = await db.select({ v: schema.paymentVouchers, project: schema.projects, line: schema.logframeItems }).from(schema.paymentVouchers)
+  const [row] = await db.select({ v: schema.paymentVouchers, project: schema.projects }).from(schema.paymentVouchers)
     .innerJoin(schema.projects, eq(schema.projects.id, schema.paymentVouchers.projectId))
-    .innerJoin(schema.logframeItems, eq(schema.logframeItems.id, schema.paymentVouchers.budgetItemId))
     .where(and(eq(schema.paymentVouchers.id, id), eq(schema.paymentVouchers.companyId, ctx.company.id)));
   if (!row || !canSeeVoucher(ctx, row.v)) throw new UserError("err_not_found");
-  const { v, project, line } = row;
-  // By the people named on the voucher, so someone who has since left is still shown.
-  const names = await db.select({ id: schema.users.id, name: schema.users.name }).from(schema.users)
-    .where(inArray(schema.users.id, [v.requestedBy, v.decidedBy, v.paidBy].filter((u): u is string => !!u)));
-  const who = (uid: string | null) => names.find((n) => n.id === uid)?.name ?? "";
-  // A draft shows the line as it stands now; from submission on, the figures frozen on the voucher.
+  const { v, project } = row;
+  const rows = await db.select({ l: schema.voucherLines, item: schema.logframeItems }).from(schema.voucherLines)
+    .innerJoin(schema.logframeItems, eq(schema.logframeItems.id, schema.voucherLines.budgetItemId)).where(eq(schema.voucherLines.voucherId, id)).orderBy(schema.voucherLines.lineNo);
+  const steps = await db.select({ s: schema.voucherSteps, name: schema.users.name }).from(schema.voucherSteps)
+    .innerJoin(schema.users, eq(schema.users.id, schema.voucherSteps.userId)).where(eq(schema.voucherSteps.voucherId, id));
+  // A draft shows each line as it stands now; from preparation on, the figures frozen on the request.
   const draft = v.status === "draft";
+  const lines = await Promise.all(rows.map(async ({ l, item }) => ({
+    code: item.taskCode || item.code, title: item.title, amount: l.amount,
+    budget: draft ? item.budget : l.activityBudget, previous: draft ? await executionOn(db, l.budgetItemId, v.id) : l.previousExecution,
+  })));
   const pdf = await voucherPdf({
     company: await printedCompany(ctx), lang,
     labels: {
-      title: t("pv_voucher"), number: t("number"), date: t("date"), status: t("status"), project: t("project"), line: t("pv_budget_line"), payee: t("pv_payee"),
+      title: t("pv_voucher"), number: t("pv_fr_no"), date: t("date"), status: t("status"), project: t("project"), line: t("pv_budget_line"), payee: t("pv_payee"),
       amountRequested: t("pv_amount_requested"), activityBudget: t("pv_activity_budget"), previousExecution: t("pv_previous_execution"), totalExecution: t("pv_total_execution"),
-      balance: t("balance_left"), description: t("pv_description"), requestedBy: t("pv_requested_by"), approvedBy: t("pv_approved_by"), paidBy: t("pv_paid_by"), signature: t("pv_signature"), footer: t("pdf_footer"),
+      balance: t("balance_left"), description: t("pv_description"), signature: t("pv_signature"), total: t("total"), footer: t("pdf_footer"),
     },
-    voucher: {
-      number: v.number, date: v.date, status: t(`vs_${v.status}`), amount: v.amount, description: v.description, payee: v.payee,
-      activityBudget: draft ? line.budget : v.activityBudget,
-      previousExecution: draft ? await executionOn(db, v.budgetItemId, v.id) : v.previousExecution,
-    },
-    project: `${project.code} - ${project.name}`, line: `${line.code} ${line.title}`,
-    requestedBy: who(v.requestedBy), approvedBy: v.status === "rejected" ? "" : who(v.decidedBy), paidBy: who(v.paidBy),
+    voucher: { number: v.number, date: v.date, status: t(`vs_${v.status}`), amount: v.amount, description: v.description, payee: v.payee },
+    project: `${project.code} - ${project.name}`, lines,
+    signatures: (["prepared", "reviewed", "approved", "authorized"] as const).map((s) => {
+      const done = steps.find((x) => x.s.step === s);
+      return { label: t(`step_${s}`), name: done?.name ?? "", at: done ? done.s.at.toISOString().slice(0, 10) : "" };
+    }),
   });
-  return { pdf, filename: `${v.number}.pdf` };
+  return { pdf, filename: `${v.number.replace(/[^A-Za-z0-9-]/g, "-")}.pdf` };
 }
 
 /** A procurement document. Staff need procurement access; a supplier gets what the portal shows them, and never the opening or evaluation records. */

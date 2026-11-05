@@ -161,6 +161,15 @@ code.k { font-family: var(--f-num); font-size: 13px; }
 .steps li { font: 600 12px var(--f-body); padding: 4px 10px; border-radius: 12px; background: var(--surface-2); color: var(--muted); }
 .steps li.done { background: var(--ok-soft); color: var(--ok); }
 .steps li.now { background: var(--accent); color: var(--accent-ink); }
+.sign-steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; list-style: none; margin: 0; padding: 0; }
+.sign-steps li { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface-2); }
+.sign-steps li.done { background: var(--ok-soft); border-color: var(--ok); }
+.sign-steps li.now { border-color: var(--accent); background: var(--accent-soft); }
+.wp-bar { background: var(--accent); border-radius: 3px; }
+.wp-bar.done { background: var(--ok); }
+.wp-bar.late { background: var(--bad); }
+.pill.reviewed { background: var(--warn-soft); color: var(--warn); }
+.pill.authorized { background: var(--ok-soft); color: var(--ok); }
 .brand-block { display: flex; flex-direction: column; gap: 14px; padding: 0 6px; }
 .top-shell { min-height: 100vh; }
 .topbar { position: sticky; top: 0; z-index: 30; background: var(--side); color: var(--side-fg); padding: 10px max(16px, 3vw); display: flex; flex-direction: column; gap: 8px; }

@@ -5,14 +5,17 @@ import { getDb, schema } from "@/db";
 import { requireView } from "@/lib/auth";
 import { getI18n } from "@/lib/i18n";
 import { sp, type SearchParams } from "@/lib/actions";
-import { isUuid } from "@/lib/format";
-import { childLevel, isBudgetLine, logframe, type LogRow } from "@/lib/programs";
+import { isIsoDate, isUuid } from "@/lib/format";
+import { childLevel, isBudgetLine, logframe, projectTotals } from "@/lib/programs";
+import { quartersOf } from "@/lib/project-status";
 import type { LogframeLevel } from "@/db/schema";
-import { ConfirmButton } from "@/components/editors";
-import { Empty, ErrorNote, PageHead, Tabs } from "@/components/ui";
-import { removeLogItem, saveLogItem } from "../actions";
+import { ErrorNote, PageHead, Tabs } from "@/components/ui";
+import { saveLogItem } from "../actions";
+import { AchievementsView, BudgetView, DetailsView, LogframeView, StatusView, WorkplanView } from "./views";
 
-export const metadata = { title: "Results framework" };
+export const metadata = { title: "Project" };
+
+const VIEWS = ["status", "budget", "workplan", "achievements", "logframe", "details"] as const;
 
 export default async function ProjectPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: SearchParams }) {
   const ctx = await requireView("projects");
@@ -20,7 +23,7 @@ export default async function ProjectPage({ params, searchParams }: { params: Pr
   const { id } = await params;
   if (!isUuid(id)) notFound();
   const q = await sp(searchParams);
-  const view = q("view") === "logframe" ? "logframe" : "budget";
+  const view = VIEWS.find((v) => v === q("view")) ?? "status";
   const db = await getDb();
   const [project] = await db.select().from(schema.projects).where(and(eq(schema.projects.id, id), eq(schema.projects.companyId, ctx.company.id)));
   if (!project) notFound();
@@ -39,27 +42,8 @@ export default async function ProjectPage({ params, searchParams }: { params: Pr
   const formLevel = editing?.level ?? (adding ? childLevel(parent?.level ?? null) : null);
   const canBudget = formLevel === "activity" || formLevel === "sub_activity";
   const budgetEditable = canBudget && (!editing || isBudgetLine(editing.level, editing.hasChildren));
-
-  const tops = rows.filter((r) => r.depth === 0);
-  const total = tops.reduce((s, r) => s + r.totalBudget, 0), executed = tops.reduce((s, r) => s + r.executed, 0), paid = tops.reduce((s, r) => s + r.paid, 0);
-  const title = (r: LogRow) => (
-    <div style={{ paddingLeft: r.depth * 16 }}>
-      <div className="small muted">{lv(r.level)} <code className="k">{r.code}</code></div>
-      {r.title}
-    </div>
-  );
-  const actions = (r: LogRow) => write ? (
-    <div className="row" style={{ gap: 4, flexWrap: "nowrap" }}>
-      <Link className="btn ghost sm" href={`${base}&edit=${r.id}#item-form`}>{t("edit")}</Link>
-      {childLevel(r.level) ? <Link className="btn ghost sm" href={`${base}&add=${r.id}#item-form`}>+ {lv(childLevel(r.level)!)}</Link> : null}
-      {!r.hasChildren ? (
-        <form action={removeLogItem}>
-          <input type="hidden" name="id" value={r.id} /><input type="hidden" name="projectId" value={id} /><input type="hidden" name="view" value={view} />
-          <ConfirmButton className="btn ghost sm danger" confirmLabel={t("confirm")}>{t("delete")}</ConfirmButton>
-        </form>
-      ) : null}
-    </div>
-  ) : null;
+  const quarters = quartersOf(project, rows);
+  const totals = projectTotals(rows);
 
   return (
     <div className="stack">
@@ -67,54 +51,24 @@ export default async function ProjectPage({ params, searchParams }: { params: Pr
         <Link className="btn" href="/projects">{t("back")}</Link>
         {ctx.can("vouchers", "write") ? <Link className="btn primary" href={`/vouchers/new?project=${id}`}>{t("pv_new")}</Link> : null}
       </PageHead>
+      {project.description ? <p className="muted small" style={{ margin: 0 }}>{project.description}</p> : null}
       <ErrorNote message={err(q("error"))} />
-      <div className="kpis">
-        <div className="panel kpi"><div className="label">{t("budget")}</div><div className="v">{money(total)}</div></div>
-        <div className="panel kpi"><div className="label">{t("prj_executed")}</div><div className="v">{money(executed)}</div></div>
-        <div className="panel kpi"><div className="label">{t("prj_paid")}</div><div className="v">{money(paid)}</div></div>
-        <div className="panel kpi"><div className="label">{t("balance_left")}</div><div className="v">{money(total - executed)}</div></div>
-      </div>
+      {q("imported") ? <div className="note ok small">{t("im_done").replace("{n}", String(rows.filter((r) => r.isLine).length)).replace("{total}", money(totals.budget))}</div> : null}
+      {q("saved") ? <div className="note ok small">{t("saved")}</div> : null}
+      {(q("imported") || view === "details") && project.importNotes.length ? (
+        <div className="note warn small"><b>{t("im_notes")}</b><ul>{project.importNotes.map((n, i) => <li key={i}>{n}</li>)}</ul></div>
+      ) : null}
       <div className="row">
-        <Tabs current={view} items={[
-          { key: "budget", href: `/projects/${id}?view=budget`, label: t("prj_budget_tab") },
-          { key: "logframe", href: `/projects/${id}?view=logframe`, label: t("prj_logframe_tab") },
-        ]} />
+        <Tabs current={view} items={VIEWS.map((v) => ({ key: v, href: `/projects/${id}?view=${v}`, label: t(`tab_${v}`) }))} />
         <span className="spacer" />
-        {write ? <Link className="btn sm" href={`${base}&add=root#item-form`}>+ {lv("goal")}</Link> : null}
+        {write && (view === "budget" || view === "logframe") ? <Link className="btn sm" href={`${base}&add=root#item-form`}>+ {lv("goal")}</Link> : null}
       </div>
-      <div className="panel">
-        {rows.length ? (
-          <div className="tbl-wrap"><table>
-            {view === "budget" ? (
-              <>
-                <thead><tr><th>{t("prj_result")}</th><th className="num">{t("budget")}</th><th className="num">{t("prj_executed")}</th><th className="num">{t("balance_left")}</th><th>{t("used")}</th><th /></tr></thead>
-                <tbody>{rows.map((r) => {
-                  const used = r.totalBudget ? Math.round((r.executed / r.totalBudget) * 100) : 0;
-                  return (
-                    <tr key={r.id} className={`lf-${r.level}`}>
-                      <td>{title(r)}</td>
-                      <td className="num">{money(r.totalBudget)}</td>
-                      <td className="num">{r.isLine ? <Link href={`/vouchers?line=${r.id}`}>{money(r.executed)}</Link> : money(r.executed)}</td>
-                      <td className="num">{money(r.totalBudget - r.executed)}</td>
-                      <td>{r.totalBudget ? <><span className={`meter${used > 100 ? " over" : ""}`}><i style={{ width: `${Math.min(used, 100)}%` }} /></span> <span className="small num">{used}%</span></> : null}</td>
-                      <td>{actions(r)}</td>
-                    </tr>
-                  );
-                })}</tbody>
-              </>
-            ) : (
-              <>
-                <thead><tr><th>{t("prj_result")}</th><th>{t("prj_indicator")}</th><th>{t("prj_target")}</th><th>{t("prj_verification")}</th><th>{t("prj_assumptions")}</th><th /></tr></thead>
-                <tbody>{rows.map((r) => (
-                  <tr key={r.id} className={`lf-${r.level}`}>
-                    <td>{title(r)}</td><td>{r.indicator}</td><td>{r.target}</td><td>{r.verification}</td><td>{r.assumptions}</td><td>{actions(r)}</td>
-                  </tr>
-                ))}</tbody>
-              </>
-            )}
-          </table></div>
-        ) : <Empty>{t("prj_empty")}</Empty>}
-      </div>
+      {view === "status" ? <StatusView ctx={ctx} project={project} to={isIsoDate(q("to")) ? q("to") : ""} /> : null}
+      {view === "budget" ? <BudgetView ctx={ctx} project={project} rows={rows} /> : null}
+      {view === "workplan" ? <WorkplanView ctx={ctx} project={project} rows={rows} /> : null}
+      {view === "achievements" ? <AchievementsView ctx={ctx} project={project} rows={rows} /> : null}
+      {view === "logframe" ? <LogframeView ctx={ctx} project={project} rows={rows} /> : null}
+      {view === "details" ? <DetailsView ctx={ctx} project={project} rows={rows} /> : null}
       {write && formLevel ? (
         <form action={saveLogItem} className="panel stack" id="item-form" key={editing?.id ?? q("add")}>
           <h2>{editing ? `${t("edit")}: ${lv(formLevel)} ${editing.code}` : `${t("add")}: ${lv(formLevel)}`}{parent ? <span className="muted small"> · {parent.code} {parent.title}</span> : null}</h2>
@@ -122,23 +76,53 @@ export default async function ProjectPage({ params, searchParams }: { params: Pr
           {editing ? <input type="hidden" name="id" value={editing.id} /> : null}
           {parent ? <input type="hidden" name="parentId" value={parent.id} /> : null}
           <label className="f">{t("prj_statement")}<textarea id="i-title" name="title" rows={2} required defaultValue={editing?.title} /></label>
-          <div className="fields">
-            <label className="f">{t("prj_indicator")}<input id="i-indicator" name="indicator" defaultValue={editing?.indicator} /></label>
-            <label className="f">{t("prj_target")}<input id="i-target" name="target" defaultValue={editing?.target} /></label>
-            <label className="f">{t("prj_verification")}<input id="i-verification" name="verification" defaultValue={editing?.verification} /></label>
-            <label className="f">{t("prj_assumptions")}<input id="i-assumptions" name="assumptions" defaultValue={editing?.assumptions} /></label>
-          </div>
-          {budgetEditable ? (
+          {!canBudget ? (
             <div className="fields">
-              <label className="f">{t("budget")} ({ctx.company.currency})<input id="i-budget" name="budget" className="num" inputMode="decimal" defaultValue={editing?.budget || ""} /></label>
-              {ctx.has("accounting") ? (
-                <label className="f">{t("prj_account")}
-                  <select id="i-account" name="accountId" defaultValue={editing?.accountId ?? ""}>
-                    <option value="">{t("none")}</option>
-                    {accounts.map((a) => <option key={a.id} value={a.id}>{a.code} · {accName(a)}</option>)}
-                  </select></label>
-              ) : null}
+              <label className="f">{t("prj_indicator")}<input id="i-indicator" name="indicator" defaultValue={editing?.indicator} /></label>
+              <label className="f">{t("prj_target")}<input id="i-target" name="target" defaultValue={editing?.target} /></label>
+              <label className="f">{t("prj_verification")}<input id="i-verification" name="verification" defaultValue={editing?.verification} /></label>
+              <label className="f">{t("prj_assumptions")}<input id="i-assumptions" name="assumptions" defaultValue={editing?.assumptions} /></label>
             </div>
+          ) : (
+            <div className="fields">
+              <label className="f">{t("wp_responsible")}<input id="i-resp" name="responsible" defaultValue={editing?.responsible} /></label>
+              <label className="f">{t("wp_start")}<input id="i-start" name="startDate" type="date" defaultValue={editing?.startDate ?? parent?.startDate ?? ""} /></label>
+              <label className="f">{t("wp_end")}<input id="i-end" name="endDate" type="date" defaultValue={editing?.endDate ?? parent?.endDate ?? ""} /></label>
+            </div>
+          )}
+          {budgetEditable ? (
+            <>
+              <div className="fields">
+                <label className="f">{t("bg_category")}<input id="i-cat" name="category" list="i-cats" defaultValue={editing?.category} /></label>
+                <datalist id="i-cats"><option value="Goods" /><option value="Service" /><option value="Works" /></datalist>
+                <label className="f">{t("gr_unit")}<input id="i-unit" name="unit" defaultValue={editing?.unit} /></label>
+                <label className="f">{t("qty")}<input id="i-qty" name="quantity" className="num" inputMode="decimal" defaultValue={editing?.quantity || ""} /></label>
+                <label className="f">{t("st_unit_cost")}<input id="i-cost" name="unitCost" className="num" inputMode="decimal" defaultValue={editing?.unitCost || ""} /></label>
+                <label className="f">{t("budget")} ({ctx.company.currency})<input id="i-budget" name="budget" className="num" inputMode="decimal" defaultValue={editing?.budget || ""} /></label>
+                <label className="f">{t("bs_own")}<input id="i-own" name="ownContribution" className="num" inputMode="decimal" defaultValue={editing?.ownContribution || ""} /></label>
+                {ctx.has("accounting") ? (
+                  <label className="f">{t("prj_account")}
+                    <select id="i-account" name="accountId" defaultValue={editing?.accountId ?? ""}>
+                      <option value="">{t("none")}</option>
+                      {accounts.map((a) => <option key={a.id} value={a.id}>{a.code} · {accName(a)}</option>)}
+                    </select></label>
+                ) : null}
+              </div>
+              <div className="small muted">{t("bg_budget_help")}</div>
+              <details>
+                <summary className="small">{t("bg_plan")}</summary>
+                <div className="fields" style={{ marginTop: 8 }}>
+                  {quarters.map((p) => <label key={p.key} className="f small">{p.label}<input id={`i-plan-${p.key}`} name={`plan_${p.key}`} className="num" inputMode="decimal" defaultValue={editing?.plan[p.key]?.qty ?? ""} /></label>)}
+                </div>
+              </details>
+              <details>
+                <summary className="small">{t("bg_baseline")}</summary>
+                <div className="fields" style={{ marginTop: 8 }}>
+                  <label className="f small">{t("bg_baseline_qty")}<input id="i-bq" name="baselineQty" className="num" inputMode="decimal" defaultValue={editing?.baselineQty || ""} /></label>
+                  <label className="f small">{t("bg_baseline_spent")}<input id="i-bs" name="baselineSpent" className="num" inputMode="decimal" defaultValue={editing?.baselineSpent || ""} /></label>
+                </div>
+              </details>
+            </>
           ) : canBudget ? <div className="small muted">{t("prj_budget_from_children")}</div> : null}
           {canBudget && parent?.level === "activity" ? <div className="note info small">{t("prj_split_note")}</div> : null}
           <div className="row">

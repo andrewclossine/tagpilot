@@ -82,11 +82,14 @@ type Col = { label: string; width: number; align?: "left" | "right" | "center" }
 function table(doc: PDFKit.PDFDocument, cols: Col[], rows: string[][]) {
   const x0 = 50;
   let y = doc.y;
-  doc.rect(x0, y, 495, 20).fill(SOFT);
-  doc.font("Helvetica-Bold").fontSize(8).fillColor(MUTED);
+  doc.font("Helvetica-Bold").fontSize(8);
+  // Long headings wrap, so the band is as tall as the tallest of them.
+  const headH = Math.max(...cols.map((c) => doc.heightOfString(c.label.toUpperCase() || " ", { width: c.width - 12 }))) + 12;
+  doc.rect(x0, y, 495, headH).fill(SOFT);
+  doc.fillColor(MUTED);
   let x = x0 + 6;
   for (const c of cols) { doc.text(c.label.toUpperCase(), x, y + 6, { width: c.width - 12, align: c.align ?? "left" }); x += c.width; }
-  y += 24;
+  y += headH + 4;
   doc.font("Helvetica").fontSize(9.5).fillColor(INK);
   for (const r of rows) {
     const h = Math.max(...r.map((v, i) => doc.heightOfString(v, { width: cols[i].width - 12 }))) + 8;
@@ -181,37 +184,38 @@ export function payslipPdf(d: PayslipPdfData): Promise<Buffer> {
 
 export type VoucherPdfData = {
   company: Company; lang: Lang;
-  labels: Record<"title" | "number" | "date" | "status" | "project" | "line" | "payee" | "amountRequested" | "activityBudget" | "previousExecution" | "totalExecution" | "balance" | "description" | "requestedBy" | "approvedBy" | "paidBy" | "signature" | "footer", string>;
-  voucher: { number: string; date: string; status: string; amount: number; activityBudget: number; previousExecution: number; description: string; payee: string };
-  project: string; line: string; requestedBy: string; approvedBy: string; paidBy: string;
+  labels: Record<"title" | "number" | "date" | "status" | "project" | "line" | "payee" | "amountRequested" | "activityBudget" | "previousExecution" | "totalExecution" | "balance" | "description" | "signature" | "total" | "footer", string>;
+  voucher: { number: string; date: string; status: string; amount: number; description: string; payee: string };
+  lines: { code: string; title: string; budget: number; previous: number; amount: number }[];
+  signatures: { label: string; name: string; at: string }[];
+  project: string;
 };
 
-/** The payment voucher: what is asked for, and where it leaves the budget line. */
+/** The fund request: what is asked for, where it leaves each budget line, and the four signatures. */
 export function voucherPdf(d: VoucherPdfData): Promise<Buffer> {
   const m = (n: number) => amount(n, d.lang);
   const cur = d.company.currency, v = d.voucher, l = d.labels;
-  const total = v.previousExecution + v.amount;
   return render((doc) => {
     header(doc, d.company, l.title, [[l.number, v.number], [l.date, v.date], [l.status, v.status]]);
-    table(doc, [{ label: l.project, width: 150 }, { label: d.line ? l.line : "", width: 345 }], [[d.project, d.line]]);
-    if (v.payee) doc.font("Helvetica-Bold").fontSize(9.5).fillColor(INK).text(`${l.payee}: `, 50, doc.y, { continued: true }).font("Helvetica").text(v.payee).moveDown(0.8);
-    table(doc, [{ label: "", width: 345 }, { label: cur, width: 150, align: "right" }], [
-      [l.activityBudget, m(v.activityBudget)],
-      [l.previousExecution, m(v.previousExecution)],
-      [l.amountRequested, m(v.amount)],
-      [l.totalExecution, m(total)],
-    ]);
-    totals(doc, [{ label: `${l.balance} ${cur}`, value: m(v.activityBudget - total), strong: true }]);
-    doc.moveDown(0.5).font("Helvetica-Bold").fontSize(8).fillColor(MUTED).text(l.description.toUpperCase(), 50);
-    doc.font("Helvetica").fontSize(10).fillColor(INK).text(v.description, { width: 495 });
-    doc.moveDown(2.5);
+    doc.font("Helvetica-Bold").fontSize(9.5).fillColor(INK).text(`${l.project}: `, 50, doc.y, { continued: true }).font("Helvetica").text(d.project);
+    if (v.payee) doc.font("Helvetica-Bold").text(`${l.payee}: `, 50, doc.y, { continued: true }).font("Helvetica").text(v.payee);
+    doc.moveDown(0.6);
+    doc.font("Helvetica-Bold").fontSize(8).fillColor(MUTED).text(l.description.toUpperCase(), 50);
+    doc.font("Helvetica").fontSize(10).fillColor(INK).text(v.description, { width: 495 }).moveDown(0.8);
+    table(doc, [
+      { label: l.line, width: 110 }, { label: l.activityBudget, width: 77, align: "right" }, { label: l.previousExecution, width: 77, align: "right" },
+      { label: l.amountRequested, width: 77, align: "right" }, { label: l.totalExecution, width: 77, align: "right" }, { label: l.balance, width: 77, align: "right" },
+    ], d.lines.map((x) => [`${x.code} ${x.title}`, m(x.budget), m(x.previous), m(x.amount), m(x.previous + x.amount), m(x.budget - x.previous - x.amount)]));
+    totals(doc, [{ label: `${l.total} ${cur}`, value: m(v.amount), strong: true }]);
+    doc.moveDown(1.5);
     const y = Math.min(doc.y, doc.page.height - 150);
-    [[l.requestedBy, d.requestedBy], [l.approvedBy, d.approvedBy], [l.paidBy, d.paidBy]].forEach(([k, who], i) => {
-      const x = 50 + i * 170;
-      doc.font("Helvetica-Bold").fontSize(8).fillColor(MUTED).text(k.toUpperCase(), x, y, { width: 155 });
-      doc.font("Helvetica").fontSize(9.5).fillColor(INK).text(who || " ", x, y + 13, { width: 155 });
-      doc.moveTo(x, y + 52).lineTo(x + 150, y + 52).lineWidth(0.5).strokeColor(LINE).stroke();
-      doc.font("Helvetica").fontSize(8).fillColor(MUTED).text(l.signature, x, y + 56, { width: 155 });
+    d.signatures.forEach((s, i) => {
+      const x = 50 + i * 125;
+      doc.font("Helvetica-Bold").fontSize(8).fillColor(MUTED).text(s.label.toUpperCase(), x, y, { width: 115 });
+      doc.font("Helvetica").fontSize(9).fillColor(INK).text(s.name || " ", x, y + 13, { width: 115 });
+      doc.font("Helvetica").fontSize(8).fillColor(MUTED).text(s.at || " ", x, y + 26, { width: 115 });
+      doc.moveTo(x, y + 58).lineTo(x + 112, y + 58).lineWidth(0.5).strokeColor(LINE).stroke();
+      doc.font("Helvetica").fontSize(8).fillColor(MUTED).text(l.signature, x, y + 62, { width: 115 });
     });
     footer(doc, l.footer);
   });
