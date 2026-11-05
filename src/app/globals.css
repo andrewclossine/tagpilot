@@ -216,7 +216,6 @@ code.k { font-family: var(--f-num); font-size: 13px; }
 .app-tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .app-tile.off { opacity: .55; }
 .app-tile.off:hover { opacity: .85; }
-.launcher-admin { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
 @media (prefers-reduced-motion: reduce) { .app-tile { transition: none; } .app-tile:hover { transform: none; } }
 .modules { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; border: 0; padding: 0; margin: 0; }
 .module { display: flex; gap: 10px; align-items: flex-start; border: 1px solid var(--line); border-radius: var(--r); padding: 12px; cursor: pointer; background: var(--surface); }

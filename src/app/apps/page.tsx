@@ -15,12 +15,6 @@ export default async function AppsPage() {
   if (ctx.role === "supplier") redirect("/portal");
   const { t, lang } = await getI18n();
   const mine = appWorkspaces(ctx, t);
-  const admin = ctx.isAdmin ? [
-    ...(ctx.can("company") ? [{ href: "/settings", label: t("nav_settings") }] : []),
-    ...(ctx.can("users") ? [{ href: "/users", label: t("nav_users") }] : []),
-    { href: "/billing", label: t("billing_title") },
-    ...(ctx.can("audit") ? [{ href: "/audit", label: t("nav_audit") }] : []),
-  ] : [];
   return (
     <div className="launcher">
       <header className="launcher-top">
@@ -61,11 +55,6 @@ export default async function AppsPage() {
           })}
         </div>
         {!mine.length ? <div className="note info">{t("apps_none")}</div> : null}
-        {admin.length ? (
-          <nav className="launcher-admin" aria-label={t("nav_admin")}>
-            {admin.map((a) => <Link key={a.href} href={a.href} className="btn sm">{a.label}</Link>)}
-          </nav>
-        ) : null}
       </main>
     </div>
   );
