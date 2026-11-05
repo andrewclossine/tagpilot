@@ -28,10 +28,10 @@ export function appWorkspaces(ctx: Ctx, t: T): (Workspace & { key: AppKey })[] {
     {
       key: "accounting", label: t("module_accounting"), items: [
         ...link("dashboard", "/dashboard", t("nav_dashboard")),
-        ...(ctx.can("journal", "write") ? [{ href: "/scan", label: t("nav_ai") }] : []),
         ...group(t("nav_sales"), [...link("sales", "/sales/invoices", t("nav_invoices")), ...(booksRole ? link("partners", "/partners", t("nav_partners")) : [])]),
         ...group(t("nav_purchases"), link("purchases", "/purchases/bills", t("nav_bills"))),
         ...group(t("nav_accounting"), [
+          ...(ctx.can("journal", "write") ? [{ href: "/scan", label: t("nav_ai") }] : []),
           ...link("journal", "/journal", t("nav_journal")),
           ...link("accounts", "/accounts", t("nav_coa")),
           ...link("banking", "/banking", t("nav_banking")),
