@@ -171,6 +171,11 @@ code.k { font-family: var(--f-num); font-size: 13px; }
 .sign-steps li { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface-2); }
 .sign-steps li.done { background: var(--ok-soft); border-color: var(--ok); }
 .sign-steps li.now { border-color: var(--accent); background: var(--accent-soft); }
+.sig-pad { display: flex; flex-direction: column; gap: 8px; position: relative; }
+.sig-pad canvas { display: block; width: 100%; max-width: 420px; aspect-ratio: 3 / 1; background: #fff; border: 1px dashed var(--muted); border-radius: var(--r); touch-action: none; cursor: crosshair; }
+.sig-image { display: block; width: 100%; max-width: 420px; aspect-ratio: 3 / 1; object-fit: contain; background: #fff; border: 1px solid var(--line); border-radius: var(--r); }
+.sig-image.small { max-width: 150px; }
+.sig-value { position: absolute; left: 12px; top: 40px; width: 1px; height: 1px; padding: 0; border: 0; opacity: 0; pointer-events: none; }
 .wp-bar { background: var(--accent); border-radius: 3px; }
 .wp-bar.done { background: var(--ok); }
 .wp-bar.late { background: var(--bad); }

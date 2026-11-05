@@ -11,11 +11,11 @@ import { quartersOf } from "@/lib/project-status";
 import type { LogframeLevel } from "@/db/schema";
 import { ErrorNote, PageHead, Tabs } from "@/components/ui";
 import { saveLogItem } from "../actions";
-import { AchievementsView, BudgetView, DetailsView, LogframeView, StatusView, WorkplanView } from "./views";
+import { AchievementsView, BudgetView, DetailsView, StatusView, WorkplanView } from "./views";
 
 export const metadata = { title: "Project" };
 
-const VIEWS = ["status", "budget", "workplan", "achievements", "logframe", "details"] as const;
+const VIEWS = ["status", "budget", "workplan", "achievements", "details"] as const;
 
 export default async function ProjectPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: SearchParams }) {
   const ctx = await requireView("projects");
@@ -61,13 +61,12 @@ export default async function ProjectPage({ params, searchParams }: { params: Pr
       <div className="row">
         <Tabs current={view} items={VIEWS.map((v) => ({ key: v, href: `/projects/${id}?view=${v}`, label: t(`tab_${v}`) }))} />
         <span className="spacer" />
-        {write && (view === "budget" || view === "logframe") ? <Link className="btn sm" href={`${base}&add=root#item-form`}>+ {lv("goal")}</Link> : null}
+        {write && view === "budget" ? <Link className="btn sm" href={`${base}&add=root#item-form`}>+ {lv("goal")}</Link> : null}
       </div>
       {view === "status" ? <StatusView ctx={ctx} project={project} to={isIsoDate(q("to")) ? q("to") : ""} /> : null}
       {view === "budget" ? <BudgetView ctx={ctx} project={project} rows={rows} /> : null}
       {view === "workplan" ? <WorkplanView ctx={ctx} project={project} rows={rows} /> : null}
-      {view === "achievements" ? <AchievementsView ctx={ctx} project={project} rows={rows} /> : null}
-      {view === "logframe" ? <LogframeView ctx={ctx} project={project} rows={rows} /> : null}
+      {view === "achievements" ? <AchievementsView ctx={ctx} project={project} rows={rows} schedule={q("schedule")} date={q("date")} /> : null}
       {view === "details" ? <DetailsView ctx={ctx} project={project} rows={rows} /> : null}
       {write && formLevel ? (
         <form action={saveLogItem} className="panel stack" id="item-form" key={editing?.id ?? q("add")}>
@@ -76,14 +75,7 @@ export default async function ProjectPage({ params, searchParams }: { params: Pr
           {editing ? <input type="hidden" name="id" value={editing.id} /> : null}
           {parent ? <input type="hidden" name="parentId" value={parent.id} /> : null}
           <label className="f">{t("prj_statement")}<textarea id="i-title" name="title" rows={2} required defaultValue={editing?.title} /></label>
-          {!canBudget ? (
-            <div className="fields">
-              <label className="f">{t("prj_indicator")}<input id="i-indicator" name="indicator" defaultValue={editing?.indicator} /></label>
-              <label className="f">{t("prj_target")}<input id="i-target" name="target" defaultValue={editing?.target} /></label>
-              <label className="f">{t("prj_verification")}<input id="i-verification" name="verification" defaultValue={editing?.verification} /></label>
-              <label className="f">{t("prj_assumptions")}<input id="i-assumptions" name="assumptions" defaultValue={editing?.assumptions} /></label>
-            </div>
-          ) : (
+          {!canBudget ? null : (
             <div className="fields">
               <label className="f">{t("wp_responsible")}<input id="i-resp" name="responsible" defaultValue={editing?.responsible} /></label>
               <label className="f">{t("wp_start")}<input id="i-start" name="startDate" type="date" defaultValue={editing?.startDate ?? parent?.startDate ?? ""} /></label>
@@ -93,12 +85,11 @@ export default async function ProjectPage({ params, searchParams }: { params: Pr
           {budgetEditable ? (
             <>
               <div className="fields">
-                <label className="f">{t("bg_category")}<input id="i-cat" name="category" list="i-cats" defaultValue={editing?.category} /></label>
-                <datalist id="i-cats"><option value="Goods" /><option value="Service" /><option value="Works" /></datalist>
-                <label className="f">{t("gr_unit")}<input id="i-unit" name="unit" defaultValue={editing?.unit} /></label>
-                <label className="f">{t("qty")}<input id="i-qty" name="quantity" className="num" inputMode="decimal" defaultValue={editing?.quantity || ""} /></label>
+                <input type="hidden" name="category" value={editing?.category ?? ""} />
+                <label className="f">{t("bg_unit")}<input id="i-unit" name="unit" defaultValue={editing?.unit} /></label>
+                <label className="f">{t("bg_units")}<input id="i-qty" name="quantity" className="num" inputMode="decimal" defaultValue={editing?.quantity || ""} /></label>
                 <label className="f">{t("st_unit_cost")}<input id="i-cost" name="unitCost" className="num" inputMode="decimal" defaultValue={editing?.unitCost || ""} /></label>
-                <label className="f">{t("budget")} ({ctx.company.currency})<input id="i-budget" name="budget" className="num" inputMode="decimal" defaultValue={editing?.budget || ""} /></label>
+                <label className="f">{t("bg_total_cost")} ({ctx.company.currency})<input id="i-budget" name="budget" className="num" inputMode="decimal" defaultValue={editing?.budget || ""} /></label>
                 <label className="f">{t("bs_own")}<input id="i-own" name="ownContribution" className="num" inputMode="decimal" defaultValue={editing?.ownContribution || ""} /></label>
                 {ctx.has("accounting") ? (
                   <label className="f">{t("prj_account")}

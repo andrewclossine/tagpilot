@@ -155,7 +155,7 @@ export async function payDoc(tx: Tx, kind: DocKind, companyId: string, userId: s
   if (amount <= 0) throw new UserError("err_amount");
   if (amount > round2(d.total - d.amountPaid) + 0.005) throw new UserError("err_overpay");
   const [money] = await tx.select().from(schema.accounts).where(and(eq(schema.accounts.id, p.moneyAccountId), eq(schema.accounts.companyId, companyId)));
-  if (!money) throw new UserError("err_account");
+  if (!money || !["bank", "cash", "momo"].includes(money.subtype ?? "")) throw new UserError("err_account");
   const partnerAcc = await accountIdByCode(tx, companyId, kind === "invoice" ? settings.arAccount : settings.apAccount);
 
   let wht = 0;

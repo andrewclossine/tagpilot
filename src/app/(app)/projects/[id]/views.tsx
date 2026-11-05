@@ -1,14 +1,16 @@
 import Link from "next/link";
-import { eq, inArray } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import type { Ctx } from "@/lib/auth";
-import { addDays, round2, today } from "@/lib/format";
+import { isSchedule, loadReportLines, periodOf, SCHEDULES, type Schedule } from "@/lib/achievement-reports";
+import { addDays, isIsoDate, round2, today } from "@/lib/format";
 import { getI18n } from "@/lib/i18n";
-import { childLevel, type LogRow } from "@/lib/programs";
+import { childLevel, projectTotals, type LogRow } from "@/lib/programs";
 import { lineFlags, loadStatus, quartersOf } from "@/lib/project-status";
 import { ConfirmButton } from "@/components/editors";
+import { PrintButton } from "@/components/PrintButton";
 import { Empty } from "@/components/ui";
-import { addAchievement, addFunds, addIndicator, deleteProject, removeAchievement, removeLogItem, saveIndicatorResults, saveProjectDetails } from "../actions";
+import { addFunds, deleteProject, removeAchievementReport, removeLogItem, saveAchievementReport, saveProjectDetails, saveWorkplan } from "../actions";
 
 type Project = typeof schema.projects.$inferSelect;
 const pct = (n: number) => `${Math.round(n * 1000) / 10}%`;
@@ -55,27 +57,37 @@ export async function BudgetView({ ctx, project, rows }: { ctx: Ctx; project: Pr
   const inYear = (r: LogRow, y: string) => Object.entries(r.plan).filter(([k]) => k.startsWith(y)).reduce((s, [, v]) => s + v.amount, 0);
   // Each budget line counts once, under the output it belongs to.
   const under = (o: LogRow) => { const i = rows.indexOf(o); const out: LogRow[] = []; for (let j = i + 1; j < rows.length && rows[j].depth > o.depth; j++) if (rows[j].isLine) out.push(rows[j]); return out; };
-  const outputs = rows.filter((r) => r.level === "output");
+  const outputs = rows.filter((r) => r.level === "goal" || r.level === "outcome" || r.level === "output");
   const total = lines.reduce((s, r) => s + r.totalBudget, 0), own = lines.reduce((s, r) => s + r.ownContribution, 0);
+  const totals = projectTotals(rows);
   return (
     <div className="stack">
+      {rows.length ? (
+        <div className="kpis">
+          <div className="panel kpi"><div className="label">{t("bg_total_cost")} · {ctx.company.currency}</div><div className="v">{money(totals.budget)}</div></div>
+          <div className="panel kpi"><div className="label">{t("st_requested")}</div><div className="v">{money(totals.requested)}</div><div className="small muted">{t("balance_left")} {money(totals.balance)}</div></div>
+          <div className="panel kpi"><div className="label">{t("st_budget_exec")}</div><div className="v">{pct(totals.budgetExecution)}</div></div>
+          <div className="panel kpi"><div className="label">{t("rp_project_execution")}</div><div className="v">{pct(totals.activityExecution)}</div><div className="small muted">{t("rp_weight_help")}</div></div>
+        </div>
+      ) : null}
       {outputs.length ? (
         <div className="panel stack">
           <h2>{t("bs_title")}</h2>
           <div className="tbl-wrap"><table>
-            <thead><tr><th>{t("lv_output")}</th>{years.map((y) => <th key={y} className="num">{t("year")} {y.slice(1)}</th>)}<th className="num">{t("total")}</th><th className="num">{t("bs_share")}</th></tr></thead>
+            <thead><tr><th>{t("prj_result")}</th>{years.map((y) => <th key={y} className="num">{t("year")} {y.slice(1)}</th>)}<th className="num">{t("bg_total_cost")}</th><th className="num">{t("bs_share")}</th><th className="num">{t("st_requested")}</th><th>{t("st_budget_exec")}</th><th>{t("rp_project_execution")}</th></tr></thead>
             <tbody>
               {outputs.map((o) => {
                 const ls = under(o);
                 return (
-                  <tr key={o.id}>
-                    <td><code className="k">{o.code}</code> {o.title}</td>
+                  <tr key={o.id} className={`lf-${o.level}`}>
+                    <td><div style={{ paddingLeft: o.depth * 14 }}><div className="small muted">{t(`lv_${o.level}`)} <code className="k">{o.code}</code></div>{o.title}</div></td>
                     {years.map((y) => <td key={y} className="num">{money(ls.reduce((s, r) => s + inYear(r, y), 0))}</td>)}
                     <td className="num"><b>{money(o.totalBudget)}</b></td><td className="num">{total ? pct(o.totalBudget / total) : ""}</td>
+                    <td className="num">{money(o.executed)}</td><td style={{ whiteSpace: "nowrap" }}><Meter value={o.budgetExecution} /></td><td style={{ whiteSpace: "nowrap" }}><Meter value={o.activityExecution} /></td>
                   </tr>
                 );
               })}
-              <tr className="total"><td>{t("total")}</td>{years.map((y) => <td key={y} className="num">{money(lines.reduce((s, r) => s + inYear(r, y), 0))}</td>)}<td className="num">{money(total)}</td><td className="num">100%</td></tr>
+              <tr className="total"><td>{t("total")}</td>{years.map((y) => <td key={y} className="num">{money(lines.reduce((s, r) => s + inYear(r, y), 0))}</td>)}<td className="num">{money(total)}</td><td className="num">100%</td><td className="num">{money(totals.requested)}</td><td className="num">{pct(totals.budgetExecution)}</td><td className="num">{pct(totals.activityExecution)}</td></tr>
             </tbody>
           </table></div>
           <div className="small muted">{t("bs_funding")}: {project.donor || t("bs_donor")} {money(total - own)} · {t("bs_own")} {money(own)}</div>
@@ -84,169 +96,191 @@ export async function BudgetView({ ctx, project, rows }: { ctx: Ctx; project: Pr
       <div className="panel">
         {rows.length ? (
           <div className="tbl-wrap"><table>
-            <thead><tr><th>{t("prj_result")}</th><th>{t("bg_category")}</th><th>{t("gr_unit")}</th><th className="num">{t("qty")}</th><th className="num">{t("st_unit_cost")}</th><th className="num">{t("budget")}</th><th className="num">{t("prj_executed")}</th><th className="num">{t("balance_left")}</th><th /></tr></thead>
+            <thead><tr><th>{t("prj_result")}</th><th>{t("bg_unit")}</th><th className="num">{t("bg_units")}</th><th className="num">{t("st_unit_cost")}</th><th className="num">{t("bg_total_cost")}</th><th className="num">{t("st_requested")}</th><th className="num">{t("balance_left")}</th><th>{t("st_budget_exec")}</th><th>{t("rp_achieved_pct")}</th><th className="num">{t("st_weight")}</th><th className="num">{t("rp_weighted")}</th><th /></tr></thead>
             <tbody>{rows.map((r) => (
               <tr key={r.id} className={`lf-${r.level}`}>
                 <td><Title r={r} /></td>
-                <td className="small">{r.category}</td><td className="small">{r.unit}</td>
+                <td className="small">{r.unit}</td>
                 <td className="num">{r.isLine && r.quantity ? money(r.quantity) : ""}</td><td className="num">{r.isLine && r.unitCost ? money(r.unitCost) : ""}</td>
-                <td className="num">{money(r.totalBudget)}</td>
+                <td className="num">{r.isLine ? money(r.totalBudget) : <b>{money(r.totalBudget)}</b>}</td>
                 <td className="num">{r.isLine ? <Link href={`/vouchers?line=${r.id}`}>{money(r.executed)}</Link> : money(r.executed)}</td>
                 <td className="num" style={{ color: r.totalBudget - r.executed < 0 ? "var(--bad)" : undefined }}>{money(r.totalBudget - r.executed)}</td>
+                <td style={{ whiteSpace: "nowrap" }}><Meter value={r.budgetExecution} /></td>
+                <td style={{ whiteSpace: "nowrap" }}><Meter value={r.activityExecution} /></td>
+                <td className="num">{pct(r.weight)}</td><td className="num">{pct(r.performance)}</td>
                 <td><RowActions r={r} base={base} projectId={project.id} view="budget" write={write} /></td>
               </tr>
             ))}</tbody>
           </table></div>
-        ) : <Empty>{t("prj_empty")}</Empty>}
+        ) : (
+          <div className="stack" style={{ alignItems: "center", textAlign: "center" }}>
+            <Empty>{t("prj_empty")}</Empty>
+            {write ? <Link className="btn primary" href={`/projects/import?project=${project.id}`}>{t("tm_use")}</Link> : null}
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-/** The logical framework: each result with its indicators, milestones and what has been achieved. */
-export async function LogframeView({ ctx, project, rows }: { ctx: Ctx; project: Project; rows: LogRow[] }) {
-  const { t, money } = await getI18n();
-  const write = ctx.can("projects", "write"), canResult = ctx.can("achievements", "write"), base = `/projects/${project.id}?view=logframe`;
-  const results = rows.filter((r) => r.level === "goal" || r.level === "outcome" || r.level === "output");
-  const db = await getDb();
-  const list = results.length ? await db.select().from(schema.indicators).where(inArray(schema.indicators.itemId, results.map((r) => r.id))).orderBy(schema.indicators.sortOrder) : [];
-  if (!rows.length) return <div className="panel"><Empty>{t("prj_empty")}</Empty></div>;
-  return (
-    <div className="stack">
-      {results.map((r) => (
-        <div key={r.id} className="panel stack">
-          <div className="row">
-            <div style={{ flex: 1, minWidth: 220 }}><div className="label">{t(`lv_${r.level}`)} {r.code}</div><b>{r.title}</b></div>
-            <RowActions r={r} base={base} projectId={project.id} view="logframe" write={write} />
-          </div>
-          {list.filter((i) => i.itemId === r.id).map((i) => {
-            const achieved = i.milestones.reduce((s, m) => s + (m.achieved ?? 0), 0);
-            return (
-              <form key={i.id} action={saveIndicatorResults} className="stack" style={{ borderTop: "1px solid var(--line)", paddingTop: 10, gap: 8 }}>
-                <input type="hidden" name="id" value={i.id} /><input type="hidden" name="projectId" value={project.id} />
-                <div><b className="small">{i.name}</b><div className="small muted">
-                  {t("lf_baseline")}: {i.baseline ?? "—"} · {t("prj_target")}: {i.target ?? "—"}{i.target ? ` · ${t("st_achieved")}: ${money(achieved)} (${pct(achieved / i.target)})` : ""}{i.source ? ` · ${t("prj_verification")}: ${i.source}` : ""}
-                </div></div>
-                {i.milestones.length ? (
-                  <div className="tbl-wrap"><table className="small">
-                    <thead><tr><th />{i.milestones.map((m, n) => <th key={n} className="num">{m.label}</th>)}</tr></thead>
-                    <tbody>
-                      <tr><td>{t("lf_planned")}</td>{i.milestones.map((m, n) => <td key={n} className="num">{m.planned ?? ""}</td>)}</tr>
-                      <tr><td>{t("st_achieved")}</td>{i.milestones.map((m, n) => <td key={n} className="num">{canResult
-                        ? <input id={`ach-${i.id}-${n}`} name={`achieved_${n}`} className="num" inputMode="decimal" defaultValue={m.achieved ?? ""} style={{ width: 80 }} aria-label={`${t("st_achieved")} ${m.label}`} />
-                        : m.achieved ?? ""}</td>)}</tr>
-                    </tbody>
-                  </table></div>
-                ) : null}
-                {i.assumptions ? <div className="small muted">{t("prj_assumptions")}: {i.assumptions}</div> : null}
-                {canResult && i.milestones.length ? <div><button type="submit" className="btn sm">{t("save")}</button></div> : null}
-              </form>
-            );
-          })}
-          {write ? (
-            <form action={addIndicator} className="stack" style={{ borderTop: "1px solid var(--line)", paddingTop: 10, gap: 8 }}>
-              <input type="hidden" name="projectId" value={project.id} /><input type="hidden" name="itemId" value={r.id} />
-              <div className="fields">
-                <label className="f small">{t("prj_indicator")}<input id={`ni-${r.id}`} name="name" required /></label>
-                <label className="f small">{t("lf_baseline")}<input id={`nib-${r.id}`} name="baseline" className="num" inputMode="decimal" /></label>
-                <label className="f small">{t("prj_target")}<input id={`nit-${r.id}`} name="target" className="num" inputMode="decimal" /></label>
-                <label className="f small">{t("lf_milestones")}<input id={`nim-${r.id}`} name="milestones" placeholder="Y1:40, Y2:60" /></label>
-                <label className="f small">{t("prj_verification")}<input id={`nis-${r.id}`} name="source" /></label>
-              </div>
-              <div><button type="submit" className="btn sm">{t("lf_add_indicator")}</button></div>
-            </form>
-          ) : null}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-/** The workplan: who does what and when, by quarter, with what is done so far. */
+/** The workplan, built on the budget: every budget line is here, and people say who does it and when. */
 export async function WorkplanView({ ctx, project, rows }: { ctx: Ctx; project: Project; rows: LogRow[] }) {
-  const { t } = await getI18n();
-  const write = ctx.can("projects", "write"), base = `/projects/${project.id}?view=workplan`;
-  const shown = rows.filter((r) => r.level === "output" || r.level === "activity");
+  const { t, money } = await getI18n();
+  const write = ctx.can("projects", "write");
   const quarters = quartersOf(project, rows);
   const now = today();
-  if (!shown.length) return <div className="panel"><Empty>{t("prj_empty")}</Empty></div>;
+  if (!rows.some((r) => r.isLine)) return <div className="panel"><Empty>{t("wp_no_budget")}</Empty></div>;
+  const table = (
+    <div className="tbl-wrap"><table>
+      <thead><tr><th>{t("st_activity")}</th><th>{t("rp_target")}</th><th className="num">{t("st_achieved")}</th><th>{t("wp_responsible")}</th><th>{t("wp_start")}</th><th>{t("wp_end")}</th><th>{t("wp_done")}</th>{quarters.map((q) => <th key={q.key} className="small" style={{ textAlign: "center", whiteSpace: "nowrap" }} title={q.from ? `${q.from} → ${q.to}` : undefined}>{q.label}</th>)}</tr></thead>
+      <tbody>{rows.map((r) => {
+        const late = r.isLine && !!r.endDate && r.endDate < now && r.activityExecution < 1;
+        return (
+          <tr key={r.id} className={`lf-${r.level}`}>
+            <td style={{ minWidth: 260 }}><div style={{ paddingLeft: r.depth * 14 }}><code className="k">{r.isLine && r.taskCode ? r.taskCode : r.code}</code> {r.title}</div></td>
+            <td className="num small" style={{ whiteSpace: "nowrap" }}>{r.isLine ? `${money(r.quantity)} ${r.unit}` : ""}</td>
+            <td className="num small">{r.isLine ? money(r.achieved) : ""}</td>
+            {r.isLine ? (
+              write ? (
+                <>
+                  <td><input id={`wp-r-${r.id}`} name={`resp_${r.id}`} defaultValue={r.responsible} aria-label={t("wp_responsible")} style={{ minWidth: 130 }} /></td>
+                  <td><input id={`wp-s-${r.id}`} name={`start_${r.id}`} type="date" defaultValue={r.startDate ?? ""} aria-label={t("wp_start")} /></td>
+                  <td><input id={`wp-e-${r.id}`} name={`end_${r.id}`} type="date" defaultValue={r.endDate ?? ""} aria-label={t("wp_end")} style={{ color: late ? "var(--bad)" : undefined }} /></td>
+                </>
+              ) : (
+                <>
+                  <td className="small">{r.responsible}</td><td className="small" style={{ whiteSpace: "nowrap" }}>{r.startDate ?? ""}</td>
+                  <td className="small" style={{ whiteSpace: "nowrap", color: late ? "var(--bad)" : undefined }}>{r.endDate ?? ""}</td>
+                </>
+              )
+            ) : <td colSpan={3} />}
+            <td style={{ whiteSpace: "nowrap" }}><Meter value={r.activityExecution} /></td>
+            {quarters.map((q) => {
+              const on = !!(r.isLine && r.startDate && r.endDate && q.from && q.to && r.startDate <= q.to && r.endDate >= q.from);
+              return <td key={q.key} style={{ padding: 2 }}><div className={on ? `wp-bar${r.activityExecution >= 1 ? " done" : late ? " late" : ""}` : ""} style={{ height: 14 }} /></td>;
+            })}
+          </tr>
+        );
+      })}</tbody>
+    </table></div>
+  );
+  if (!write) return <div className="panel stack">{table}</div>;
   return (
-    <div className="panel stack">
+    <form action={saveWorkplan} className="panel stack">
+      <input type="hidden" name="projectId" value={project.id} />
+      <div className="small muted">{t("wp_help")}</div>
+      <div className="fields">
+        <label className="f">{t("wp_project_start")}<input id="wp-start" name="startDate" type="date" defaultValue={project.startDate ?? ""} /></label>
+        <label className="f">{t("wp_project_end")}<input id="wp-end" name="endDate" type="date" defaultValue={project.endDate ?? ""} /></label>
+      </div>
       {!project.startDate ? <div className="note warn small">{t("wp_no_start")}</div> : null}
-      <div className="tbl-wrap"><table>
-        <thead><tr><th>{t("st_activity")}</th><th>{t("wp_responsible")}</th><th>{t("wp_start")}</th><th>{t("wp_end")}</th><th>{t("wp_done")}</th>{quarters.map((q) => <th key={q.key} className="small" style={{ textAlign: "center", whiteSpace: "nowrap" }} title={q.from ? `${q.from} → ${q.to}` : undefined}>{q.label}</th>)}<th /></tr></thead>
-        <tbody>{shown.map((r) => {
-          const late = r.level === "activity" && !!r.endDate && r.endDate < now && r.activityExecution < 1;
-          return (
-            <tr key={r.id} className={`lf-${r.level}`}>
-              <td style={{ minWidth: 240 }}><code className="k">{r.code}</code> {r.title}</td>
-              <td className="small">{r.responsible}</td>
-              <td className="small" style={{ whiteSpace: "nowrap" }}>{r.startDate ?? ""}</td>
-              <td className="small" style={{ whiteSpace: "nowrap", color: late ? "var(--bad)" : undefined }}>{r.endDate ?? ""}</td>
-              <td style={{ whiteSpace: "nowrap" }}><Meter value={r.activityExecution} /></td>
-              {quarters.map((q) => {
-                const on = !!(r.startDate && r.endDate && q.from && q.to && r.startDate <= q.to && r.endDate >= q.from);
-                return <td key={q.key} style={{ padding: 2 }}><div className={on ? `wp-bar${r.activityExecution >= 1 ? " done" : late ? " late" : ""}` : ""} style={{ height: 14 }} /></td>;
-              })}
-              <td>{r.level === "activity" ? <RowActions r={r} base={base} projectId={project.id} view="workplan" write={write} /> : null}</td>
-            </tr>
-          );
-        })}</tbody>
-      </table></div>
-    </div>
+      {table}
+      <div><button type="submit" className="btn primary">{t("save")}</button></div>
+    </form>
   );
 }
 
-/** Where people record what was actually done on each budget line. */
-export async function AchievementsView({ ctx, project, rows }: { ctx: Ctx; project: Project; rows: LogRow[] }) {
+/** The progress report: for the chosen period, each budget line's previous achievement, this period's, and the total against its target. */
+export async function AchievementsView({ ctx, project, rows, schedule: wantedSchedule, date: wantedDate }: { ctx: Ctx; project: Project; rows: LogRow[]; schedule: string; date: string }) {
   const { t, money } = await getI18n();
   const write = ctx.can("achievements", "write");
-  const lines = rows.filter((r) => r.isLine);
+  if (!rows.some((r) => r.isLine)) return <div className="panel"><Empty>{t("wp_no_budget")}</Empty></div>;
+  const schedule: Schedule = isSchedule(wantedSchedule) ? wantedSchedule : "monthly";
+  const date = isIsoDate(wantedDate) ? wantedDate : today();
+  const { from, to } = periodOf(schedule, date);
   const db = await getDb();
-  const list = await db.select({ a: schema.achievements, who: schema.users.name }).from(schema.achievements)
-    .leftJoin(schema.users, eq(schema.users.id, schema.achievements.enteredBy)).where(eq(schema.achievements.projectId, project.id));
-  list.sort((x, y) => y.a.date.localeCompare(x.a.date));
+  const reports = await db.select({ r: schema.achievementReports, who: schema.users.name }).from(schema.achievementReports)
+    .leftJoin(schema.users, eq(schema.users.id, schema.achievementReports.createdBy))
+    .where(eq(schema.achievementReports.projectId, project.id)).orderBy(desc(schema.achievementReports.periodFrom));
+  const current = reports.find(({ r }) => r.schedule === schedule && r.periodFrom === from && r.periodTo === to)?.r;
+  const overlap = reports.find(({ r }) => r !== current && r.periodFrom <= to && r.periodTo >= from)?.r;
+  const { byId, before, after } = await loadReportLines(db, ctx.company.id, project.id, current?.id ?? null, to, rows);
+  const totals = projectTotals(rows);
+  const canSave = write && !overlap && from <= today() && (!current || ctx.role !== "staff" || current.createdBy === ctx.user.id);
+  // A row above the budget lines shows the weighted achievement of the lines under it.
+  const underShare = (i: number) => {
+    const out = { budget: 0, done: 0 };
+    for (let j = i + 1; j < rows.length && rows[j].depth > rows[i].depth; j++) if (rows[j].isLine) { const l = byId.get(rows[j].id); out.budget += rows[j].budget; out.done += rows[j].budget * (l?.share ?? 0); }
+    return out.budget ? out.done / out.budget : 0;
+  };
+  const table = (
+    <div className="tbl-wrap"><table>
+      <thead><tr><th>{t("st_activity")}</th><th>{t("bg_unit")}</th><th className="num">{t("rp_target")}</th><th className="num">{t("rp_previous")}</th><th className="num">{t("rp_this_period")}</th><th className="num">{t("rp_total")}</th><th className="num">{t("rp_achieved_pct")}</th><th className="num">{t("bg_total_cost")}</th><th className="num">{t("st_weight")}</th><th className="num">{t("rp_weighted")}</th><th>{t("description")}</th></tr></thead>
+      <tbody>{rows.map((r, i) => {
+        const l = byId.get(r.id);
+        if (!r.isLine) {
+          const share = underShare(i);
+          return <tr key={r.id} className={`lf-${r.level}`}><td style={{ minWidth: 260 }}><div style={{ paddingLeft: r.depth * 14 }}><code className="k">{r.code}</code> <b>{r.title}</b></div></td><td colSpan={5} /><td className="num"><b>{pct(share)}</b></td><td className="num"><b>{money(r.totalBudget)}</b></td><td className="num">{pct(r.weight)}</td><td className="num">{pct(share * r.weight)}</td><td /></tr>;
+        }
+        return (
+          <tr key={r.id} className={`lf-${r.level}`}>
+            <td style={{ minWidth: 260 }}><div style={{ paddingLeft: r.depth * 14 }}><code className="k">{r.taskCode || r.code}</code> {r.title}</div></td>
+            <td className="small">{r.unit}</td>
+            <td className="num">{money(r.quantity)}</td>
+            <td className="num">{money(l?.previous ?? 0)}</td>
+            <td className="num" style={{ minWidth: 100 }}>{canSave ? <input id={`rp-q-${r.id}`} name={`qty_${r.id}`} className="num" inputMode="decimal" defaultValue={l?.current || ""} aria-label={t("rp_this_period")} /> : money(l?.current ?? 0)}</td>
+            <td className="num">{money(l?.total ?? 0)}</td>
+            <td style={{ whiteSpace: "nowrap" }}><Meter value={r.quantity > 0 ? (l?.total ?? 0) / r.quantity : 0} /></td>
+            <td className="num">{money(r.budget)}</td>
+            <td className="num">{pct(r.weight)}</td>
+            <td className="num">{pct(l?.weighted ?? 0)}</td>
+            <td>{canSave ? <input id={`rp-n-${r.id}`} name={`note_${r.id}`} defaultValue={l?.note} aria-label={t("description")} style={{ minWidth: 140 }} /> : <span className="small">{l?.note}</span>}</td>
+          </tr>
+        );
+      })}
+        <tr className="total"><td colSpan={7}>{t("rp_project_execution")}</td><td className="num">{money(totals.budget)}</td><td className="num">100%</td><td className="num">{pct(after)}</td><td /></tr>
+      </tbody>
+    </table></div>
+  );
   return (
     <div className="stack">
-      {write && lines.length ? (
-        <form action={addAchievement} className="panel stack">
-          <h2>{t("ac_add")}</h2>
-          <input type="hidden" name="projectId" value={project.id} />
-          <label className="f">{t("pv_budget_line")}
-            <select id="a-line" name="budgetItemId" required defaultValue="">
-              <option value="">{t("none")}</option>
-              {lines.map((l) => <option key={l.id} value={l.id}>{l.taskCode || l.code} {l.title.slice(0, 80)} ({money(l.achieved)} / {money(l.quantity)} {l.unit})</option>)}
-            </select></label>
-          <div className="fields">
-            <label className="f">{t("date")}<input id="a-date" name="date" type="date" required defaultValue={today()} /></label>
-            <label className="f">{t("ac_quantity")}<input id="a-qty" name="quantity" className="num" inputMode="decimal" required /></label>
-            <label className="f">{t("ac_evidence")}<input id="a-file" name="file" type="file" accept="image/*,application/pdf" /></label>
-          </div>
-          <label className="f">{t("description")}<input id="a-desc" name="description" /></label>
-          <div><button type="submit" className="btn primary">{t("save")}</button></div>
+      <form method="get" className="panel row noprint">
+        <input type="hidden" name="view" value="achievements" />
+        <label className="f">{t("rp_schedule")}
+          <select id="rp-schedule" name="schedule" defaultValue={schedule}>{SCHEDULES.map((s) => <option key={s} value={s}>{t(`rp_${s}`)}</option>)}</select></label>
+        <label className="f">{t(schedule === "biweekly" ? "rp_first_day" : "rp_date_in_period")}<input id="rp-date" name="date" type="date" defaultValue={date} /></label>
+        <button type="submit" className="btn">{t("show")}</button>
+        <span className="spacer" />
+        <PrintButton label={t("r_print")} />
+      </form>
+      <div className="kpis">
+        <div className="panel kpi"><div className="label">{t("rp_previous_execution")}</div><div className="v">{pct(before)}</div></div>
+        <div className="panel kpi"><div className="label">{t("rp_this_execution")}</div><div className="v">+{pct(after - before)}</div></div>
+        <div className="panel kpi"><div className="label">{t("rp_project_execution")}</div><div className="v">{pct(after)}</div><div className="small muted">{t("rp_weight_help")}</div></div>
+        <div className="panel kpi"><div className="label">{t("st_budget_exec")}</div><div className="v">{pct(totals.budgetExecution)}</div><div className="small muted">{money(totals.requested)} / {money(totals.budget)}</div></div>
+      </div>
+      {canSave ? (
+        <form action={saveAchievementReport} className="panel stack">
+          <h2>{t(`rp_${schedule}`)} · {from} → {to}{current ? <span className="small muted"> · {t("rp_editing")}</span> : null}</h2>
+          <input type="hidden" name="projectId" value={project.id} /><input type="hidden" name="schedule" value={schedule} /><input type="hidden" name="date" value={date} />
+          {table}
+          <label className="f">{t("ac_evidence")}<input id="rp-file" name="file" type="file" accept="image/*,application/pdf" /></label>
+          <div><button type="submit" className="btn primary">{t("rp_save")}</button></div>
         </form>
-      ) : null}
-      <div className="panel stack">
-        <h2>{t("ac_history")}</h2>
-        {list.length ? (
+      ) : (
+        <div className="panel stack">
+          <h2>{t(`rp_${schedule}`)} · {from} → {to}</h2>
+          {overlap ? <div className="note warn small">{t("err_report_overlap")} ({overlap.periodFrom} → {overlap.periodTo})</div> : null}
+          {from > today() ? <div className="note warn small">{t("err_report_future")}</div> : null}
+          {table}
+        </div>
+      )}
+      <div className="panel stack noprint">
+        <h2>{t("rp_reports")}</h2>
+        {reports.length ? (
           <div className="tbl-wrap"><table>
-            <thead><tr><th>{t("date")}</th><th>{t("pv_budget_line")}</th><th className="num">{t("qty")}</th><th>{t("description")}</th><th>{t("ach_recorded_by")}</th><th /></tr></thead>
-            <tbody>{list.map(({ a, who }) => {
-              const l = lines.find((x) => x.id === a.budgetItemId);
-              return (
-                <tr key={a.id}>
-                  <td style={{ whiteSpace: "nowrap" }}>{a.date}</td>
-                  <td><code className="k">{l?.taskCode || l?.code}</code> {l?.title}</td>
-                  <td className="num">{money(a.quantity)} {l?.unit}</td>
-                  <td>{a.description}{a.attachmentId ? <> · <a className="small" href={`/api/files/${a.attachmentId}`} target="_blank" rel="noreferrer">{t("tn_file")}</a></> : null}</td>
-                  <td className="small">{who}</td>
-                  <td>{write ? (
-                    <form action={removeAchievement}><input type="hidden" name="id" value={a.id} /><input type="hidden" name="projectId" value={project.id} />
-                      <ConfirmButton className="btn ghost sm danger" confirmLabel={t("confirm")}>{t("delete")}</ConfirmButton></form>
-                  ) : null}</td>
-                </tr>
-              );
-            })}</tbody>
+            <thead><tr><th>{t("rp_schedule")}</th><th>{t("rp_period")}</th><th>{t("audit_who")}</th><th /></tr></thead>
+            <tbody>{reports.map(({ r, who }) => (
+              <tr key={r.id}>
+                <td>{t(`rp_${r.schedule}`)}</td>
+                <td><Link className="rowlink" href={`/projects/${project.id}?view=achievements&schedule=${r.schedule}&date=${r.periodFrom}`}>{r.periodFrom} → {r.periodTo}</Link></td>
+                <td className="small">{who}</td>
+                <td>{write && (ctx.role !== "staff" || r.createdBy === ctx.user.id) ? (
+                  <form action={removeAchievementReport}><input type="hidden" name="id" value={r.id} /><input type="hidden" name="projectId" value={project.id} />
+                    <ConfirmButton className="btn ghost sm danger" confirmLabel={t("confirm")}>{t("delete")}</ConfirmButton></form>
+                ) : null}</td>
+              </tr>
+            ))}</tbody>
           </table></div>
         ) : <Empty>{t("nothing_yet")}</Empty>}
       </div>

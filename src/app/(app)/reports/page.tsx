@@ -45,11 +45,22 @@ const GROUPS: { title: Key; items: { kind: string; label: Key; help: Key }[] }[]
     ],
   },
   {
+    title: "nav_vendor_reports",
+    items: [
+      { kind: "ap", label: "r_ap", help: "rh_ap" },
+      { kind: "ap-aging-detail", label: "r_ap_aging_detail", help: "rh_ap_aging_detail" },
+      { kind: "ap-balance-summary", label: "r_ap_balance_summary", help: "rh_ap_balance_summary" },
+      { kind: "ap-balance-detail", label: "r_ap_balance_detail", help: "rh_ap_balance_detail" },
+      { kind: "ap-unpaid", label: "r_ap_unpaid", help: "rh_ap_unpaid" },
+      { kind: "vendors", label: "r_vendors", help: "rh_vendors" },
+      { kind: "po-open", label: "r_po_open", help: "rh_po_open" },
+    ],
+  },
+  {
     title: "r_group_other",
     items: [
       { kind: "vat", label: "r_vat", help: "rh_vat" },
       { kind: "ar", label: "r_ar", help: "rh_ar" },
-      { kind: "ap", label: "r_ap", help: "rh_ap" },
     ],
   },
 ];

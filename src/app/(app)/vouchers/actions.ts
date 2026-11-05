@@ -12,6 +12,7 @@ import {
 } from "@/lib/programs";
 import { optionalUpload } from "@/lib/upload";
 import { audit } from "@/lib/audit";
+import { readSignature, rememberSignature } from "@/lib/signature";
 import type { DocStatusValue } from "@/db/schema";
 
 const refresh = (id: string) => { revalidatePath("/vouchers"); revalidatePath(`/vouchers/${id}`); };
@@ -58,7 +59,8 @@ export async function saveVoucher(fd: FormData) {
         if (!old) throw new UserError("err_not_found");
         if (old.status !== "draft") throw new UserError("err_voucher_state");
         if (old.requestedBy !== ctx.user.id) throw new UserError("err_voucher_not_yours");
-        await tx.update(schema.paymentVouchers).set({ ...values, attachmentId: attachmentId ?? old.attachmentId }).where(eq(schema.paymentVouchers.id, vid));
+        const number = old.date.slice(0, 4) === date.slice(0, 4) ? old.number : await nextFundRequestNumber(tx, ctx.company.id, date);
+        await tx.update(schema.paymentVouchers).set({ ...values, number, attachmentId: attachmentId ?? old.attachmentId }).where(eq(schema.paymentVouchers.id, vid));
         await tx.delete(schema.voucherLines).where(eq(schema.voucherLines.voucherId, vid));
       } else {
         const number = await nextFundRequestNumber(tx, ctx.company.id, date);
@@ -67,20 +69,24 @@ export async function saveVoucher(fd: FormData) {
         await audit(tx, ctx.company.id, ctx.user.id, "create", "payment_voucher", number, { amount });
       }
       await tx.insert(schema.voucherLines).values(lines.map((l, i) => ({ ...l, companyId: ctx.company.id, voucherId: vid, lineNo: i + 1 })));
-      if (submit) await submitVoucher(tx, ctx.company.id, ctx.user.id, vid);
       return vid;
     });
   } catch (e) { fail(e, back); }
   refresh(savedId);
-  redirect(`/vouchers/${savedId}`);
+  // Preparing is a signature: the form keeps the draft and opens the page where it is signed.
+  redirect(`/vouchers/${savedId}${submit ? "#sign" : ""}`);
 }
 
 export async function submitDraft(fd: FormData) {
   const ctx = await requireWrite("vouchers");
   const id = str(fd, "id");
   try {
+    const signature = readSignature(str(fd, "signature"));
     const db = await getDb();
-    await db.transaction((tx) => submitVoucher(tx, ctx.company.id, ctx.user.id, id));
+    await db.transaction(async (tx) => {
+      await submitVoucher(tx, ctx.company.id, ctx.user.id, id, signature);
+      await rememberSignature(tx, ctx.user.id, signature, fd.get("rememberSignature") === "on");
+    });
   } catch (e) { fail(e, `/vouchers/${id}`); }
   refresh(id);
   redirect(`/vouchers/${id}`);
@@ -111,12 +117,19 @@ export async function decide(fd: FormData) {
     const [v] = await db.select().from(schema.paymentVouchers).where(and(eq(schema.paymentVouchers.id, id), eq(schema.paymentVouchers.companyId, ctx.company.id)));
     if (!v) throw new UserError("err_not_found");
     const step = NEXT_STEP[v.status];
-    if (!step) throw new UserError("err_voucher_state");
-    if (!ctx.can(step.area, "write")) throw new UserError("err_voucher_no_right");
+    // An authorized request not yet paid has no step left to sign, but its authorizer can still send it back or cancel it.
+    const area = step?.area ?? (v.status === "authorized" && decision !== "sign" ? "voucher_authorize" : null);
+    if (!area) throw new UserError("err_voucher_state");
+    if (!ctx.can(area, "write")) throw new UserError("err_voucher_no_right");
     if (decision !== "sign" && !note) throw new UserError("err_reason_required");
-    await db.transaction((tx) => decision === "sign" ? signVoucher(tx, ctx.company.id, ctx.user.id, ctx.isAdmin, id, note)
-      : decision === "return" ? returnVoucher(tx, ctx.company.id, ctx.user.id, id, note)
-        : cancelVoucher(tx, ctx.company.id, ctx.user.id, id, note));
+    const signature = decision === "sign" ? readSignature(str(fd, "signature")) : "";
+    await db.transaction(async (tx) => {
+      if (decision === "sign") {
+        await signVoucher(tx, ctx.company.id, ctx.user.id, ctx.isAdmin, id, note, signature);
+        await rememberSignature(tx, ctx.user.id, signature, fd.get("rememberSignature") === "on");
+      } else if (decision === "return") await returnVoucher(tx, ctx.company.id, ctx.user.id, id, note);
+      else await cancelVoucher(tx, ctx.company.id, ctx.user.id, id, note);
+    });
   } catch (e) { fail(e, `/vouchers/${id}`); }
   refresh(id);
   redirect(`/vouchers/${id}`);

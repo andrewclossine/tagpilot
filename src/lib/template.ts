@@ -29,6 +29,7 @@ export const STARTER_ACCOUNTS: StarterAccount[] = [
   { code: "4200", type: "income", en: "Service revenue", fr: "Prestations de services" },
   { code: "4300", type: "income", en: "Grants & donations", fr: "Subventions et dons" },
   { code: "4800", type: "income", en: "Gain on disposal of assets", fr: "Plus-values de cession d'actifs" },
+  { code: "4850", type: "income", en: "Foreign exchange gains", fr: "Gains de change" },
   { code: "4900", type: "income", en: "Other income", fr: "Autres produits" },
   { code: "5100", type: "expense", en: "Cost of goods sold", fr: "Coût des marchandises vendues" },
   { code: "5150", type: "expense", en: "Stock adjustments & losses", fr: "Ajustements et pertes de stock" },
@@ -47,6 +48,7 @@ export const STARTER_ACCOUNTS: StarterAccount[] = [
   { code: "6200", type: "expense", en: "Depreciation", fr: "Dotations aux amortissements" },
   { code: "6210", type: "expense", en: "Impairment losses", fr: "Pertes de valeur" },
   { code: "6800", type: "expense", en: "Loss on disposal of assets", fr: "Moins-values de cession d'actifs" },
+  { code: "6850", type: "expense", en: "Foreign exchange losses", fr: "Pertes de change" },
   { code: "6900", type: "expense", en: "Other expenses", fr: "Autres charges" },
 ];
 

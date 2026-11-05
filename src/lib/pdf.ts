@@ -184,11 +184,11 @@ export function payslipPdf(d: PayslipPdfData): Promise<Buffer> {
 
 export type VoucherPdfData = {
   company: Company; lang: Lang;
-  labels: Record<"title" | "number" | "date" | "status" | "project" | "line" | "payee" | "amountRequested" | "activityBudget" | "previousExecution" | "totalExecution" | "balance" | "description" | "signature" | "total" | "footer", string>;
+  labels: Record<"title" | "number" | "projectCode" | "date" | "status" | "project" | "line" | "payee" | "amountRequested" | "activityBudget" | "previousExecution" | "totalExecution" | "balance" | "description" | "signature" | "signedElectronically" | "total" | "footer", string>;
   voucher: { number: string; date: string; status: string; amount: number; description: string; payee: string };
   lines: { code: string; title: string; budget: number; previous: number; amount: number }[];
-  signatures: { label: string; name: string; at: string }[];
-  project: string;
+  signatures: { label: string; name: string; at: string; image: string | null }[];
+  project: string; projectCode: string;
 };
 
 /** The fund request: what is asked for, where it leaves each budget line, and the four signatures. */
@@ -196,7 +196,7 @@ export function voucherPdf(d: VoucherPdfData): Promise<Buffer> {
   const m = (n: number) => amount(n, d.lang);
   const cur = d.company.currency, v = d.voucher, l = d.labels;
   return render((doc) => {
-    header(doc, d.company, l.title, [[l.number, v.number], [l.date, v.date], [l.status, v.status]]);
+    header(doc, d.company, l.title, [[l.number, v.number], [l.projectCode, d.projectCode], [l.date, v.date], [l.status, v.status]]);
     doc.font("Helvetica-Bold").fontSize(9.5).fillColor(INK).text(`${l.project}: `, 50, doc.y, { continued: true }).font("Helvetica").text(d.project);
     if (v.payee) doc.font("Helvetica-Bold").text(`${l.payee}: `, 50, doc.y, { continued: true }).font("Helvetica").text(v.payee);
     doc.moveDown(0.6);
@@ -205,17 +205,23 @@ export function voucherPdf(d: VoucherPdfData): Promise<Buffer> {
     table(doc, [
       { label: l.line, width: 110 }, { label: l.activityBudget, width: 77, align: "right" }, { label: l.previousExecution, width: 77, align: "right" },
       { label: l.amountRequested, width: 77, align: "right" }, { label: l.totalExecution, width: 77, align: "right" }, { label: l.balance, width: 77, align: "right" },
-    ], d.lines.map((x) => [`${x.code} ${x.title}`, m(x.budget), m(x.previous), m(x.amount), m(x.previous + x.amount), m(x.budget - x.previous - x.amount)]));
+    ], d.lines.map((x) => [`${x.code} ${x.title}`, m(x.budget), m(x.previous), m(x.amount), `${m(x.previous + x.amount)}${x.budget ? ` (${Math.round(((x.previous + x.amount) / x.budget) * 1000) / 10}%)` : ""}`, m(x.budget - x.previous - x.amount)]));
     totals(doc, [{ label: `${l.total} ${cur}`, value: m(v.amount), strong: true }]);
     doc.moveDown(1.5);
-    const y = Math.min(doc.y, doc.page.height - 150);
+    // The signatures stay together, on a new page if they would not fit under the table.
+    if (doc.y > doc.page.height - 190) doc.addPage();
+    const y = doc.y;
     d.signatures.forEach((s, i) => {
       const x = 50 + i * 125;
       doc.font("Helvetica-Bold").fontSize(8).fillColor(MUTED).text(s.label.toUpperCase(), x, y, { width: 115 });
       doc.font("Helvetica").fontSize(9).fillColor(INK).text(s.name || " ", x, y + 13, { width: 115 });
       doc.font("Helvetica").fontSize(8).fillColor(MUTED).text(s.at || " ", x, y + 26, { width: 115 });
-      doc.moveTo(x, y + 58).lineTo(x + 112, y + 58).lineWidth(0.5).strokeColor(LINE).stroke();
-      doc.font("Helvetica").fontSize(8).fillColor(MUTED).text(l.signature, x, y + 62, { width: 115 });
+      if (s.image) {
+        // A signature that cannot be drawn must not stop the document: the name and time are still printed.
+        try { doc.image(Buffer.from(s.image.split(",")[1], "base64"), x, y + 38, { fit: [112, 38] }); } catch { /* the name stands */ }
+      }
+      doc.moveTo(x, y + 80).lineTo(x + 112, y + 80).lineWidth(0.5).strokeColor(LINE).stroke();
+      doc.font("Helvetica").fontSize(8).fillColor(MUTED).text(s.image ? l.signedElectronically : l.signature, x, y + 84, { width: 115 });
     });
     footer(doc, l.footer);
   });

@@ -7,7 +7,7 @@ import { getI18n } from "@/lib/i18n";
 import { sp, type SearchParams } from "@/lib/actions";
 import { assetBalances, loadAsset } from "@/lib/assets";
 import { moneyAccounts, UserError } from "@/lib/ledger";
-import { today } from "@/lib/format";
+import { isUuid, today } from "@/lib/format";
 import { ErrorNote, PageHead, Pill } from "@/components/ui";
 import { ConfirmButton } from "@/components/editors";
 import { assetMovement } from "../actions";
@@ -16,6 +16,7 @@ export const metadata = { title: "Fixed asset" };
 
 export default async function AssetPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: SearchParams }) {
   const { id } = await params;
+  if (!isUuid(id)) notFound();
   const ctx = await requireView("assets");
   const { t, err, money } = await getI18n();
   const q = await sp(searchParams);

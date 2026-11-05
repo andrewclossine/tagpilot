@@ -5,7 +5,7 @@ import { getDb, schema } from "@/db";
 import { requireView } from "@/lib/auth";
 import { getI18n } from "@/lib/i18n";
 import { sp, type SearchParams } from "@/lib/actions";
-import { today } from "@/lib/format";
+import { isUuid, today } from "@/lib/format";
 import { ConfirmButton } from "@/components/editors";
 import { ErrorNote, PageHead, Pill } from "@/components/ui";
 import { EntryForm } from "../EntryForm";
@@ -15,6 +15,7 @@ export const metadata = { title: "Journal entry" };
 
 export default async function EntryPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: SearchParams }) {
   const { id } = await params;
+  if (!isUuid(id)) notFound();
   const ctx = await requireView("journal");
   const { t, err, accName, money } = await getI18n();
   const q = await sp(searchParams);

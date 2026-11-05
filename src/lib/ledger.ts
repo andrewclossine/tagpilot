@@ -41,19 +41,21 @@ export function checkLines(lines: LineInput[]): string | null {
   return null;
 }
 
-async function assertAccounts(tx: Tx, companyId: string, lines: LineInput[]) {
+async function assertAccounts(tx: Tx, companyId: string, lines: LineInput[], source: EntrySource) {
   const ids = [...new Set(lines.map((l) => l.accountId))];
   if (!ids.length) return;
-  const found = await tx.select({ id: schema.accounts.id }).from(schema.accounts)
+  const found = await tx.select({ id: schema.accounts.id, currency: schema.accounts.currency }).from(schema.accounts)
     .where(and(eq(schema.accounts.companyId, companyId), inArray(schema.accounts.id, ids)));
   if (found.length !== ids.length) throw new UserError("err_account");
+  // A foreign currency account is kept in two currencies, so only its own page can post to it.
+  if (source !== "fx" && source !== "reversal" && found.some((a) => a.currency)) throw new UserError("err_fx_account");
 }
 
 /** Creates or replaces an entry. With `post`, it is validated, numbered and locked. */
 export async function saveEntry(tx: Tx, companyId: string, userId: string, input: EntryInput, post: boolean): Promise<string> {
   const lines = cleanLines(input.lines);
   if (post) { const err = checkLines(lines); if (err) throw new UserError(err); }
-  await assertAccounts(tx, companyId, lines);
+  await assertAccounts(tx, companyId, lines, input.source ?? "manual");
 
   let id = input.id;
   const values = {

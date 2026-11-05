@@ -9,7 +9,9 @@ import { sp, type SearchParams } from "@/lib/actions";
 import { isUuid, today } from "@/lib/format";
 import { moneyAccounts } from "@/lib/ledger";
 import { DOC_TYPES, executionOn, NEXT_STEP } from "@/lib/programs";
+import { savedSignature } from "@/lib/signature";
 import { ConfirmButton } from "@/components/editors";
+import { SignaturePad } from "@/components/SignaturePad";
 import { ErrorNote, PageHead, Pill } from "@/components/ui";
 import type { VoucherStep } from "@/db/schema";
 import { decide, deleteVoucher, pay, saveDocuments, submitDraft } from "../actions";
@@ -69,11 +71,16 @@ export default async function VoucherPage({ params, searchParams }: { params: Pr
   const docOf = (type: string) => docs.find((x) => x.d.docType === type)?.d;
   const canDocs = ctx.can("vouchers", "write") && (ctx.role !== "staff" || mine);
   const over = figures.some((f) => f.total > f.budget + 0.01);
+  const canPrepare = v.status === "draft" && mine && ctx.can("vouchers", "write");
+  const canSendBack = v.status === "authorized" && ctx.can("voucher_authorize", "write");
+  const pad = canPrepare || (next && canSign && !alreadySigned) ? <SignaturePad saved={await savedSignature(db, ctx.user.id)} labels={{
+    help: t("sig_help"), clear: t("sig_clear"), upload: t("sig_upload"), redraw: t("sig_redraw"), remember: t("sig_remember"), required: t("err_signature"),
+  }} /> : null;
   return (
     <div className="stack">
       <PageHead title={`${t("pv_voucher")} ${v.number}`}>
         <Link className="btn" href="/vouchers">{t("back")}</Link>
-        <a className="btn" href={`/api/pdf/voucher/${v.id}`} target="_blank" rel="noreferrer">PDF</a>
+        <a className="btn" href={`/api/pdf/voucher/${v.id}`} download={`FR-${v.number.replace(/[^A-Za-z0-9-]/g, "-")}.pdf`}>{t("pv_download_pdf")}</a>
         <Pill kind={v.status}>{t(`vs_${v.status}`)}</Pill>
       </PageHead>
       <ErrorNote message={err(q("error"))} />
@@ -81,8 +88,10 @@ export default async function VoucherPage({ params, searchParams }: { params: Pr
 
       <div className="panel stack">
         <div className="fields">
+          <div><div className="label">{t("pv_fr_no")}</div><b>{v.number}</b></div>
+          <div><div className="label">{t("pv_project_code")}</div><b>{project.code}</b></div>
           <div><div className="label">{t("date")}</div>{v.date}</div>
-          <div><div className="label">{t("project")}</div><Link href={`/projects/${project.id}`}>{project.code} · {project.name}</Link></div>
+          <div><div className="label">{t("project")}</div><Link href={`/projects/${project.id}`}>{project.name}</Link></div>
           {v.payee ? <div><div className="label">{t("pv_payee")}</div>{v.payee}</div> : null}
           {v.paymentReference ? <div><div className="label">{t("pv_cheque")}</div>{v.paymentReference}</div> : null}
         </div>
@@ -95,7 +104,7 @@ export default async function VoucherPage({ params, searchParams }: { params: Pr
             {figures.map(({ l, item, budget, previous, total }) => (
               <tr key={l.id}>
                 <td><code className="k">{item.taskCode || item.code}</code> {item.title}{l.description ? <div className="small muted">{l.description}</div> : null}</td>
-                <td className="num">{money(budget, 2)}</td><td className="num">{money(previous, 2)}</td><td className="num"><b>{money(l.amount, 2)}</b></td><td className="num">{money(total, 2)}</td>
+                <td className="num">{money(budget, 2)}</td><td className="num">{money(previous, 2)}</td><td className="num"><b>{money(l.amount, 2)}</b></td><td className="num">{money(total, 2)}{budget ? <div className="small muted">{Math.round((total / budget) * 1000) / 10}%</div> : null}</td>
                 <td className="num" style={{ color: budget - total < -0.01 ? "var(--bad)" : undefined }}>{money(budget - total, 2)}</td>
               </tr>
             ))}
@@ -114,6 +123,7 @@ export default async function VoucherPage({ params, searchParams }: { params: Pr
             return (
               <li key={s} className={done ? "done" : next?.step === s ? "now" : ""}>
                 <b>{t(`step_${s}`)}</b>
+                {done?.signature ? <img src={done.signature} alt={`${t(`step_${s}`)}: ${who}`} className="sig-image small" /> : null}
                 <span className="small">{done ? who : "—"}</span>
                 <span className="small muted">{done ? done.at.toISOString().slice(0, 16).replace("T", " ") : ""}</span>
                 {done?.note ? <span className="small muted">{done.note}</span> : null}
@@ -125,27 +135,53 @@ export default async function VoucherPage({ params, searchParams }: { params: Pr
       </div>
 
       {v.status === "draft" && mine && ctx.can("vouchers", "write") ? (
-        <div className="panel row">
-          <form action={submitDraft}><input type="hidden" name="id" value={v.id} /><button type="submit" className="btn primary">{t("pv_submit")}</button></form>
-          <Link className="btn" href={`/vouchers/${v.id}?edit=1`}>{t("edit")}</Link>
-          <form action={deleteVoucher}><input type="hidden" name="id" value={v.id} /><ConfirmButton className="btn ghost danger" confirmLabel={t("confirm")}>{t("delete")}</ConfirmButton></form>
+        <div className="panel stack">
+          <h2 id="sign">{t("step_do_prepared")}</h2>
+          <form action={submitDraft} className="stack">
+            <input type="hidden" name="id" value={v.id} />
+            {pad}
+            <div><button type="submit" className="btn primary">{t("pv_submit")}</button></div>
+          </form>
+          <div className="row">
+            <Link className="btn" href={`/vouchers/${v.id}?edit=1`}>{t("edit")}</Link>
+            <form action={deleteVoucher}><input type="hidden" name="id" value={v.id} /><ConfirmButton className="btn ghost danger" confirmLabel={t("confirm")}>{t("delete")}</ConfirmButton></form>
+          </div>
         </div>
       ) : null}
 
       {next && canSign ? (
         alreadySigned ? <div className="note info small">{t("err_self_approval")}</div> : (
-          <form action={decide} className="panel stack">
-            <h2>{t(`step_do_${next.step}` as "step_do_reviewed")}</h2>
-            <input type="hidden" name="id" value={v.id} />
-            <label className="f">{t("pv_decision_note")}<input id="v-note" name="note" /></label>
-            <div className="row">
-              <button type="submit" name="decision" value="sign" className="btn primary">{t(`step_do_${next.step}` as "step_do_reviewed")}</button>
-              <button type="submit" name="decision" value="return" className="btn">{t("pv_return")}</button>
-              <button type="submit" name="decision" value="cancel" className="btn danger">{t("pv_reject")}</button>
-            </div>
-          </form>
+          <div className="panel stack">
+            <form action={decide} className="stack">
+              <h2 id="sign">{t(`step_do_${next.step}` as "step_do_reviewed")}</h2>
+              <input type="hidden" name="id" value={v.id} />
+              <input type="hidden" name="decision" value="sign" />
+              {pad}
+              <label className="f">{t("pv_decision_note")}<input id="v-note" name="note" /></label>
+              <div><button type="submit" className="btn primary">{t(`step_do_${next.step}` as "step_do_reviewed")}</button></div>
+            </form>
+            <form action={decide} className="stack">
+              <input type="hidden" name="id" value={v.id} />
+              <label className="f">{t("pv_send_back_reason")}<input id="v-reason" name="note" required /></label>
+              <div className="row">
+                <button type="submit" name="decision" value="return" className="btn">{t("pv_return")}</button>
+                <button type="submit" name="decision" value="cancel" className="btn danger">{t("pv_reject")}</button>
+              </div>
+            </form>
+          </div>
         )
       ) : next ? <div className="note info small">{t("pv_waiting_for")}: {t(`step_${next.step}`)}</div> : null}
+
+      {canSendBack ? (
+        <form action={decide} className="panel stack">
+          <input type="hidden" name="id" value={v.id} />
+          <label className="f">{t("pv_send_back_reason")}<input id="v-reason" name="note" required /></label>
+          <div className="row">
+            <button type="submit" name="decision" value="return" className="btn">{t("pv_return")}</button>
+            <button type="submit" name="decision" value="cancel" className="btn danger">{t("pv_reject")}</button>
+          </div>
+        </form>
+      ) : null}
 
       {v.status === "authorized" && canPay && !ctx.has("accounting") ? (
         <form action={pay} className="panel stack">

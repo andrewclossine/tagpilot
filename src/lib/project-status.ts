@@ -2,6 +2,7 @@ import "server-only";
 import ExcelJS from "exceljs";
 import { and, eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
+import type { BudgetPlan } from "@/db/schema";
 import type { Ctx } from "./auth";
 import type { T } from "./i18n";
 import { addDays, daysBetween, round2, today } from "./format";
@@ -62,6 +63,21 @@ export function quartersOf(project: { startDate: string | null; endDate: string 
     out.push({ key: `Y${y}Q${q}`, label: `Y${y} Q${q}`, from, to });
   }
   return out;
+}
+
+/** A line's plan by quarter from its dates: its quantity and budget spread evenly over the quarters it runs in. */
+export function spreadPlan(line: { quantity: number; budget: number; startDate: string | null; endDate: string | null }, quarters: ReturnType<typeof quartersOf>): BudgetPlan {
+  if (!line.startDate || !line.endDate) return {};
+  const on = quarters.filter((q) => q.from && q.to && line.startDate! <= q.to && line.endDate! >= q.from);
+  const plan: BudgetPlan = {};
+  let qtyLeft = line.quantity, moneyLeft = line.budget;
+  on.forEach((q, i) => {
+    const last = i === on.length - 1;
+    const qty = last ? round2(qtyLeft) : round2(line.quantity / on.length), amount = last ? round2(moneyLeft) : round2(line.budget / on.length);
+    plan[q.key] = { qty, amount };
+    qtyLeft -= qty; moneyLeft -= amount;
+  });
+  return plan;
 }
 
 /** The implementation status as an Excel file, laid out like the budget performance sheet. */

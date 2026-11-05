@@ -103,6 +103,7 @@ export const accounts = pgTable("accounts", {
   type: text("type").$type<AccountType>().notNull(),
   subtype: text("subtype").$type<AccountSubtype>(),
   taxLine: text("tax_line"), // income tax working paper line; empty uses the default for the account
+  currency: text("currency"), // a money account held in a foreign currency; empty is the company's own currency
   isActive: boolean("is_active").notNull().default(true),
 }, (t) => [uniqueIndex("accounts_company_code").on(t.companyId, t.code)]);
 
@@ -150,7 +151,7 @@ export type AiInfo = {
   newPartner?: { name: string; tin: string; kind: "customer" | "supplier" } | null;
 };
 
-export type EntrySource = "manual" | "ai" | "invoice" | "invoice_payment" | "bill" | "bill_payment" | "payroll" | "bank" | "reversal" | "voucher" | "receipt";
+export type EntrySource = "manual" | "ai" | "invoice" | "invoice_payment" | "bill" | "bill_payment" | "payroll" | "bank" | "reversal" | "voucher" | "receipt" | "check" | "deposit" | "transfer" | "fx";
 
 export const journalEntries = pgTable("journal_entries", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -190,6 +191,7 @@ export const journalLines = pgTable("journal_lines", {
   projectId: uuid("project_id").references(() => projects.id),
   partnerId: uuid("partner_id").references(() => partners.id),
   reconciled: boolean("reconciled").notNull().default(false),
+  reconciliationId: uuid("reconciliation_id"), // the reconciliation that cleared it, so that it can be undone
 }, (t) => [index("lines_entry").on(t.entryId), index("lines_company_account").on(t.companyId, t.accountId)]);
 
 // ---------- sales & purchases ----------
@@ -242,11 +244,51 @@ export const bills = pgTable("bills", {
   supplierRef: text("supplier_ref").notNull().default(""),
   whtRate: numeric("wht_rate", { precision: 5, scale: 2, mode: "number" }).notNull().default(0),
   goodsReceiptId: uuid("goods_receipt_id"), // the delivery this bill is for: its stock is already in inventory
+  purchaseOrderId: uuid("purchase_order_id"), // the purchase order this bill is for
 }, (t) => [uniqueIndex("bills_company_number").on(t.companyId, t.number)]);
 export const billLines = pgTable("bill_lines", {
   ...docLineColumns(),
   billId: uuid("bill_id").notNull().references(() => bills.id, { onDelete: "cascade" }),
 });
+
+/** An order to a supplier, issued from Procurement for a project or cost center. Nothing is booked until its bill comes. */
+export const purchaseOrders = pgTable("purchase_orders", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  number: text("number").notNull(),
+  partnerId: uuid("partner_id").notNull().references(() => partners.id),
+  projectId: uuid("project_id").notNull().references(() => projects.id),
+  date: date("date", { mode: "string" }).notNull(),
+  expectedDate: date("expected_date", { mode: "string" }),
+  status: text("status").$type<"draft" | "issued" | "closed" | "cancelled">().notNull().default("draft"),
+  notes: text("notes").notNull().default(""),
+  closeNote: text("close_note").notNull().default(""),
+  subtotal: money("subtotal"),
+  vat: money("vat"),
+  total: money("total"),
+  createdBy: uuid("created_by").references(() => users.id),
+  issuedBy: uuid("issued_by").references(() => users.id),
+  issuedAt: timestamp("issued_at", { withTimezone: true }),
+  createdAt: created(),
+}, (t) => [uniqueIndex("purchase_orders_company_number").on(t.companyId, t.number), index("purchase_orders_project").on(t.projectId)]);
+export const purchaseOrderLines = pgTable("purchase_order_lines", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  orderId: uuid("order_id").notNull().references(() => purchaseOrders.id, { onDelete: "cascade" }),
+  lineNo: integer("line_no").notNull(),
+  description: text("description").notNull(),
+  quantity: numeric("quantity", { precision: 18, scale: 3, mode: "number" }).notNull().default(1),
+  unitPrice: money("unit_price"),
+  vatApplies: boolean("vat_applies").notNull().default(true),
+  amount: money("amount"),
+}, (t) => [index("po_lines_order").on(t.orderId)]);
+/** What a bill took from a line of the order. It stays even if the draft bill's lines are edited; deleting the draft frees it. */
+export const purchaseOrderBillings = pgTable("purchase_order_billings", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  billId: uuid("bill_id").notNull().references(() => bills.id, { onDelete: "cascade" }),
+  lineId: uuid("line_id").notNull().references(() => purchaseOrderLines.id, { onDelete: "cascade" }),
+  quantity: numeric("quantity", { precision: 18, scale: 3, mode: "number" }).notNull(),
+  amount: money("amount"),
+}, (t) => [index("po_billings_line").on(t.lineId), index("po_billings_bill").on(t.billId)]);
 
 /** A quotation to a customer. Nothing is booked until it becomes an invoice. */
 export const proformas = pgTable("proformas", {
@@ -327,6 +369,46 @@ export const bankLines = pgTable("bank_lines", {
   importBatch: text("import_batch").notNull(),
   createdAt: created(),
 }, (t) => [index("bank_lines_account").on(t.companyId, t.accountId, t.date)]);
+
+/** A cheque, deposit, transfer or foreign currency movement. The journal entry is the accounting; this is what the bank page lists. */
+export type BankTransactionKind = "check" | "deposit" | "transfer" | "fx_in" | "fx_out" | "fx_exchange" | "fx_revaluation";
+
+export const bankTransactions = pgTable("bank_transactions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  kind: text("kind").$type<BankTransactionKind>().notNull(),
+  number: text("number").notNull().default(""),
+  date: date("date", { mode: "string" }).notNull(),
+  accountId: uuid("account_id").notNull().references(() => accounts.id),
+  toAccountId: uuid("to_account_id").references(() => accounts.id),
+  partnerId: uuid("partner_id").references(() => partners.id),
+  payee: text("payee").notNull().default(""),
+  memo: text("memo").notNull().default(""),
+  amount: money("amount"), // in the company's own currency
+  currency: text("currency").notNull().default(""),
+  foreignAmount: money("foreign_amount"), // moved on accountId, in its currency: money in is positive
+  toForeignAmount: money("to_foreign_amount"), // received on toAccountId, in its currency
+  rate: numeric("rate", { precision: 18, scale: 6, mode: "number" }).notNull().default(0),
+  entryId: uuid("entry_id").notNull().references(() => journalEntries.id),
+  createdBy: uuid("created_by").references(() => users.id),
+  createdAt: created(),
+}, (t) => [
+  index("bank_tx_company_kind").on(t.companyId, t.kind, t.date),
+  uniqueIndex("bank_tx_check_number").on(t.accountId, t.number).where(sql`${t.kind} = 'check'`),
+]);
+
+/** A bank statement agreed with the books. */
+export const bankReconciliations = pgTable("bank_reconciliations", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  accountId: uuid("account_id").notNull().references(() => accounts.id),
+  statementDate: date("statement_date", { mode: "string" }).notNull(),
+  openingBalance: money("opening_balance"),
+  endingBalance: money("ending_balance"),
+  clearedCount: integer("cleared_count").notNull().default(0),
+  createdBy: uuid("created_by").references(() => users.id),
+  createdAt: created(),
+}, (t) => [index("bank_rec_account").on(t.companyId, t.accountId, t.statementDate)]);
 
 // ---------- budgets ----------
 export const budgets = pgTable("budgets", {
@@ -571,8 +653,16 @@ export const voucherSteps = pgTable("voucher_steps", {
   step: text("step").$type<VoucherStep>().notNull(),
   userId: uuid("user_id").notNull().references(() => users.id),
   note: text("note").notNull().default(""),
+  signature: text("signature"), // the picture of the electronic signature, kept with the step it signed
   at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [index("voucher_steps_voucher").on(t.voucherId)]);
+
+/** The signature a person chose to keep for next time. A table of its own, so it is not read with every page. */
+export const userSignatures = pgTable("user_signatures", {
+  userId: uuid("user_id").primaryKey().references(() => users.id, { onDelete: "cascade" }),
+  image: text("image").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
 
 export type DocStatusValue = "submitted" | "pending" | "na";
 
@@ -585,6 +675,18 @@ export const voucherDocuments = pgTable("voucher_documents", {
 }, (t) => [primaryKey({ columns: [t.voucherId, t.docType] })]);
 
 /** What was actually done on a budget line. Set against its budget, this is the activity execution. */
+/** A progress report for a period: what was achieved on the budget lines, weekly to yearly. */
+export const achievementReports = pgTable("achievement_reports", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  projectId: uuid("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  schedule: text("schedule").$type<"weekly" | "biweekly" | "monthly" | "quarterly" | "annually">().notNull(),
+  periodFrom: date("period_from", { mode: "string" }).notNull(),
+  periodTo: date("period_to", { mode: "string" }).notNull(),
+  createdBy: uuid("created_by").references(() => users.id),
+  createdAt: created(),
+}, (t) => [index("achievement_reports_project").on(t.projectId, t.periodFrom)]);
+
 export const achievements = pgTable("achievements", {
   id: uuid("id").primaryKey().defaultRandom(),
   companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
@@ -595,6 +697,7 @@ export const achievements = pgTable("achievements", {
   description: text("description").notNull().default(""),
   attachmentId: uuid("attachment_id").references(() => attachments.id),
   enteredBy: uuid("entered_by").references(() => users.id),
+  reportId: uuid("report_id").references(() => achievementReports.id, { onDelete: "cascade" }),
   createdAt: created(),
 }, (t) => [index("achievements_item").on(t.budgetItemId), index("achievements_project").on(t.projectId)]);
 

@@ -6,7 +6,7 @@ import { requireView } from "@/lib/auth";
 import { getI18n } from "@/lib/i18n";
 import { sp, type SearchParams } from "@/lib/actions";
 import { balances } from "@/lib/ledger";
-import { daysBetween } from "@/lib/format";
+import { daysBetween, isUuid } from "@/lib/format";
 import { Empty, ErrorNote, PageHead, Pill } from "@/components/ui";
 import { bookLine, ignoreLine, importStatement, matchLine, suggestWithAi } from "../actions";
 
@@ -14,6 +14,7 @@ export const metadata = { title: "Bank account" };
 
 export default async function BankAccountPage({ params, searchParams }: { params: Promise<{ accountId: string }>; searchParams: SearchParams }) {
   const { accountId } = await params;
+  if (!isUuid(accountId)) notFound();
   const ctx = await requireView("banking");
   const { t, err, accName, money } = await getI18n();
   const q = await sp(searchParams);

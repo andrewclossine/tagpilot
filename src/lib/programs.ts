@@ -116,7 +116,8 @@ export async function budgetLines(db: Db | Tx, companyId: string) {
 async function nextCode(tx: Tx, companyId: string, projectId: string, parent: LogItem | null, level: LogframeLevel): Promise<string> {
   const siblings = await tx.select({ code: schema.logframeItems.code }).from(schema.logframeItems).where(and(
     eq(schema.logframeItems.companyId, companyId), eq(schema.logframeItems.projectId, projectId),
-    parent ? eq(schema.logframeItems.parentId, parent.id) : sql`${schema.logframeItems.parentId} is null`,
+    // Outcomes are numbered across the whole project, so two goals never give the same code.
+    parent?.level === "goal" ? eq(schema.logframeItems.level, "outcome") : parent ? eq(schema.logframeItems.parentId, parent.id) : sql`${schema.logframeItems.parentId} is null`,
   ));
   const last = Math.max(0, ...siblings.map((s) => Number(s.code.replace(/^[A-Z]+/, "").split(".").pop()) || 0));
   if (level === "goal") return `G${last + 1}`;
@@ -169,8 +170,8 @@ export async function updateLogItem(tx: Tx, companyId: string, userId: string, i
   const budget = line ? lineBudget(input) : 0;
   if (line && budget < await executionOn(tx, id)) throw new UserError("err_budget_below_execution");
   await tx.update(schema.logframeItems).set(line
-    ? { ...input, budget }
-    : { title: input.title, indicator: input.indicator, target: input.target, verification: input.verification, assumptions: input.assumptions, responsible: input.responsible, startDate: input.startDate, endDate: input.endDate },
+    ? { title: input.title, accountId: input.accountId, category: input.category, unit: input.unit, quantity: input.quantity, unitCost: input.unitCost, ownContribution: input.ownContribution, plan: input.plan, responsible: input.responsible, startDate: input.startDate, endDate: input.endDate, baselineQty: input.baselineQty, baselineSpent: input.baselineSpent, budget }
+    : { title: input.title, responsible: input.responsible, startDate: input.startDate, endDate: input.endDate },
   ).where(eq(schema.logframeItems.id, id));
   await audit(tx, companyId, userId, "update", "logframe_item", id, { code: item.code, budget });
 }
@@ -215,11 +216,11 @@ async function lockVoucher(tx: Tx, companyId: string, id: string) {
   return v;
 }
 
-const sign = (tx: Tx, companyId: string, voucherId: string, step: VoucherStep, userId: string, note = "") =>
-  tx.insert(schema.voucherSteps).values({ companyId, voucherId, step, userId, note });
+const sign = (tx: Tx, companyId: string, voucherId: string, step: VoucherStep, userId: string, note = "", signature: string | null = null) =>
+  tx.insert(schema.voucherSteps).values({ companyId, voucherId, step, userId, note, signature });
 
 /** Prepares a draft: it goes for review. Budget and execution are frozen on each line, and overspending is refused. */
-export async function submitVoucher(tx: Tx, companyId: string, userId: string, id: string) {
+export async function submitVoucher(tx: Tx, companyId: string, userId: string, id: string, signature: string) {
   const v = await lockVoucher(tx, companyId, id);
   if (v.status !== "draft") throw new UserError("err_voucher_state");
   if (v.requestedBy !== userId) throw new UserError("err_voucher_not_yours");
@@ -236,7 +237,7 @@ export async function submitVoucher(tx: Tx, companyId: string, userId: string, i
     await tx.update(schema.voucherLines).set({ activityBudget: line.budget, previousExecution: previous }).where(eq(schema.voucherLines.id, l.id));
   }
   await tx.update(schema.paymentVouchers).set({ status: "submitted", submittedAt: new Date() }).where(eq(schema.paymentVouchers.id, id));
-  await sign(tx, companyId, id, "prepared", userId);
+  await sign(tx, companyId, id, "prepared", userId, "", signature);
   await audit(tx, companyId, userId, "prepare", "payment_voucher", v.number, { amount: v.amount });
 }
 
@@ -248,7 +249,7 @@ export const NEXT_STEP: Partial<Record<VoucherStatus, { step: VoucherStep; to: V
 };
 
 /** Signs the next step. One person signs one step of a request, so that four eyes see it; an admin may stand in for anyone. */
-export async function signVoucher(tx: Tx, companyId: string, userId: string, isAdmin: boolean, id: string, note: string) {
+export async function signVoucher(tx: Tx, companyId: string, userId: string, isAdmin: boolean, id: string, note: string, signature: string) {
   const v = await lockVoucher(tx, companyId, id);
   const next = NEXT_STEP[v.status];
   if (!next) throw new UserError("err_voucher_state");
@@ -256,7 +257,7 @@ export async function signVoucher(tx: Tx, companyId: string, userId: string, isA
   const current = steps.filter((s) => (["prepared", "reviewed", "approved", "authorized"] as VoucherStep[]).includes(s.step));
   if (!isAdmin && current.some((s) => s.userId === userId)) throw new UserError("err_self_approval");
   await tx.update(schema.paymentVouchers).set({ status: next.to, decidedBy: userId, decidedAt: new Date(), decisionNote: note }).where(eq(schema.paymentVouchers.id, id));
-  await sign(tx, companyId, id, next.step, userId, note);
+  await sign(tx, companyId, id, next.step, userId, note, signature);
   await audit(tx, companyId, userId, next.step, "payment_voucher", v.number, { note });
 }
 

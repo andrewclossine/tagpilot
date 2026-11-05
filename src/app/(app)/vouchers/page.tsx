@@ -51,13 +51,14 @@ export default async function VouchersPage({ searchParams }: { searchParams: Sea
       <div className="panel">
         {rows.length ? (
           <div className="tbl-wrap"><table>
-            <thead><tr><th>{t("pv_fr_no")}</th><th>{t("date")}</th><th>TSK</th><th>{t("pv_description")}</th><th>{t("pv_payee")}</th><th>{t("pv_requested_by")}</th><th className="num">{t("amount")}</th><th>{t("status")}</th><th>{t("pv_cheque")}</th><th>{t("pv_documents")}</th></tr></thead>
+            <thead><tr><th>{t("pv_fr_no")}</th><th>{t("pv_project_code")}</th><th>{t("date")}</th><th>TSK</th><th>{t("pv_description")}</th><th>{t("pv_payee")}</th><th>{t("pv_requested_by")}</th><th className="num">{t("amount")}</th><th>{t("status")}</th><th>{t("pv_cheque")}</th><th>{t("pv_documents")}</th><th>PDF</th></tr></thead>
             <tbody>
-              {rows.map(({ v, who }) => {
+              {rows.map(({ v, who, project }) => {
                 const d = counted(v.id);
                 return (
                   <tr key={v.id}>
                     <td><Link className="rowlink" href={`/vouchers/${v.id}`}><code className="k">{v.number}</code></Link></td>
+                    <td><code className="k">{project}</code></td>
                     <td style={{ whiteSpace: "nowrap" }}>{v.date}</td>
                     <td className="small">{[...new Set(lines.filter((l) => l.voucherId === v.id).map((l) => l.code))].join(", ")}</td>
                     <td>{v.description.slice(0, 90)}</td><td>{v.payee}</td><td>{who}</td>
@@ -65,10 +66,11 @@ export default async function VouchersPage({ searchParams }: { searchParams: Sea
                     <td><Pill kind={v.status}>{t(`vs_${v.status}`)}</Pill></td>
                     <td>{v.paymentReference}</td>
                     <td className="small">{d.done ? `${d.done} ✓` : ""}{d.waiting ? <span style={{ color: "var(--warn)" }}> {d.waiting} {t("pv_doc_pending").toLowerCase()}</span> : null}</td>
+                    <td><a className="small" href={`/api/pdf/voucher/${v.id}`} download={`FR-${v.number.replace(/[^A-Za-z0-9-]/g, "-")}.pdf`}>PDF</a></td>
                   </tr>
                 );
               })}
-              <tr className="total"><td colSpan={6}>{t("total")}</td><td className="num">{money(total)}</td><td colSpan={3} /></tr>
+              <tr className="total"><td colSpan={7}>{t("total")}</td><td className="num">{money(total)}</td><td colSpan={4} /></tr>
             </tbody>
           </table></div>
         ) : <Empty>{t("nothing_yet")}</Empty>}

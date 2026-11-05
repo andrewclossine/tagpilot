@@ -14,7 +14,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ kind: st
   const fromQ = q.get("from"), toQ = q.get("to");
   const from = isIsoDate(fromQ) ? fromQ : `${today().slice(0, 4)}-01-01`;
   const to = isIsoDate(toQ) ? toQ : today();
-  const report = await buildReport(kind, { companyId: ctx.company.id, from, to, account: q.get("account") ?? undefined, t, accName });
+  const report = await buildReport(kind, { companyId: ctx.company.id, apAccount: ctx.company.settings.apAccount, from, to, account: q.get("account") ?? undefined, t, accName });
   const buffer = await reportWorkbook(report, t(REPORT_TITLES[kind]), ctx.company.name, ctx.company.currency);
   return new Response(new Uint8Array(buffer), {
     headers: {

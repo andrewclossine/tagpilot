@@ -5,7 +5,7 @@ import { and, eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { requireWrite } from "@/lib/auth";
 import { fail } from "@/lib/actions";
-import { isIsoDate, str, today } from "@/lib/format";
+import { isIsoDate, isUuid, str, today } from "@/lib/format";
 import { audit } from "@/lib/audit";
 import { deleteDraft, postDraft, reverseEntry, saveEntry, UserError } from "@/lib/ledger";
 import { getI18n } from "@/lib/i18n";
@@ -42,6 +42,7 @@ export async function setAdjusting(fd: FormData) {
   const ctx = await requireWrite("journal");
   const id = str(fd, "id");
   const value = str(fd, "value") === "1";
+  if (!isUuid(id)) redirect("/journal");
   const db = await getDb();
   await db.transaction(async (tx) => {
     await tx.update(schema.journalEntries).set({ isAdjusting: value }).where(and(eq(schema.journalEntries.id, id), eq(schema.journalEntries.companyId, ctx.company.id)));

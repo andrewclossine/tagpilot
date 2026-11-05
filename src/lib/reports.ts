@@ -5,6 +5,7 @@ import { balances, listAccounts } from "./ledger";
 import { addDays, round2 } from "./format";
 import type { Key, T } from "./i18n";
 import { buildFinancialReport, FINANCIAL_KINDS, FINANCIAL_TITLES, isFinancialKind, ledgerLines, natural, type Column, type Report, type Row } from "./financial-reports";
+import { buildVendorReport, isVendorKind, VENDOR_TITLES, type VendorKind } from "./vendor-reports";
 import { EXPENSE_TAX_LINES, INCOME_TAX_LINES, taxLineKey, taxLineOf, type TaxLine } from "./tax-lines";
 
 const LEDGER_TITLES = {
@@ -13,17 +14,18 @@ const LEDGER_TITLES = {
   "ignored-summary": "r_ignored_summary", "ignored-detail": "r_ignored_detail",
 } as const satisfies Record<string, Key>;
 
-export const REPORT_TITLES: Record<string, Key> = { ...FINANCIAL_TITLES, ...LEDGER_TITLES };
-export type ReportKind = (typeof FINANCIAL_KINDS)[number] | keyof typeof LEDGER_TITLES;
+export const REPORT_TITLES: Record<string, Key> = { ...FINANCIAL_TITLES, ...LEDGER_TITLES, ...VENDOR_TITLES };
+export type ReportKind = (typeof FINANCIAL_KINDS)[number] | keyof typeof LEDGER_TITLES | VendorKind;
 export const isReportKind = (k: string): k is ReportKind => k in REPORT_TITLES;
 
 /** The area a person needs to open a report. */
-export const reportArea = (k: ReportKind) => (k === "audit" ? ("audit" as const) : ("reports" as const));
+export const reportArea = (k: ReportKind) => (k === "audit" ? ("audit" as const) : isVendorKind(k) ? ("purchases" as const) : ("reports" as const));
 
-type Options = { companyId: string; from: string; to: string; account?: string; t: T; accName: (a: { nameEn: string; nameFr: string }) => string };
+type Options = { companyId: string; apAccount: string; from: string; to: string; account?: string; t: T; accName: (a: { nameEn: string; nameFr: string }) => string };
 
 export async function buildReport(kind: ReportKind, o: Options): Promise<Report> {
   if (isFinancialKind(kind)) return buildFinancialReport(kind, o.companyId, o.from, o.to, o.t, o.accName);
+  if (isVendorKind(kind)) return buildVendorReport(kind, o);
   const { companyId, from, to, t, accName } = o;
   const db = await getDb();
   const accounts = await listAccounts(db, companyId);

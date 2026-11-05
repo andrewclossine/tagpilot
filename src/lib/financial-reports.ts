@@ -27,7 +27,7 @@ export type FinancialKind = (typeof FINANCIAL_KINDS)[number];
 export const isFinancialKind = (k: string): k is FinancialKind => (FINANCIAL_KINDS as readonly string[]).includes(k);
 
 /** Reports that show one date rather than a period. */
-export const AS_AT_KINDS: readonly string[] = ["bs", "bs-summary", "bs-compare"];
+export const AS_AT_KINDS: readonly string[] = ["bs", "bs-summary", "bs-compare", "ap", "ap-aging-detail", "ap-balance-summary", "ap-unpaid", "vendors", "po-open"];
 
 export const FINANCIAL_TITLES: Record<FinancialKind, Key> = {
   pl: "r_pl", "pl-detail": "r_pl_detail", "pl-compare": "r_pl_compare", proj: "r_proj", "pl-unclassified": "r_pl_unclassified",
@@ -403,7 +403,9 @@ export async function buildFinancialReport(
       const disposal = total(accounts.filter(isCodeOf("4800", "6800")), moved);
       const cashEffect = (a: Account) => round2(-moved(a));
       const working = accounts.filter((a) => ["receivable", "inventory", "other_current_asset", "payable", "other_current_liability"].includes(place(a)) && moved(a));
-      const operating = round2(result + depreciation + disposal + total(working, cashEffect));
+      // Exchange differences on cash are not cash earned: they get a line of their own (IAS 7.28).
+      const exchange = total(accounts.filter(isCodeOf("4850", "6850")), moved);
+      const operating = round2(result + depreciation + disposal + exchange + total(working, cashEffect));
 
       const longAssets = accounts.filter((a) => place(a) === "non_current_asset");
       const revaluation = accounts.filter(isCodeOf("3300"));
@@ -418,7 +420,7 @@ export async function buildFinancialReport(
 
       const financingAccounts = accounts.filter((a) => (place(a) === "non_current_liability" || (a.type === "equity" && a.code !== "3300")) && moved(a));
       const financing = total(financingAccounts, cashEffect);
-      const net = round2(operating + investing + financing);
+      const net = round2(operating + investing + financing - exchange);
       const opening = total(accounts.filter(isCash), (a) => openMap.get(a.id)?.net ?? 0);
       const closing = round2(opening + total(accounts.filter(isCash), moved));
       const ln = (title: string, v: number, href?: string): Row[] => (v ? [{ style: "line", indent: true, cells: [title, v], links: href ? { 0: href } : undefined }] : []);
@@ -431,6 +433,7 @@ export async function buildFinancialReport(
           { style: "line", indent: true, cells: [t("net_result"), result] },
           ...ln(t("r_cf_depreciation"), depreciation),
           ...ln(t("r_cf_disposal_result"), disposal),
+          ...ln(t("r_cf_fx_remove"), exchange),
           ...working.flatMap((a) => ln(label(a), cashEffect(a), gl(a))),
           sum(t("r_cf_operating_total"), [operating]),
           head(t("r_cf_investing")),
@@ -440,6 +443,7 @@ export async function buildFinancialReport(
           head(t("r_cf_financing")),
           ...financingAccounts.flatMap((a) => ln(label(a), cashEffect(a), gl(a))),
           sum(t("r_cf_financing_total"), [financing]),
+          ...ln(t("r_cf_fx_effect"), -exchange),
           sum(t("r_cf_net"), [net], "total"),
           { style: "line", cells: [t("r_cf_opening"), opening] },
           sum(t("r_cf_closing"), [closing], "total"),
@@ -454,7 +458,7 @@ export async function buildFinancialReport(
 export async function reportWorkbook(report: Report, title: string, company: string, currency: string): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
   wb.creator = "TAGPILOT";
-  const ws = wb.addWorksheet(title.replace(/[\\/*?:[\]]/g, " ").slice(0, 31));
+  const ws = wb.addWorksheet(title.replace(/[\\/*?:[\]]/g, " ").slice(0, 31).replace(/^'+|'+$/g, "") /* Excel refuses a sheet name that starts or ends with an apostrophe */);
   ws.addRow([company]).font = { bold: true, size: 14 };
   ws.addRow([title]).font = { bold: true };
   ws.addRow([`${report.period} · ${currency}`]);

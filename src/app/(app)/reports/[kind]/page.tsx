@@ -8,6 +8,7 @@ import { sp, type SearchParams } from "@/lib/actions";
 import { balances, listAccounts } from "@/lib/ledger";
 import { daysBetween, isIsoDate, round2, today } from "@/lib/format";
 import { AS_AT_KINDS, natural } from "@/lib/financial-reports";
+import { isVendorKind } from "@/lib/vendor-reports";
 import { buildReport, isReportKind, REPORT_TITLES, reportArea, type ReportKind } from "@/lib/reports";
 import { taxLineKey, taxLineOf, taxLinesFor } from "@/lib/tax-lines";
 import { saveTaxLines } from "../actions";
@@ -17,7 +18,7 @@ import { Empty, PageHead } from "@/components/ui";
 
 export const metadata = { title: "Reports" };
 
-const OTHER_KINDS = { vat: "r_vat", ar: "r_ar", ap: "r_ap" } as const satisfies Record<string, Key>;
+const OTHER_KINDS = { vat: "r_vat", ar: "r_ar" } as const satisfies Record<string, Key>;
 const KINDS: Record<string, Key> = { ...REPORT_TITLES, ...OTHER_KINDS };
 type Kind = keyof typeof OTHER_KINDS | ReportKind;
 
@@ -40,7 +41,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
   let note: string | undefined;
 
   if (isReportKind(kind)) {
-    const report = await buildReport(kind, { companyId: ctx.company.id, from, to, account: q("account"), t, accName });
+    const report = await buildReport(kind, { companyId: ctx.company.id, apAccount: ctx.company.settings.apAccount, from, to, account: q("account"), t, accName });
     periodLabel = report.period;
     note = report.note;
     const picker = kind === "gl" || kind === "txn-account" ? (
@@ -115,7 +116,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
     <div className="stack">
       <PageHead title={t(KINDS[kind])}>
         <div className="row noprint">
-          {ctx.can("reports") ? <Link className="btn sm" href="/reports">{t("r_all_reports")}</Link> : null}
+          {ctx.can("reports") ? <Link className="btn sm" href="/reports">{t("r_all_reports")}</Link> : ctx.can("purchases") && isVendorKind(kind) ? <Link className="btn sm" href="/purchases/reports">{t("nav_vendor_reports")}</Link> : null}
           {isReportKind(kind) ? <a className="btn sm" href={`/api/export/report/${kind}?${qs}${q("account") ? `&account=${q("account")}` : ""}`}>{t("r_download_excel")}</a> : null}
           <PrintButton label={t("r_print")} />
         </div>

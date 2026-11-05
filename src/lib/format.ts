@@ -25,7 +25,12 @@ export function lastDayOfMonth(month: string): string {
   return `${month}-${String(new Date(Date.UTC(y, m, 0)).getUTCDate()).padStart(2, "0")}`;
 }
 
-export const isIsoDate = (s: unknown): s is string => typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s);
+/** A real calendar date written as YYYY-MM-DD: 2026-13-45 and 2026-02-30 are refused. */
+export const isIsoDate = (s: unknown): s is string => {
+  if (typeof s !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const d = new Date(`${s}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
+};
 
 export function str(fd: FormData, key: string): string {
   const v = fd.get(key);

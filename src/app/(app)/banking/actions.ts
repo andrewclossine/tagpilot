@@ -5,7 +5,10 @@ import { and, eq, inArray } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { requireWrite } from "@/lib/auth";
 import { fail, withParam } from "@/lib/actions";
-import { str } from "@/lib/format";
+import { isIsoDate, isUuid, parseAmount, str, today } from "@/lib/format";
+import { addLine } from "@/lib/banking-form";
+import { finishReconciliation, foreignExchange, foreignMove, makeDeposit, revalue, transferFunds, undoReconciliation, writeCheck } from "@/lib/banking";
+import { CURRENCIES } from "@/lib/template";
 import { saveEntry, UserError } from "@/lib/ledger";
 import { parseStatement } from "@/lib/statement";
 import { suggestBankAccounts } from "@/lib/ai";
@@ -144,4 +147,156 @@ export async function reopenLines(fd: FormData) {
     .where(and(eq(schema.bankLines.companyId, ctx.company.id), inArray(schema.bankLines.id, ids), eq(schema.bankLines.status, "ignored")));
   revalidatePath(back);
   redirect(back);
+}
+
+const refreshBank = () => { revalidatePath("/banking", "layout"); revalidatePath("/journal"); };
+const dateOf = (fd: FormData) => { const d = str(fd, "date") || today(); if (!isIsoDate(d)) throw new UserError("err_required"); return d; };
+
+/** The partner chosen on a form, if it is this company's, and the name to print. */
+async function whoOf(companyId: string, fd: FormData) {
+  const db = await getDb();
+  const id = str(fd, "partnerId");
+  let name = str(fd, "payee");
+  if (!isUuid(id)) return { partnerId: null, payee: name };
+  const [p] = await db.select().from(schema.partners).where(and(eq(schema.partners.id, id), eq(schema.partners.companyId, companyId)));
+  if (!p) throw new UserError("err_not_found");
+  name = name || p.name;
+  return { partnerId: p.id, payee: name };
+}
+
+export async function saveCheck(fd: FormData) {
+  const ctx = await requireWrite("banking");
+  const back = "/banking/check";
+  try {
+    const date = dateOf(fd), who = await whoOf(ctx.company.id, fd);
+    if (!who.payee) throw new UserError("err_required");
+    const lines = addLine(fd);
+    const db = await getDb();
+    await db.transaction((tx) => writeCheck(tx, ctx.company.id, ctx.user.id, str(fd, "accountId"), { date, reference: str(fd, "reference"), memo: str(fd, "memo"), ...who }, lines));
+  } catch (e) { fail(e, back); }
+  refreshBank();
+  redirect(withParam(back, "saved", "1"));
+}
+
+export async function saveDeposit(fd: FormData) {
+  const ctx = await requireWrite("banking");
+  const back = "/banking/deposit";
+  try {
+    const date = dateOf(fd), who = await whoOf(ctx.company.id, fd);
+    const lines = addLine(fd);
+    const db = await getDb();
+    await db.transaction((tx) => makeDeposit(tx, ctx.company.id, ctx.user.id, str(fd, "accountId"), { date, reference: str(fd, "reference"), memo: str(fd, "memo"), ...who }, lines));
+  } catch (e) { fail(e, back); }
+  refreshBank();
+  redirect(withParam(back, "saved", "1"));
+}
+
+export async function saveTransfer(fd: FormData) {
+  const ctx = await requireWrite("banking");
+  const back = "/banking/transfer";
+  try {
+    const date = dateOf(fd);
+    const db = await getDb();
+    await db.transaction((tx) => transferFunds(tx, ctx.company.id, ctx.user.id, str(fd, "fromId"), str(fd, "toId"), parseAmount(str(fd, "amount")), { date, reference: str(fd, "reference"), memo: str(fd, "memo") }));
+  } catch (e) { fail(e, back); }
+  refreshBank();
+  redirect(withParam(back, "saved", "1"));
+}
+
+export async function saveReconciliation(fd: FormData) {
+  const ctx = await requireWrite("banking");
+  const accountId = str(fd, "accountId"), date = str(fd, "date"), ending = parseAmount(str(fd, "ending"));
+  const back = `/banking/reconcile?account=${accountId}&date=${date}&ending=${ending}`;
+  try {
+    if (!isUuid(accountId) || !isIsoDate(date)) throw new UserError("err_required");
+    const ids = fd.getAll("line").map(String);
+    if (ids.some((id) => !isUuid(id))) throw new UserError("err_not_found");
+    const db = await getDb();
+    await db.transaction((tx) => finishReconciliation(tx, ctx.company.id, ctx.user.id, accountId, date, ending, ids));
+  } catch (e) { fail(e, back); }
+  refreshBank();
+  redirect(`/banking/reconcile?account=${accountId}&saved=1`);
+}
+
+export async function undoReconcile(fd: FormData) {
+  const ctx = await requireWrite("banking");
+  const back = "/banking/reconcile";
+  try {
+    const id = str(fd, "id");
+    if (!isUuid(id)) throw new UserError("err_not_found");
+    const db = await getDb();
+    await db.transaction((tx) => undoReconciliation(tx, ctx.company.id, ctx.user.id, id));
+  } catch (e) { fail(e, back); }
+  refreshBank();
+  redirect(back);
+}
+
+const rateOf = (v: string) => { const n = Number(v.replace(/[\s,]/g, "")); return Number.isFinite(n) ? Math.round(n * 1e6) / 1e6 : 0; };
+
+/** Opens a bank account held in a foreign currency. */
+export async function addForeignAccount(fd: FormData) {
+  const ctx = await requireWrite("banking");
+  const back = "/banking/foreign";
+  try {
+    const code = str(fd, "code"), name = str(fd, "name"), currency = str(fd, "currency");
+    if (!code || !name) throw new UserError("err_required");
+    if (!CURRENCIES.includes(currency) || currency === ctx.company.currency) throw new UserError("err_required");
+    const db = await getDb();
+    const [used] = await db.select({ id: schema.accounts.id }).from(schema.accounts).where(and(eq(schema.accounts.companyId, ctx.company.id), eq(schema.accounts.code, code)));
+    if (used) throw new UserError("err_code_taken");
+    await db.transaction(async (tx) => {
+      await tx.insert(schema.accounts).values({ companyId: ctx.company.id, code, nameEn: name, nameFr: name, type: "asset", subtype: "bank", currency });
+      await audit(tx, ctx.company.id, ctx.user.id, "create", "foreign_account", code, { currency });
+    });
+  } catch (e) { fail(e, back); }
+  refreshBank();
+  redirect(withParam(back, "saved", "1"));
+}
+
+export async function saveForeignMove(fd: FormData) {
+  const ctx = await requireWrite("banking");
+  const back = "/banking/foreign";
+  try {
+    const date = dateOf(fd), who = await whoOf(ctx.company.id, fd);
+    const projectId = isUuid(str(fd, "projectId")) ? str(fd, "projectId") : null;
+    const db = await getDb();
+    await db.transaction((tx) => foreignMove(tx, ctx.company.id, ctx.user.id, {
+      date, reference: str(fd, "reference"), memo: str(fd, "memo"), ...who, accountId: str(fd, "accountId"), direction: str(fd, "direction") === "out" ? "out" : "in",
+      foreign: parseAmount(str(fd, "foreign")), rate: rateOf(str(fd, "rate")), counterId: str(fd, "counterId"), projectId,
+    }));
+  } catch (e) { fail(e, back); }
+  refreshBank();
+  redirect(withParam(back, "saved", "1"));
+}
+
+export async function saveForeignExchange(fd: FormData) {
+  const ctx = await requireWrite("banking");
+  const back = "/banking/foreign";
+  try {
+    const date = dateOf(fd);
+    const db = await getDb();
+    await db.transaction((tx) => foreignExchange(tx, ctx.company.id, ctx.user.id, {
+      date, reference: str(fd, "reference"), memo: str(fd, "memo"), fromId: str(fd, "fromId"), toId: str(fd, "toId"),
+      sent: parseAmount(str(fd, "sent")), received: parseAmount(str(fd, "received")), rate: rateOf(str(fd, "rate")),
+    }));
+  } catch (e) { fail(e, back); }
+  refreshBank();
+  redirect(withParam(back, "saved", "1"));
+}
+
+export async function saveRevaluation(fd: FormData) {
+  const ctx = await requireWrite("banking");
+  const back = "/banking/foreign";
+  const { t } = await getI18n();
+  try {
+    const date = dateOf(fd);
+    const rates = new Map<string, number>();
+    for (const [k, v] of fd.entries()) if (k.startsWith("rate_") && String(v).trim()) rates.set(k.slice(5), rateOf(String(v)));
+    if (!rates.size) throw new UserError("err_fx_rate");
+    if ([...rates.keys()].some((id) => !isUuid(id))) throw new UserError("err_account");
+    const db = await getDb();
+    await db.transaction((tx) => revalue(tx, ctx.company.id, ctx.user.id, date, rates, t("bk_fx_revalue")));
+  } catch (e) { fail(e, back); }
+  refreshBank();
+  redirect(withParam(back, "saved", "1"));
 }

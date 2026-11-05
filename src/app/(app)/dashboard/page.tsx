@@ -78,11 +78,7 @@ export default async function Dashboard() {
   const cur = ctx.company.currency;
   return (
     <div className="stack">
-      <PageHead title={ctx.company.name}>
-        {ctx.can("journal", "write") ? <Link className="btn primary" href="/scan">{t("qa_scan")}</Link> : null}
-        {ctx.can("sales", "write") ? <Link className="btn" href="/sales/invoices/new">{t("qa_invoice")}</Link> : null}
-        {ctx.can("purchases", "write") ? <Link className="btn" href="/purchases/bills/new">{t("qa_bill")}</Link> : null}
-      </PageHead>
+      <PageHead title={ctx.company.name} />
 
       {lowStock.length ? (
         <Link href="/inventory" className="note warn small" style={{ textDecoration: "none" }}>

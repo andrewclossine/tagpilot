@@ -92,6 +92,34 @@
       "when": 1793887038173,
       "tag": "0012_report_tax_lines_adjusting",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1793888624392,
+      "tag": "0013_fund_request_signatures",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1793890145221,
+      "tag": "0014_banking_transactions_reconcile_fx",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1793892035132,
+      "tag": "0015_purchase_orders",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1793893373239,
+      "tag": "0016_achievement_reports_template",
+      "breakpoints": true
     }
   ]
 }

@@ -16,6 +16,7 @@ export function appWorkspaces(ctx: Ctx, t: T): (Workspace & { key: AppKey })[] {
   const scan: NavItem[] = ctx.can("journal", "write") ? [{ href: "/scan", label: t("nav_ai") }] : [];
   const buying: NavItem[] = [
     ...link("procurement", "/procurement", t("nav_tenders")),
+    ...link("procurement", "/procurement/orders", t("nav_purchase_orders")),
     ...link("procurement", "/procurement/suppliers", t("nav_supplier_accounts")),
     ...link("contracts", "/contracts", t("nav_contracts")),
     ...(ctx.can("procurement") ? link("partners", "/partners", t("nav_partners")) : []),
@@ -37,25 +38,29 @@ export function appWorkspaces(ctx: Ctx, t: T): (Workspace & { key: AppKey })[] {
           ...scan,
         ] : []),
         ...group(t("nav_purchases"), ctx.can("purchases") ? [
+          ...(ctx.can("purchases", "write") ? link("purchases", "/purchases/bills/new", t("nav_enter_bill")) : []),
+          ...link("purchases", "/purchases/pay", t("nav_pay_bill")),
+          ...link("purchases", "/purchases/receive-items", t("nav_receive_items")),
+          ...link("purchases", "/purchases/bill-received", t("nav_bill_received")),
+          ...(ctx.has("procurement") ? link("purchases", "/purchases/orders", t("nav_purchase_orders")) : []),
           ...link("purchases", "/purchases/bills", t("nav_bills")),
           ...(ctx.has("procurement") ? link("purchases", "/purchases/received-bills", t("nav_receive_bill")) : []),
-          ...link("purchases", "/purchases/receive-items", t("nav_receive_items")),
           ...link("partners", "/purchases/suppliers", t("nav_suppliers")),
           ...(ctx.has("procurement") ? link("purchases", "/purchases/tenders", t("nav_tender_report")) : []),
+          ...link("purchases", "/purchases/reports", t("nav_vendor_reports")),
           ...scan,
         ] : []),
-        ...top("banking", "/banking", t("nav_banking")),
+        ...group(t("nav_banking"), ctx.can("banking") ? [
+          ...link("banking", "/banking", t("nav_bank_accounts")),
+          ...link("banking", "/banking/check", t("nav_write_check")),
+          ...link("banking", "/banking/deposit", t("nav_make_deposit")),
+          ...link("banking", "/banking/transfer", t("nav_transfer_funds")),
+          ...link("banking", "/banking/reconcile", t("nav_reconcile")),
+          ...link("banking", "/banking/foreign", t("nav_foreign")),
+        ] : []),
         ...group(t("nav_inventory"), ctx.can("inventory") ? [
           ...link("inventory", "/inventory", t("nav_items")),
-          ...link("assets", "/assets/depreciation", t("nav_depreciation")),
-          ...link("assets", "/assets/dispose", t("nav_dispose_asset")),
         ] : []),
-        ...group(t("nav_assets"), [
-          ...link("assets", "/assets", t("nav_asset_register")),
-          ...link("assets", "/assets/depreciation", t("nav_depreciation")),
-          ...link("assets", "/assets/schedule", t("asset_schedule")),
-          ...link("assets", "/assets/dispose", t("nav_dispose_asset")),
-        ]),
         ...group(t("nav_employees"), [
           ...link("payroll", "/payroll?tab=employees", t("nav_employees")),
           ...link("payroll", "/payroll", t("nav_payroll")),
@@ -64,6 +69,10 @@ export function appWorkspaces(ctx: Ctx, t: T): (Workspace & { key: AppKey })[] {
           ...link("journal", "/journal", t("nav_journal")),
           ...link("accounts", "/accounts", t("nav_coa")),
           ...link("budgets", "/budgets", t("nav_budgets")),
+          ...link("assets", "/assets", t("nav_asset_register")),
+          ...link("assets", "/assets/depreciation", t("nav_depreciation")),
+          ...link("assets", "/assets/schedule", t("asset_schedule")),
+          ...link("assets", "/assets/dispose", t("nav_dispose_asset")),
           ...link("reports", "/reports", t("nav_reports")),
         ]),
       ],
@@ -72,7 +81,7 @@ export function appWorkspaces(ctx: Ctx, t: T): (Workspace & { key: AppKey })[] {
       key: "projects", label: t("module_projects"), items: [
         ...link("projects", "/projects", t("nav_projects")),
         ...link("vouchers", "/vouchers", t("nav_vouchers")),
-        ...(ctx.can("projects", "write") ? [{ href: "/projects/import", label: t("im_title") }] : []),
+        ...(ctx.can("projects", "write") ? [{ href: "/projects/import", label: t("tm_title") }] : []),
       ],
     },
     {

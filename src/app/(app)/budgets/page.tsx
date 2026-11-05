@@ -5,7 +5,7 @@ import { getDb, schema } from "@/db";
 import { requireView, requireWrite } from "@/lib/auth";
 import { getI18n } from "@/lib/i18n";
 import { sp, type SearchParams } from "@/lib/actions";
-import { parseAmount, str, today } from "@/lib/format";
+import { isUuid, parseAmount, str, today } from "@/lib/format";
 import { balances } from "@/lib/ledger";
 import { audit } from "@/lib/audit";
 import { PageHead } from "@/components/ui";
@@ -34,7 +34,7 @@ export default async function BudgetsPage({ searchParams }: { searchParams: Sear
   const { t, accName, money } = await getI18n();
   const q = await sp(searchParams);
   const year = /^\d{4}$/.test(q("year")) ? Number(q("year")) : Number(today().slice(0, 4));
-  const projectId = q("project") || null;
+  const projectId = isUuid(q("project")) ? q("project") : null;
   const db = await getDb();
   const [accounts, projects, budgetRows, actual] = await Promise.all([
     db.select().from(schema.accounts).where(eq(schema.accounts.companyId, ctx.company.id)).orderBy(schema.accounts.code),

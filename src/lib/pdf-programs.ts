@@ -36,15 +36,15 @@ export async function buildVoucherPdf(ctx: Ctx, id: string) {
   const pdf = await voucherPdf({
     company: await printedCompany(ctx), lang,
     labels: {
-      title: t("pv_voucher"), number: t("pv_fr_no"), date: t("date"), status: t("status"), project: t("project"), line: t("pv_budget_line"), payee: t("pv_payee"),
+      title: t("pv_voucher"), number: t("pv_fr_no"), projectCode: t("pv_project_code"), date: t("date"), status: t("status"), project: t("project"), line: t("pv_budget_line"), payee: t("pv_payee"),
       amountRequested: t("pv_amount_requested"), activityBudget: t("pv_activity_budget"), previousExecution: t("pv_previous_execution"), totalExecution: t("pv_total_execution"),
-      balance: t("balance_left"), description: t("pv_description"), signature: t("pv_signature"), total: t("total"), footer: t("pdf_footer"),
+      balance: t("balance_left"), description: t("pv_description"), signature: t("pv_signature"), signedElectronically: t("sig_electronic"), total: t("total"), footer: t("pdf_footer"),
     },
     voucher: { number: v.number, date: v.date, status: t(`vs_${v.status}`), amount: v.amount, description: v.description, payee: v.payee },
-    project: `${project.code} - ${project.name}`, lines,
+    projectCode: project.code, project: project.name, lines,
     signatures: (["prepared", "reviewed", "approved", "authorized"] as const).map((s) => {
       const done = steps.find((x) => x.s.step === s);
-      return { label: t(`step_${s}`), name: done?.name ?? "", at: done ? done.s.at.toISOString().slice(0, 10) : "" };
+      return { label: t(`step_${s}`), name: done?.name ?? "", at: done ? `${done.s.at.toISOString().slice(0, 16).replace("T", " ")} UTC` : "", image: done?.s.signature ?? null };
     }),
   });
   return { pdf, filename: `${v.number.replace(/[^A-Za-z0-9-]/g, "-")}.pdf` };
