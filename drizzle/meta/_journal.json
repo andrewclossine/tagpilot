@@ -127,6 +127,13 @@
       "when": 1793954785647,
       "tag": "0017_partner_details",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1793959488287,
+      "tag": "0018_company_suspension",
+      "breakpoints": true
     }
   ]
 }

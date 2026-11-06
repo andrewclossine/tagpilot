@@ -83,6 +83,8 @@ export const getCtx = cache(async (): Promise<Ctx> => {
   if (!rows.length) redirect("/onboarding");
   const wanted = (await cookies()).get(COMPANY_COOKIE)?.value;
   const row = rows.find((r) => r.company.id === wanted) ?? rows[0];
+  // A company the platform owner suspended cannot be used at all, until it is reactivated.
+  if (row.company.suspendedAt) redirect("/suspended");
   // A company is paid up while its last paid period has not ended; otherwise the free trial applies.
   const paid = !!row.company.paidUntil && row.company.paidUntil.getTime() > Date.now();
   const trialDaysLeft = paid ? null : Math.max(0, Math.ceil((row.company.trialEndsAt.getTime() - Date.now()) / 86400000));

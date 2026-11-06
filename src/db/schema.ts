@@ -75,6 +75,8 @@ export const companies = pgTable("companies", {
   plan: text("plan").$type<"trial" | "active" | "expired">().notNull().default("trial"),
   trialEndsAt: timestamp("trial_ends_at", { withTimezone: true }).notNull().default(sql`now() + interval '30 days'`),
   paidUntil: timestamp("paid_until", { withTimezone: true }), // end of the last paid subscription period
+  suspendedAt: timestamp("suspended_at", { withTimezone: true }), // set by the platform owner: nobody in it can use TAGPILOT
+  suspendedReason: text("suspended_reason").notNull().default(""),
   logoAttachmentId: uuid("logo_attachment_id"), // shown on PDFs and in the sidebar
   // What the organisation chose, and what its last payment covers. Organisations from before modules keep everything.
   modules: jsonb("modules").$type<ModuleKey[]>().notNull().default(["accounting", "projects", "procurement"]),

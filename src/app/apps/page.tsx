@@ -6,6 +6,7 @@ import { getI18n } from "@/lib/i18n";
 import { setLang, signOut } from "@/app/session-actions";
 import { AppIcon } from "@/components/AppIcon";
 import { Logo } from "@/components/Logo";
+import { isPlatformOwner } from "@/lib/platform";
 
 export const metadata = { title: "Apps" };
 
@@ -21,6 +22,7 @@ export default async function AppsPage() {
         <Logo size={30} />
         <span className="spacer" />
         <span className="small muted">{ctx.user.name} · {ctx.company.name}</span>
+        {isPlatformOwner(ctx.user) ? <Link className="btn sm" href="/platform">{t("plt_title")}</Link> : null}
         <form action={setLang} className="row" style={{ gap: 6 }}>
           <input type="hidden" name="back" value="/apps" />
           <button type="submit" name="lang" value="en" className="btn sm" aria-pressed={lang === "en"}>EN</button>
