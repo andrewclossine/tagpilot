@@ -16,7 +16,8 @@ const hashToken = (token: string) => crypto.createHash("sha256").update(token).d
 
 /**
  * The first platform owner. While there is none, an existing ordinary account whose email is in PLATFORM_OWNER_EMAILS
- * (set on the server only) and that belongs to no organisation becomes the platform owner, with its password.
+ * (set on the server only) gives the platform owner their name, email and password. An account that already runs an
+ * organisation keeps it and stays as it is; one with no organisation is moved into the platform.
  * Nobody can claim the platform from the web.
  */
 async function ensureFirstOwner() {
@@ -27,10 +28,10 @@ async function ensureFirstOwner() {
   for (const email of emails) {
     const [u] = await db.select().from(schema.users).where(eq(sql`lower(${schema.users.email})`, email));
     if (!u) continue;
+    await db.insert(schema.platformAdmins).values({ email, name: u.name, passwordHash: u.passwordHash }).onConflictDoNothing();
     const [member] = await db.select().from(schema.memberships).where(eq(schema.memberships.userId, u.id)).limit(1);
     if (member) continue;
-    await db.insert(schema.platformAdmins).values({ email, name: u.name, passwordHash: u.passwordHash }).onConflictDoNothing();
-    // The ordinary account is moved, not copied, so its email is free for an organisation's account.
+    // With no organisation, the ordinary account is moved, not copied, so its email is free for an organisation's account.
     // If something still points to it, it stays; the platform account works either way.
     try { await db.delete(schema.users).where(eq(schema.users.id, u.id)); } catch { /* kept */ }
   }
