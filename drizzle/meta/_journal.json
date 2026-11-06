@@ -120,6 +120,13 @@
       "when": 1793893373239,
       "tag": "0016_achievement_reports_template",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1793954785647,
+      "tag": "0017_partner_details",
+      "breakpoints": true
     }
   ]
 }

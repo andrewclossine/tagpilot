@@ -115,7 +115,18 @@ export const partners = pgTable("partners", {
   tin: text("tin").notNull().default(""),
   phone: text("phone").notNull().default(""),
   email: text("email").notNull().default(""),
-  address: text("address").notNull().default(""),
+  address: text("address").notNull().default(""), // the first line of the fiscal address
+  address2: text("address2").notNull().default(""),
+  address3: text("address3").notNull().default(""),
+  website: text("website").notNull().default(""),
+  workPhone: text("work_phone").notNull().default(""),
+  bankAccount: text("bank_account").notNull().default(""),
+  paymentTerms: integer("payment_terms").notNull().default(0), // days to pay; 0 uses 30 days
+  creditLimit: money("credit_limit"), // 0 means no limit
+  taxCode: text("tax_code").$type<"standard" | "zero" | "exempt">().notNull().default("standard"),
+  openingBalance: money("opening_balance"),
+  openingDate: date("opening_date", { mode: "string" }),
+  openingDocId: uuid("opening_doc_id"), // the invoice or bill that carries the opening balance
   linkedCompanyId: uuid("linked_company_id"), // a supplier organisation on TAGPILOT that bid on an advert
   createdAt: created(),
 }, (t) => [index("partners_company").on(t.companyId), uniqueIndex("partners_linked_company").on(t.companyId, t.linkedCompanyId)]);

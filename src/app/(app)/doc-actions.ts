@@ -34,6 +34,8 @@ export async function saveDoc(fd: FormData) {
     }, lines, vatRate);
     const [p] = await db.select().from(schema.partners).where(and(eq(schema.partners.id, partnerId), eq(schema.partners.companyId, ctx.company.id)));
     if (!p) throw new UserError("err_required");
+    // A zero-rated or exempt customer or supplier is charged no VAT.
+    if (p.taxCode !== "standard") for (const l of lines) l.vatApplies = false;
     try {
       savedId = await db.transaction(async (tx) => {
         const docId = await draft(tx);

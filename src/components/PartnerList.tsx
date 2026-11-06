@@ -67,17 +67,47 @@ export async function PartnerList({ ctx, only, back, title, error, editId }: {
           <h2>{editing ? `${t("edit")}: ${editing.name}` : t("add")}</h2>
           {editing ? <input type="hidden" name="id" value={editing.id} /> : null}
           <input type="hidden" name="back" value={back} />
+          <h3 className="small muted">{t("pt_identity")}</h3>
           <div className="fields">
-            <label className="f">{t("name")}<input id="p-name" name="name" defaultValue={editing?.name} required /></label>
+            <label className="f">{t(only === "supplier" ? "pt_supplier_name" : "pt_customer_name")}<input id="p-name" name="name" defaultValue={editing?.name} required /></label>
             <label className="f">{t("kind")}
               <select id="p-kind" name="kind" defaultValue={editing?.kind ?? only ?? "customer"}>
                 <option value="customer">{t("customer")}</option><option value="supplier">{t("supplier")}</option><option value="both">{t("both")}</option>
               </select>
             </label>
+          </div>
+          <h3 className="small muted">{t("pt_opening")}</h3>
+          {editing?.openingDocId ? (
+            <div className="small">{t("pt_opening_done")} {money(editing.openingBalance)} · {editing.openingDate} · <a href={`${editing.kind === "supplier" ? "/purchases/bills" : "/sales/invoices"}/${editing.openingDocId}`}>{t("pt_opening_doc")} →</a></div>
+          ) : (
+            <div className="fields">
+              <label className="f">{t(only === "supplier" ? "pt_opening_owe" : "pt_opening_owed")}<input id="p-opening" name="openingBalance" className="num" inputMode="decimal" /></label>
+              <label className="f">{t("pt_as_of")}<input id="p-opening-date" name="openingDate" type="date" /></label>
+            </div>
+          )}
+          <h3 className="small muted">{t("pt_payment")}</h3>
+          <div className="fields">
+            <label className="f">{t("pt_bank_account")}<input id="p-bank" name="bankAccount" defaultValue={editing?.bankAccount} /></label>
+            <label className="f">{t("pt_terms")}<input id="p-terms" name="paymentTerms" className="num" inputMode="numeric" defaultValue={editing?.paymentTerms || ""} placeholder="30" /></label>
+            <label className="f">{t("pt_credit_limit")}<input id="p-limit" name="creditLimit" className="num" inputMode="decimal" defaultValue={editing?.creditLimit || ""} /></label>
+          </div>
+          <h3 className="small muted">{t("pt_tax")}</h3>
+          <div className="fields">
             <label className="f">{t("tin")}<input id="p-tin" name="tin" defaultValue={editing?.tin} inputMode="numeric" /></label>
+            <label className="f">{t("pt_tax_code")}
+              <select id="p-tax" name="taxCode" defaultValue={editing?.taxCode ?? "standard"}>
+                <option value="standard">{t("pt_tax_standard")}</option><option value="zero">{t("pt_tax_zero")}</option><option value="exempt">{t("pt_tax_exempt")}</option>
+              </select></label>
+          </div>
+          <h3 className="small muted">{t("pt_address")}</h3>
+          <div className="fields">
             <label className="f">{t("phone")}<input id="p-phone" name="phone" defaultValue={editing?.phone} /></label>
+            <label className="f">{t("pt_work_phone")}<input id="p-work" name="workPhone" defaultValue={editing?.workPhone} /></label>
             <label className="f">{t("email")}<input id="p-email" name="email" type="email" defaultValue={editing?.email} /></label>
-            <label className="f">{t("address")}<input id="p-address" name="address" defaultValue={editing?.address} /></label>
+            <label className="f">{t("pt_website")}<input id="p-web" name="website" defaultValue={editing?.website} placeholder="www." /></label>
+            <label className="f">{t("pt_address1")}<input id="p-address" name="address" defaultValue={editing?.address} /></label>
+            <label className="f">{t("pt_address2")}<input id="p-address2" name="address2" defaultValue={editing?.address2} /></label>
+            <label className="f">{t("pt_address3")}<input id="p-address3" name="address3" defaultValue={editing?.address3} /></label>
           </div>
           <div className="row"><button type="submit" className="btn primary">{t("save")}</button>{editing ? <a className="btn ghost" href={back}>{t("cancel")}</a> : null}</div>
         </form>

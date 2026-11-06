@@ -8,6 +8,7 @@ import { bookOptions, docLabels } from "@/lib/data";
 import { moneyAccounts } from "@/lib/ledger";
 import { addDays, daysBetween, round2, today } from "@/lib/format";
 import { ConfirmButton, DocLinesEditor, type DLine, type ItemOpt } from "./editors";
+import { PartnerPicker } from "./PartnerPicker";
 import { Empty, ErrorNote, PageHead, Pill, Tabs } from "./ui";
 import { deleteDocDraft, payDocAction, saveDoc, voidDocAction } from "@/app/(app)/doc-actions";
 import { sendInvoiceEmail } from "@/app/(app)/send-actions";
@@ -95,16 +96,14 @@ export async function DocForm({ kind, ctx, doc, lines, error }: { kind: DocKind;
         <Link className="btn ghost" href={docBase(kind)}>{t("back")}</Link>
       </PageHead>
       <ErrorNote message={error} />
-      {!partners.length ? <div className="note warn small"><Link href={kind === "invoice" ? "/sales/customers" : "/purchases/suppliers"}>{t(kind === "invoice" ? "nav_customers" : "nav_suppliers")} →</Link></div> : null}
+      {doc && kind === "invoice" ? await creditWarning(ctx.company.id, doc.partnerId, doc.total, doc.id) : null}
       <form action={saveDoc} className="panel stack">
         <input type="hidden" name="kind" value={kind} />
         {doc ? <input type="hidden" name="id" value={doc.id} /> : null}
         <div className="fields">
           <label className="f">{t(kind === "invoice" ? "customer" : "supplier")}
-            <select id="partnerId" name="partnerId" defaultValue={doc?.partnerId ?? ""} required>
-              <option value="">—</option>
-              {partners.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
+            <PartnerPicker kind={kind === "invoice" ? "customer" : "supplier"} options={partners.map((p) => ({ id: p.id, name: p.name, terms: p.paymentTerms }))} defaultValue={doc?.partnerId ?? ""} canAdd={ctx.can("partners", "write")}
+              labels={kind === "invoice" ? { add: t("cust_add_new"), title: t("cust_add_new_title"), name: t("name"), tin: t("tin"), phone: t("phone"), email: t("email"), save: t("save"), cancel: t("cancel") } : { add: t("supp_add_new"), title: t("supp_add_new_title"), name: t("name"), tin: t("tin"), phone: t("phone"), email: t("email"), save: t("save"), cancel: t("cancel") }} />
           </label>
           <label className="f">{t("date")}<input id="date" type="date" name="date" defaultValue={doc?.date ?? today()} required /></label>
           <label className="f">{t("due_date")}<input id="dueDate" type="date" name="dueDate" defaultValue={doc?.dueDate ?? addDays(today(), 30)} required /></label>
@@ -156,6 +155,7 @@ export async function DocView({ kind, ctx, doc, error }: { kind: DocKind; ctx: C
         <Link className="btn ghost" href={docBase(kind)}>{t("back")}</Link>
       </PageHead>
       <ErrorNote message={error} />
+      {kind === "invoice" && (doc.status === "open" || doc.status === "partial") ? await creditWarning(ctx.company.id, doc.partnerId, 0, doc.id) : null}
       <div className="grid-doc">
         <div className="panel stack">
           <div>
@@ -246,6 +246,19 @@ export async function DocView({ kind, ctx, doc, error }: { kind: DocKind; ctx: C
 }
 
 /** The page for one document: an editable form while it is a draft, the posted view afterwards. */
+/** A warning when a customer would owe more than their credit limit. It does not stop the invoice: the person decides. */
+async function creditWarning(companyId: string, partnerId: string, extra: number, docId: string) {
+  const { t, money } = await getI18n();
+  const db = await getDb();
+  const [p] = await db.select().from(schema.partners).where(and(eq(schema.partners.id, partnerId), eq(schema.partners.companyId, companyId)));
+  if (!p || !(p.creditLimit > 0)) return null;
+  const open = await db.select({ total: schema.invoices.total, paid: schema.invoices.amountPaid, id: schema.invoices.id }).from(schema.invoices)
+    .where(and(eq(schema.invoices.companyId, companyId), eq(schema.invoices.partnerId, partnerId), inArray(schema.invoices.status, ["open", "partial"])));
+  const owed = round2(open.filter((x) => x.id !== docId || !extra).reduce((s, x) => s + x.total - x.paid, 0) + extra);
+  if (owed <= p.creditLimit) return null;
+  return <div className="note warn small">{t("pt_over_limit").replace("{name}", p.name).replace("{owed}", money(owed)).replace("{limit}", money(p.creditLimit))}</div>;
+}
+
 export async function DocPage({ kind, ctx, id, error }: { kind: DocKind; ctx: Ctx; id: string; error: string }) {
   const db = await getDb();
   const doc = kind === "invoice"
