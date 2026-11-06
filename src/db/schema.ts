@@ -53,6 +53,20 @@ export const users = pgTable("users", {
   createdAt: created(),
 });
 
+/** The people who run TAGPILOT itself. Separate from every organisation's users, with their own sign-in. */
+export const platformAdmins = pgTable("platform_admins", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  email: text("email").notNull().unique(),
+  name: text("name").notNull(),
+  passwordHash: text("password_hash").notNull(),
+  createdAt: created(),
+});
+export const platformSessions = pgTable("platform_sessions", {
+  id: text("id").primaryKey(), // sha-256 of the cookie token
+  adminId: uuid("admin_id").notNull().references(() => platformAdmins.id, { onDelete: "cascade" }),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+});
+
 export const sessions = pgTable("sessions", {
   id: text("id").primaryKey(), // sha-256 of the cookie token
   userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),

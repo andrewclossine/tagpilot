@@ -2,11 +2,11 @@ import Link from "next/link";
 import { requirePlatformOwner } from "@/lib/platform";
 import { getI18n } from "@/lib/i18n";
 import { Logo } from "@/components/Logo";
-import { signOut } from "@/app/session-actions";
+import { platformSignOut } from "../session";
 
 export const metadata = { title: "Platform" };
 
-/** The platform owner's own frame: no company menus, since this part sits above all companies. */
+/** The platform owner's own frame: no organisation menus, since this part sits above all organisations. */
 export default async function PlatformLayout({ children }: { children: React.ReactNode }) {
   const owner = await requirePlatformOwner();
   const { t } = await getI18n();
@@ -17,8 +17,7 @@ export default async function PlatformLayout({ children }: { children: React.Rea
         <b>{t("plt_title")}</b>
         <span className="spacer" />
         <span className="small muted">{owner.name} · {owner.email}</span>
-        <Link className="btn sm" href="/apps">{t("nav_all_apps")}</Link>
-        <form action={signOut}><button type="submit" className="btn sm">{t("sign_out")}</button></form>
+        <form action={platformSignOut}><button type="submit" className="btn sm">{t("sign_out")}</button></form>
       </header>
       <main className="main" style={{ maxWidth: 1200, margin: "0 auto", width: "100%" }}>{children}</main>
     </div>

@@ -28,7 +28,7 @@ export async function extendTrial(fd: FormData) {
   const from = Math.max(Date.now(), c.trialEndsAt.getTime());
   const db = await getDb();
   await db.update(schema.companies).set({ trialEndsAt: new Date(from + days * 86400000) }).where(eq(schema.companies.id, id));
-  await audit(db, id, owner.id, "platform_extend_trial", "company", id, { days });
+  await audit(db, id, null, "platform_extend_trial", "company", id, { days, by: owner.email });
   revalidatePath(`/platform/companies/${id}`);
   redirect(back(id));
 }
@@ -41,7 +41,7 @@ export async function suspendCompany(fd: FormData) {
   if (!reason) redirect(back(id, "err_reason_required"));
   const db = await getDb();
   await db.update(schema.companies).set({ suspendedAt: new Date(), suspendedReason: reason }).where(eq(schema.companies.id, id));
-  await audit(db, id, owner.id, "platform_suspend", "company", id, { reason });
+  await audit(db, id, null, "platform_suspend", "company", id, { reason, by: owner.email });
   revalidatePath(`/platform/companies/${id}`);
   redirect(back(id));
 }
@@ -52,7 +52,7 @@ export async function reactivateCompany(fd: FormData) {
   await companyOf(id);
   const db = await getDb();
   await db.update(schema.companies).set({ suspendedAt: null, suspendedReason: "" }).where(eq(schema.companies.id, id));
-  await audit(db, id, owner.id, "platform_reactivate", "company", id);
+  await audit(db, id, null, "platform_reactivate", "company", id, { by: owner.email });
   revalidatePath(`/platform/companies/${id}`);
   redirect(back(id));
 }
@@ -70,10 +70,10 @@ export async function recordPayment(fd: FormData) {
   await db.transaction(async (tx) => {
     await tx.insert(schema.subscriptionPayments).values({
       companyId: id, txRef: `manual-${crypto.randomUUID()}`, period: "monthly", modules, amount, currency, status: "successful",
-      providerTransactionId: str(fd, "reference").slice(0, 120) || null, periodStart: new Date(), periodEnd, createdBy: owner.id, paidAt: new Date(),
+      providerTransactionId: str(fd, "reference").slice(0, 120) || null, periodStart: new Date(), periodEnd, createdBy: null, paidAt: new Date(),
     });
     await tx.update(schema.companies).set({ paidUntil: periodEnd, paidModules: modules, plan: "active" }).where(eq(schema.companies.id, id));
-    await audit(tx, id, owner.id, "platform_payment", "company", id, { amount, currency, until });
+    await audit(tx, id, null, "platform_payment", "company", id, { amount, currency, until, by: owner.email });
   });
   revalidatePath(`/platform/companies/${id}`);
   redirect(back(id));

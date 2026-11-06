@@ -8,7 +8,7 @@ import { companyStatus, requirePlatformOwner } from "@/lib/platform";
 import { sp, type SearchParams } from "@/lib/actions";
 import { ConfirmButton } from "@/components/editors";
 import { Empty, ErrorNote, PageHead, Pill } from "@/components/ui";
-import { extendTrial, reactivateCompany, recordPayment, suspendCompany } from "../../actions";
+import { extendTrial, reactivateCompany, recordPayment, suspendCompany } from "../../../actions";
 
 /** One organisation, as the platform owner sees it: who it is, who uses it, what it paid. Not its books. */
 export default async function PlatformCompanyPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: SearchParams }) {

@@ -134,6 +134,13 @@
       "when": 1793959488287,
       "tag": "0018_company_suspension",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1793961570989,
+      "tag": "0019_platform_admins",
+      "breakpoints": true
     }
   ]
 }

@@ -8,7 +8,6 @@ import { setLang, signOut } from "@/app/session-actions";
 import { AppShell } from "@/components/AppShell";
 import type { NavItem } from "@/components/NavLinks";
 import { Logo } from "@/components/Logo";
-import { isPlatformOwner } from "@/lib/platform";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const ctx = await getCtx();
@@ -41,7 +40,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <button type="submit" name="lang" value="en" className="btn sm" aria-pressed={lang === "en"}>EN</button>
         <button type="submit" name="lang" value="fr" className="btn sm" aria-pressed={lang === "fr"}>FR</button>
       </form>
-      {isPlatformOwner(ctx.user) ? <Link className="btn sm" href="/platform">{t("plt_title")}</Link> : null}
       <form action={signOut}><button type="submit" className="btn sm">{t("sign_out")}</button></form>
     </div>
   );
