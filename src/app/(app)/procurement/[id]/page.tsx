@@ -11,7 +11,8 @@ import type { TenderStage } from "@/db/schema";
 import { ConfirmButton } from "@/components/editors";
 import { LocalTime } from "@/components/datetime";
 import { ErrorNote, PageHead, Pill } from "@/components/ui";
-import { cancelTender, evaluateBids, publishTender, recordStage } from "../actions";
+import { addTenderForm, cancelTender, evaluateBids, publishTender, recordStage, removeTenderForm } from "../actions";
+import { TenderSummary } from "@/components/TenderSummary";
 import { TenderForm } from "../TenderForm";
 
 export const metadata = { title: "Procurement" };
@@ -88,15 +89,21 @@ export default async function TenderPage({ params, searchParams }: { params: Pro
 
       <div className="grid2">
         <div className="panel stack">
-          <div className="fields">
-            <div><div className="label">{t("type")}</div>{t(tender.kind === "rfq" ? "tn_rfq" : "tn_tender")}</div>
-            <div><div className="label">{t("tn_deadline")}</div><LocalTime value={tender.deadline?.toISOString() ?? null} /></div>
-            <div><div className="label">{t("tn_estimate")}</div>{money(tender.estimate, 2)} {ctx.company.currency}</div>
-            <div><div className="label">{t("tn_technical_weight")}</div>{tender.technicalWeight}%</div>
-          </div>
-          {tender.description ? <div><div className="label">{t("tn_description")}</div><div style={{ whiteSpace: "pre-wrap" }}>{tender.description}</div></div> : null}
-          {tender.requirements ? <div><div className="label">{t("tn_requirements")}</div><div style={{ whiteSpace: "pre-wrap" }}>{tender.requirements}</div></div> : null}
-          {fileLink(tender.attachmentId, t("tn_document_file"))}
+          <TenderSummary tender={tender}
+            extra={<><div><div className="label">{t("tn_estimate")}</div>{money(tender.estimate, 2)} {ctx.company.currency}</div><div><div className="label">{t("tn_technical_weight")}</div>{tender.technicalWeight}%</div></>}
+            formActions={tender.status === "draft" && write ? (f) => (
+              <form action={removeTenderForm}><input type="hidden" name="id" value={tender.id} /><input type="hidden" name="formId" value={f.id} /><ConfirmButton className="btn sm ghost danger" confirmLabel={t("confirm")}>{t("delete")}</ConfirmButton></form>
+            ) : undefined} />
+          {tender.status === "draft" && write ? (
+            <form action={addTenderForm} className="stack" id="forms" style={{ borderTop: "1px solid var(--line)", paddingTop: 12 }}>
+              <h3>{t("tn_add_form")}</h3>
+              <div className="small muted">{t("tn_add_form_help")}</div>
+              <input type="hidden" name="id" value={tender.id} />
+              <label className="f">{t("tn_form_description")}<input id="tf-description" name="description" required placeholder={t("tn_form_example")} /></label>
+              <label className="f">{t("tn_form_file")}<input id="tf-file" name="file" type="file" required accept=".pdf,.doc,.docx,.xls,.xlsx,application/pdf,image/*" /></label>
+              <div><button type="submit" className="btn">{t("tn_add_form")}</button></div>
+            </form>
+          ) : null}
           {tender.status === "draft" && write ? <div><Link className="btn" href={`/procurement/${id}?edit=1`}>{t("edit")}</Link></div> : null}
         </div>
 

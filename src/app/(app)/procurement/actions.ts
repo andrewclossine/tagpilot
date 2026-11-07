@@ -1,7 +1,7 @@
 "use server";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { hashPassword, requireWrite } from "@/lib/auth";
 import { fail } from "@/lib/actions";
@@ -24,6 +24,43 @@ async function getTender(companyId: string, id: string) {
   const [t] = await db.select().from(schema.tenders).where(and(eq(schema.tenders.id, id), eq(schema.tenders.companyId, companyId)));
   if (!t) throw new UserError("err_not_found");
   return t;
+}
+
+/** Adds a standard form for bidders to fill, with what it is for. Only while the request is a draft, so every bidder gets the same set. */
+export async function addTenderForm(fd: FormData) {
+  const ctx = await requireWrite("procurement");
+  const id = str(fd, "id"), back = `/procurement/${id}`;
+  try {
+    const description = str(fd, "description").slice(0, 300);
+    if (!description) throw new UserError("err_required");
+    const tender = await getTender(ctx.company.id, id);
+    if (tender.status !== "draft") throw new UserError("err_tender_state");
+    const attachmentId = await optionalUpload(ctx.company.id, ctx.user.id, fd);
+    if (!attachmentId) throw new UserError("err_tender_form_file");
+    const db = await getDb();
+    const [{ n }] = await db.select({ n: sql<number>`count(*)` }).from(schema.tenderForms).where(eq(schema.tenderForms.tenderId, id));
+    await db.insert(schema.tenderForms).values({ companyId: ctx.company.id, tenderId: id, description, attachmentId, sortOrder: Number(n) + 1, createdBy: ctx.user.id });
+    await audit(db, ctx.company.id, ctx.user.id, "add_form", "tender", tender.number, { description });
+  } catch (e) { fail(e, back); }
+  refresh(id);
+  redirect(`${back}#forms`);
+}
+
+export async function removeTenderForm(fd: FormData) {
+  const ctx = await requireWrite("procurement");
+  const id = str(fd, "id"), formId = str(fd, "formId"), back = `/procurement/${id}`;
+  try {
+    if (!isUuid(formId)) throw new UserError("err_not_found");
+    const tender = await getTender(ctx.company.id, id);
+    if (tender.status !== "draft") throw new UserError("err_tender_state");
+    const db = await getDb();
+    const [f] = await db.select().from(schema.tenderForms).where(and(eq(schema.tenderForms.id, formId), eq(schema.tenderForms.tenderId, id), eq(schema.tenderForms.companyId, ctx.company.id)));
+    if (!f) throw new UserError("err_not_found");
+    await db.delete(schema.tenderForms).where(eq(schema.tenderForms.id, formId));
+    await audit(db, ctx.company.id, ctx.user.id, "remove_form", "tender", tender.number, { description: f.description });
+  } catch (e) { fail(e, back); }
+  refresh(id);
+  redirect(`${back}#forms`);
 }
 
 /** Saves the request for quotation or tender document while it is still a draft. */
@@ -85,7 +122,7 @@ export async function publishTender(fd: FormData) {
       if (!ids.length && !tender.openToAll) throw new UserError("err_no_invites");
       await tx.delete(schema.tenderInvites).where(eq(schema.tenderInvites.tenderId, id));
       if (ids.length) await tx.insert(schema.tenderInvites).values(ids.map((partnerId) => ({ tenderId: id, partnerId })));
-      await tx.update(schema.tenders).set({ status: "published" }).where(eq(schema.tenders.id, id));
+      await tx.update(schema.tenders).set({ status: "published", publishedAt: new Date() }).where(eq(schema.tenders.id, id));
       await audit(tx, ctx.company.id, ctx.user.id, "publish", "tender", tender.number, { invited: ids.length, openToAll: tender.openToAll });
       number = tender.number; title = tender.title; recipients = ids;
       if (tender.openToAll) {

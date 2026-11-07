@@ -77,10 +77,17 @@ export async function buildTenderPdf(ctx: Ctx, id: string, stageParam: string | 
   const amount = (n: number) => fmtMoney(n, lang, 2).replace(/[  ]/g, " ");
 
   if (!stage) {
+    const when = (d: Date | null) => d ? `${d.toISOString().slice(0, 16).replace("T", " ")} UTC` : "-";
+    const forms = await db.select({ description: schema.tenderForms.description }).from(schema.tenderForms)
+      .where(eq(schema.tenderForms.tenderId, id)).orderBy(schema.tenderForms.sortOrder, schema.tenderForms.createdAt);
     const pdf = await letterPdf({
       company, title: t(tender.kind === "rfq" ? "tn_rfq" : "tn_tender"), subject: tender.title, footer,
-      lines: [[t("number"), tender.number], [t("tn_deadline"), tender.deadline ? `${tender.deadline.toISOString().slice(0, 16).replace("T", " ")} UTC` : "-"]],
-      body: [tender.description, tender.requirements ? `${t("tn_requirements")}:\n${tender.requirements}` : ""].filter(Boolean).join("\n\n"),
+      lines: [[t(tender.kind === "rfq" ? "tn_rfq_no" : "tn_tender_no"), tender.number], [t("tn_issue_date"), when(tender.publishedAt)], [t("tn_deadline"), when(tender.deadline)]],
+      body: [
+        tender.description,
+        tender.requirements ? `${t("tn_requirements")}:\n${tender.requirements}` : "",
+        forms.length ? `${t("tn_forms")}:\n${forms.map((x, i) => `${i + 1}. ${x.description}`).join("\n")}` : "",
+      ].filter(Boolean).join("\n\n"),
     });
     return { pdf, filename: `${tender.number}.pdf` };
   }

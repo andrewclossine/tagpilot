@@ -22,8 +22,9 @@ export async function canReadAttachment(db: Db, ctx: Ctx, attachmentId: string):
     return ctx.can("procurement") && !isSealed(bid.t);
   }
 
-  const [tender] = await db.select().from(schema.tenders).where(eq(schema.tenders.attachmentId, attachmentId));
-  if (tender) return supplier ? supplierCanSee(db, tender, supplier) : ctx.can("procurement");
+  const [form] = await db.select({ tenderId: schema.tenderForms.tenderId }).from(schema.tenderForms).where(eq(schema.tenderForms.attachmentId, attachmentId));
+  const [tender] = await db.select().from(schema.tenders).where(form ? eq(schema.tenders.id, form.tenderId) : eq(schema.tenders.attachmentId, attachmentId));
+  if (tender) return supplier ? tender.status !== "draft" && supplierCanSee(db, tender, supplier) : ctx.can("procurement") && tender.companyId === ctx.company.id;
 
   const [stage] = await db.select().from(schema.tenderStages).where(eq(schema.tenderStages.attachmentId, attachmentId));
   if (stage) {
@@ -78,7 +79,8 @@ export async function canReadAsBidder(db: Db, ctx: Ctx, attachmentId: string): P
   const [bid] = await db.select().from(schema.bids).where(eq(schema.bids.attachmentId, attachmentId));
   if (bid) return mine(bid.partnerId);
 
-  const [tender] = await db.select().from(schema.tenders).where(eq(schema.tenders.attachmentId, attachmentId));
+  const [form] = await db.select({ tenderId: schema.tenderForms.tenderId }).from(schema.tenderForms).where(eq(schema.tenderForms.attachmentId, attachmentId));
+  const [tender] = await db.select().from(schema.tenders).where(form ? eq(schema.tenders.id, form.tenderId) : eq(schema.tenders.attachmentId, attachmentId));
   if (tender) {
     if (tender.openToAll && tender.status !== "draft" && tender.status !== "cancelled") return true;
     const bids = await db.select().from(schema.bids).where(eq(schema.bids.tenderId, tender.id));

@@ -776,9 +776,22 @@ export const tenders = pgTable("tenders", {
   standstillDays: integer("standstill_days").notNull().default(7), // days between provisional and final notification
   attachmentId: uuid("attachment_id").references(() => attachments.id),
   status: text("status").$type<TenderStatus>().notNull().default("draft"),
+  publishedAt: timestamp("published_at", { withTimezone: true }), // the issue date: when it was published to bidders
   createdBy: uuid("created_by").references(() => users.id),
   createdAt: created(),
 }, (t) => [uniqueIndex("tenders_company_number").on(t.companyId, t.number)]);
+
+/** A standard form bidders must fill and send back with their bid (bid form, price schedule, declarations...). */
+export const tenderForms = pgTable("tender_forms", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  tenderId: uuid("tender_id").notNull().references(() => tenders.id, { onDelete: "cascade" }),
+  description: text("description").notNull(),
+  attachmentId: uuid("attachment_id").notNull().references(() => attachments.id),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdBy: uuid("created_by").references(() => users.id),
+  createdAt: created(),
+}, (t) => [index("tender_forms_tender").on(t.tenderId)]);
 
 export const tenderInvites = pgTable("tender_invites", {
   tenderId: uuid("tender_id").notNull().references(() => tenders.id, { onDelete: "cascade" }),

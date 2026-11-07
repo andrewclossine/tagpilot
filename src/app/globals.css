@@ -171,6 +171,8 @@ code.k { font-family: var(--f-num); font-size: 13px; }
 .sign-steps li { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface-2); }
 .sign-steps li.done { background: var(--ok-soft); border-color: var(--ok); }
 .sign-steps li.now { border-color: var(--accent); background: var(--accent-soft); }
+.tender-forms { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
+.tender-forms li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .quick-add { margin-top: 8px; background: var(--surface-2); padding: 12px; }
 .sig-pad { display: flex; flex-direction: column; gap: 8px; position: relative; }
 .sig-pad canvas { display: block; width: 100%; max-width: 420px; aspect-ratio: 3 / 1; background: #fff; border: 1px dashed var(--muted); border-radius: var(--r); touch-action: none; cursor: crosshair; }

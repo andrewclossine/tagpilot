@@ -9,6 +9,7 @@ import { isUuid } from "@/lib/format";
 import { biddingOpen, supplierCanSee, supplierSeesStage } from "@/lib/procurement";
 import type { TenderStage } from "@/db/schema";
 import { LocalTime } from "@/components/datetime";
+import { TenderSummary } from "@/components/TenderSummary";
 import { ErrorNote, PageHead, Pill } from "@/components/ui";
 import { submitBid } from "../../actions";
 
@@ -44,13 +45,7 @@ export default async function PortalTenderPage({ params, searchParams }: { param
       {q("sent") ? <div className="note ok small">{t("portal_bid_sent")}</div> : null}
       <div className="grid2">
         <div className="panel stack">
-          <div className="fields">
-            <div><div className="label">{t("type")}</div>{t(tender.kind === "rfq" ? "tn_rfq" : "tn_tender")}</div>
-            <div><div className="label">{t("tn_deadline")}</div><LocalTime value={tender.deadline?.toISOString() ?? null} /></div>
-          </div>
-          {tender.description ? <div><div className="label">{t("tn_description")}</div><div style={{ whiteSpace: "pre-wrap" }}>{tender.description}</div></div> : null}
-          {tender.requirements ? <div><div className="label">{t("tn_requirements")}</div><div style={{ whiteSpace: "pre-wrap" }}>{tender.requirements}</div></div> : null}
-          {file(tender.attachmentId, t("tn_document_file"))}
+          <TenderSummary tender={tender} />
         </div>
         <div className="panel stack">
           <h2>{t("portal_my_bid")}</h2>
