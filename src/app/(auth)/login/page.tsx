@@ -4,6 +4,7 @@ import { getI18n } from "@/lib/i18n";
 import { sp, type SearchParams } from "@/lib/actions";
 import { ErrorNote } from "@/components/ui";
 import { Logo } from "@/components/Logo";
+import { InstallApp } from "@/components/InstallApp";
 
 export const metadata = { title: "Sign in" };
 
@@ -24,6 +25,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Search
         <div className="small"><Link href="/forgot">{t("forgot_title")}</Link></div>
         <div className="small muted">{t("login_staff_help")}</div>
         <div className="small muted">{t("no_account")} <Link href="/signup">{t("start_trial")}</Link></div>
+        <div className="small"><InstallApp label={t("app_get")} className="" /></div>
       </form>
     </div>
   );

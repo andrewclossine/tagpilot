@@ -10,6 +10,8 @@ stage="$(mktemp -d)"
 mkdir -p "$stage/app"
 cp package.json package-lock.json next.config.ts "$stage/app/"
 cp -r drizzle "$stage/app/"
+# Icons, the installable app's worker and its offline page.
+[ -d public ] && cp -r public "$stage/app/"
 # The build without its caches, development files and the links to this computer's packages.
 tar -C . --exclude=.next/cache --exclude=.next/dev --exclude=.next/trace --exclude=.next/trace-build --exclude=.next/node_modules --exclude=.next/types -cf - .next | tar -C "$stage/app" -xf -
 # Turbopack loads some packages through links in .next/node_modules; the server recreates them from this list.

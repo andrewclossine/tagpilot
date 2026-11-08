@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<title>TAGPILOT · No connection</title>
+<style>
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #f4f6fb; color: #1f2937; font-family: system-ui, "Segoe UI", sans-serif; }
+  .box { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 32px 28px; max-width: 380px; margin: 16px; text-align: center; }
+  h1 { font-size: 20px; margin: 16px 0 8px; }
+  p { margin: 0 0 20px; color: #4b5563; line-height: 1.5; }
+  button { background: #1e3a8a; color: #fff; border: 0; border-radius: 8px; padding: 10px 18px; font-size: 15px; cursor: pointer; }
+</style>
+</head>
+<body>
+  <div class="box">
+    <img src="build/icon.png" width="56" height="56" alt="">
+    <h1>No internet connection</h1>
+    <p>TAGPILOT works online. Check your connection, then try again.<br><span lang="fr">Pas de connexion internet. Vérifiez votre connexion, puis réessayez.</span></p>
+    <button id="retry">Try again · Réessayer</button>
+  </div>
+  <script>
+    // Only ever goes back to the TAGPILOT page that failed (main.js passes it), never anywhere else.
+    const target = new URLSearchParams(location.search).get("retry");
+    document.getElementById("retry").onclick = () => { if (target && /^https?:\/\//.test(target)) location.href = target; };
+    window.addEventListener("online", () => document.getElementById("retry").click());
+  </script>
+</body>
+</html>

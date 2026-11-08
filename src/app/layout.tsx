@@ -1,11 +1,14 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { getI18n } from "@/lib/i18n";
 import "./globals.css";
 
 export const metadata: Metadata = {
   title: { default: "TAGPILOT", template: "%s · TAGPILOT" },
   description: "Smart accounting, with AI that reads your supporting documents.",
+  appleWebApp: { capable: true, title: "TAGPILOT", statusBarStyle: "default" },
 };
+
+export const viewport: Viewport = { themeColor: "#1e3a8a" };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const { lang } = await getI18n();
