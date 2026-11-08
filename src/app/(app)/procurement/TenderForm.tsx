@@ -8,7 +8,7 @@ import { saveTender } from "./actions";
 
 type Tender = typeof schema.tenders.$inferSelect;
 
-/** The request for quotation or tender document. A quotation is usually judged on price, so it starts at 0% technical. */
+/** The request for quotation or tender document. */
 export async function TenderForm({ ctx, kind, tender }: { ctx: Ctx; kind: "rfq" | "tender"; tender?: Tender }) {
   const { t } = await getI18n();
   const db = await getDb();
@@ -29,8 +29,6 @@ export async function TenderForm({ ctx, kind, tender }: { ctx: Ctx; kind: "rfq" 
               {projects.map((p) => <option key={p.id} value={p.id}>{p.code} · {p.name}</option>)}
             </select></label>
         ) : null}
-        <label className="f">{t("tn_estimate")} ({ctx.company.currency})<input id="t-estimate" name="estimate" className="num" inputMode="decimal" defaultValue={tender?.estimate || ""} /></label>
-        <label className="f">{t("tn_technical_weight")}<input id="t-weight" name="technicalWeight" className="num" type="number" min={0} max={100} defaultValue={tender?.technicalWeight ?? (kind === "rfq" ? 0 : 70)} /></label>
         <label className="f">{t("tn_standstill")}<input id="t-standstill" name="standstillDays" className="num" type="number" min={0} max={60} defaultValue={tender?.standstillDays ?? 7} /></label>
       </div>
       <label className="row small" style={{ gap: 8 }}><input id="t-open" name="openToAll" type="checkbox" style={{ width: "auto" }} defaultChecked={tender?.openToAll ?? kind === "tender"} /> {t("tn_open_to_all")}</label>

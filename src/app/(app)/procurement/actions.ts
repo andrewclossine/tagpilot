@@ -82,8 +82,8 @@ export async function saveTender(fd: FormData) {
       if (!p) throw new UserError("err_not_found");
     }
     const values = {
-      title, description: str(fd, "description"), requirements: str(fd, "requirements"), projectId, estimate: parseAmount(fd.get("estimate")), deadline,
-      openToAll: fd.get("openToAll") === "on", technicalWeight: clamp(Number(str(fd, "technicalWeight")), 0, 100), standstillDays: clamp(Number(str(fd, "standstillDays")), 0, 60),
+      title, description: str(fd, "description"), requirements: str(fd, "requirements"), projectId, deadline,
+      openToAll: fd.get("openToAll") === "on", standstillDays: clamp(Number(str(fd, "standstillDays")), 0, 60),
     };
     savedId = await db.transaction(async (tx) => {
       if (id) {
@@ -94,7 +94,7 @@ export async function saveTender(fd: FormData) {
         return id;
       }
       const number = await nextNumber(tx, schema.tenders, { number: schema.tenders.number, companyId: schema.tenders.companyId }, ctx.company.id, kind === "rfq" ? "RFQ" : "TND");
-      const [row] = await tx.insert(schema.tenders).values({ ...values, companyId: ctx.company.id, number, kind, attachmentId, createdBy: ctx.user.id }).returning({ id: schema.tenders.id });
+      const [row] = await tx.insert(schema.tenders).values({ ...values, technicalWeight: kind === "rfq" ? 0 : 70, companyId: ctx.company.id, number, kind, attachmentId, createdBy: ctx.user.id }).returning({ id: schema.tenders.id });
       await audit(tx, ctx.company.id, ctx.user.id, "create", "tender", number, { kind });
       return row.id;
     });

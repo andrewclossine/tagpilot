@@ -90,7 +90,6 @@ export default async function TenderPage({ params, searchParams }: { params: Pro
       <div className="grid2">
         <div className="panel stack">
           <TenderSummary tender={tender}
-            extra={<><div><div className="label">{t("tn_estimate")}</div>{money(tender.estimate, 2)} {ctx.company.currency}</div><div><div className="label">{t("tn_technical_weight")}</div>{tender.technicalWeight}%</div></>}
             formActions={tender.status === "draft" && write ? (f) => (
               <form action={removeTenderForm}><input type="hidden" name="id" value={tender.id} /><input type="hidden" name="formId" value={f.id} /><ConfirmButton className="btn sm ghost danger" confirmLabel={t("confirm")}>{t("delete")}</ConfirmButton></form>
             ) : undefined} />
