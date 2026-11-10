@@ -68,14 +68,16 @@ export function appWorkspaces(ctx: Ctx, t: T): (Workspace & { key: AppKey })[] {
           ...link("payroll", "/payroll?tab=employees", t("nav_employees")),
           ...link("payroll", "/payroll", t("nav_payroll")),
         ]),
-        ...group(t("nav_accountant"), [
-          ...link("journal", "/journal", t("nav_journal")),
-          ...link("accounts", "/accounts", t("nav_coa")),
-          ...link("budgets", "/budgets", t("nav_budgets")),
+        ...group(t("nav_assets"), [
           ...link("assets", "/assets", t("nav_asset_register")),
           ...link("assets", "/assets/depreciation", t("nav_depreciation")),
           ...link("assets", "/assets/schedule", t("asset_schedule")),
           ...link("assets", "/assets/dispose", t("nav_dispose_asset")),
+        ]),
+        ...group(t("nav_accountant"), [
+          ...link("journal", "/journal", t("nav_journal")),
+          ...link("accounts", "/accounts", t("nav_coa")),
+          ...link("budgets", "/budgets", t("nav_budgets")),
           ...link("reports", "/reports", t("nav_reports")),
         ]),
       ],
