@@ -148,6 +148,13 @@
       "when": 1793963301045,
       "tag": "0020_tender_forms",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1794236220997,
+      "tag": "0021_requisitions_committee",
+      "breakpoints": true
     }
   ]
 }

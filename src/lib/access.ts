@@ -19,7 +19,10 @@ export async function canReadAttachment(db: Db, ctx: Ctx, attachmentId: string):
     .where(eq(schema.bids.attachmentId, attachmentId));
   if (bid) {
     if (supplier) return bid.b.partnerId === supplier;
-    return ctx.can("procurement") && !isSealed(bid.t);
+    if (isSealed(bid.t) || bid.t.companyId !== ctx.company.id) return false;
+    if (ctx.can("procurement")) return true;
+    const [member] = await db.select().from(schema.tenderCommittee).where(and(eq(schema.tenderCommittee.tenderId, bid.t.id), eq(schema.tenderCommittee.userId, ctx.user.id)));
+    return !!member || bid.t.awardApproverId === ctx.user.id;
   }
 
   const [form] = await db.select({ tenderId: schema.tenderForms.tenderId }).from(schema.tenderForms).where(eq(schema.tenderForms.attachmentId, attachmentId));

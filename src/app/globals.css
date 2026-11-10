@@ -171,6 +171,11 @@ code.k { font-family: var(--f-num); font-size: 13px; }
 .sign-steps li { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface-2); }
 .sign-steps li.done { background: var(--ok-soft); border-color: var(--ok); }
 .sign-steps li.now { border-color: var(--accent); background: var(--accent-soft); }
+.approvals { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 10px; }
+.approvals li.approved::marker { color: var(--ok); }
+.approvals li.rejected::marker { color: var(--bad); }
+.approvals li.waiting { opacity: .65; }
+table.compare th, table.compare td { white-space: nowrap; }
 .tender-forms { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
 .tender-forms li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .quick-add { margin-top: 8px; background: var(--surface-2); padding: 12px; }

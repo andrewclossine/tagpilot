@@ -11,6 +11,7 @@ import { myPartners, placeBid } from "@/lib/bidding";
 import { biddingOpen, requestAmendment } from "@/lib/procurement";
 import { submitSupplierBill } from "@/lib/purchasing";
 import { optionalUpload } from "@/lib/upload";
+import { itemsOf, readBidPrices } from "@/lib/boq";
 
 /** Sends or replaces this organisation's bid on an advert. The deadline is checked on the server, against its clock. */
 export async function submitAdvertBid(fd: FormData) {
@@ -18,15 +19,17 @@ export async function submitAdvertBid(fd: FormData) {
   const tenderId = str(fd, "tenderId"), back = `/adverts/${tenderId}`;
   try {
     if (!isUuid(tenderId)) throw new UserError("err_not_found");
-    const amount = parseAmount(fd.get("amount"));
-    if (!(amount > 0)) throw new UserError("err_amount");
     const db = await getDb();
     const [tender] = await db.select().from(schema.tenders).where(eq(schema.tenders.id, tenderId));
     if (!tender || !tender.openToAll) throw new UserError("err_not_found");
     if (!biddingOpen(tender)) throw new UserError("err_not_bidding");
     // The file belongs with the tender, in the buyer's storage, and the sealed-bid rules decide who may open it.
     const attachmentId = await optionalUpload(tender.companyId, ctx.user.id, fd);
-    await db.transaction((tx) => placeBid(tx, ctx, tenderId, { amount, note: str(fd, "note"), attachmentId }));
+    const items = await itemsOf(db, tenderId);
+    const priced = items.length ? readBidPrices(fd, items) : null;
+    const amount = priced ? priced.amount : parseAmount(fd.get("amount"));
+    if (!(amount > 0)) throw new UserError("err_amount");
+    await db.transaction((tx) => placeBid(tx, ctx, tenderId, { amount, note: str(fd, "note"), attachmentId, prices: priced?.prices }));
   } catch (e) { fail(e, back); }
   revalidatePath(back);
   revalidatePath("/my-bids");

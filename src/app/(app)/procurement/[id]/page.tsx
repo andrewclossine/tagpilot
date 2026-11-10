@@ -11,7 +11,11 @@ import type { TenderStage } from "@/db/schema";
 import { ConfirmButton } from "@/components/editors";
 import { LocalTime } from "@/components/datetime";
 import { ErrorNote, PageHead, Pill } from "@/components/ui";
-import { addTenderForm, cancelTender, evaluateBids, publishTender, recordStage, removeTenderForm } from "../actions";
+import { addTenderForm, cancelTender, evaluateBids, publishTender, recordStage, removeTenderForm, saveTenderItems } from "../actions";
+import { itemsOf, pricesOf } from "@/lib/boq";
+import { committeeTechnical } from "@/lib/committee";
+import { ItemLines } from "@/components/ItemLines";
+import { PriceComparison } from "@/components/PriceComparison";
 import { TenderSummary } from "@/components/TenderSummary";
 import { TenderForm } from "../TenderForm";
 
@@ -40,11 +44,13 @@ export default async function TenderPage({ params, searchParams }: { params: Pro
   }
 
   const sealed = isSealed(tender);
-  const [stages, invites, suppliers, bidCount] = await Promise.all([
+  const [stages, invites, suppliers, bidCount, items, committee] = await Promise.all([
     db.select().from(schema.tenderStages).where(eq(schema.tenderStages.tenderId, id)),
     db.select().from(schema.tenderInvites).where(eq(schema.tenderInvites.tenderId, id)),
     db.select().from(schema.partners).where(and(eq(schema.partners.companyId, ctx.company.id), inArray(schema.partners.kind, ["supplier", "both"]))).orderBy(schema.partners.name),
     countBids(db, id),
+    itemsOf(db, id),
+    committeeTechnical(db, id),
   ]);
   // Sealed bids are never read here: only how many have arrived.
   const bids = sealed ? [] : await db.select({ b: schema.bids, partner: schema.partners.name }).from(schema.bids)
@@ -54,6 +60,8 @@ export default async function TenderPage({ params, searchParams }: { params: Pro
   const hasAccount = (partnerId: string) => accounts.some((a) => a.partnerId === partnerId);
   const stageOf = (s: TenderStage) => stages.find((x) => x.stage === s);
   const winner = bids.find((x) => x.b.isWinner);
+  const prices = sealed ? new Map<string, number>() : await pricesOf(db, bids.map((x) => x.b.id));
+  const awaitingAward = tender.status === "evaluated" && !!tender.awardApproverId && !tender.awardApprovedAt;
   const sorted = [...bids].sort((a, b) => (a.b.rank ?? 999) - (b.b.rank ?? 999) || a.b.amount - b.b.amount);
   const closed = !!tender.deadline && tender.deadline.getTime() <= Date.now();
   const provisional = stageOf("provisional");
@@ -77,6 +85,7 @@ export default async function TenderPage({ params, searchParams }: { params: Pro
       <PageHead title={`${tender.number} · ${tender.title}`}>
         <Link className="btn" href="/procurement">{t("back")}</Link>
         <a className="btn" href={`/api/pdf/tender/${id}`} target="_blank" rel="noreferrer">PDF</a>
+        <Link className="btn" href={`/procurement/${id}/evaluation`}>{t("cm_title")}</Link>
         <Pill kind={tender.status}>{t(`ts_${tender.status}`)}</Pill>
       </PageHead>
       <ErrorNote message={err(q("error"))} />
@@ -89,7 +98,7 @@ export default async function TenderPage({ params, searchParams }: { params: Pro
 
       <div className="grid2">
         <div className="panel stack">
-          <TenderSummary tender={tender}
+          <TenderSummary tender={tender} showItems={!(tender.status === "draft" && write)}
             formActions={tender.status === "draft" && write ? (f) => (
               <form action={removeTenderForm}><input type="hidden" name="id" value={tender.id} /><input type="hidden" name="formId" value={f.id} /><ConfirmButton className="btn sm ghost danger" confirmLabel={t("confirm")}>{t("delete")}</ConfirmButton></form>
             ) : undefined} />
@@ -101,6 +110,16 @@ export default async function TenderPage({ params, searchParams }: { params: Pro
               <label className="f">{t("tn_form_description")}<input id="tf-description" name="description" required placeholder={t("tn_form_example")} /></label>
               <label className="f">{t("tn_form_file")}<input id="tf-file" name="file" type="file" required accept=".pdf,.doc,.docx,.xls,.xlsx,application/pdf,image/*" /></label>
               <div><button type="submit" className="btn">{t("tn_add_form")}</button></div>
+            </form>
+          ) : null}
+          {tender.status === "draft" && write ? (
+            <form action={saveTenderItems} className="stack" id="boq" style={{ borderTop: "1px solid var(--line)", paddingTop: 12 }}>
+              <h3>{t("boq_title")}</h3>
+              <div className="small muted">{t("boq_help")}</div>
+              <input type="hidden" name="id" value={tender.id} />
+              <ItemLines initial={items.map((i) => ({ description: i.description, unit: i.unit, quantity: i.quantity }))}
+                labels={{ description: t("description"), unit: t("rq_unit"), quantity: t("rq_quantity"), unitCost: t("rq_unit_cost"), amount: t("amount"), total: t("total"), add: t("rq_add_line"), remove: t("delete") }} />
+              <div><button type="submit" className="btn">{t("boq_save")}</button></div>
             </form>
           ) : null}
           {tender.status === "draft" && write ? <div><Link className="btn" href={`/procurement/${id}?edit=1`}>{t("edit")}</Link></div> : null}
@@ -162,10 +181,16 @@ export default async function TenderPage({ params, searchParams }: { params: Pro
         );
       })}
 
+      {!sealed ? <PriceComparison items={items} currency={ctx.company.currency} prices={prices} bids={sorted.map(({ b, partner }) => ({ id: b.id, partner, amount: b.amount }))} /> : null}
+
+      {awaitingAward ? <div className="note warn">{t("cm_award_waiting")} <Link href={`/procurement/${id}/evaluation`}>{t("cm_title")} →</Link></div> : null}
+      {tender.awardApprovedAt ? <div className="note ok small">{t("cm_award_approved")} <LocalTime value={tender.awardApprovedAt.toISOString()} /></div> : null}
+
       {write && (tender.status === "opened" || tender.status === "evaluated") ? (
         <form action={evaluateBids} className="panel stack">
           <h2>{t("stage_evaluation")}</h2>
           <div className="small muted">{t("tn_eval_help").replace("{w}", String(tender.technicalWeight))}</div>
+          {committee.members ? <div className={`note small ${committee.sent < committee.members ? "warn" : "info"}`}>{t("cm_results_help").replace("{sent}", String(committee.sent)).replace("{members}", String(committee.members))} <Link href={`/procurement/${id}/evaluation`}>{t("cm_title")} →</Link></div> : null}
           <input type="hidden" name="id" value={id} />
           <div className="tbl-wrap"><table>
             <thead><tr><th>{t("supplier")}</th><th className="num">{t("amount")}</th><th>{t("tn_responsive")}</th><th>{t("tn_tech")}</th><th>{t("notes")}</th><th>{t("tn_winner")}</th></tr></thead>
@@ -173,7 +198,7 @@ export default async function TenderPage({ params, searchParams }: { params: Pro
               <tr key={b.id}>
                 <td><b>{partner}</b></td><td className="num">{money(b.amount, 2)}</td>
                 <td><input id={`r-${b.id}`} name={`responsive_${b.id}`} type="checkbox" style={{ width: "auto" }} defaultChecked={b.responsive ?? true} aria-label={t("tn_responsive")} /></td>
-                <td><input id={`t-${b.id}`} name={`technical_${b.id}`} className="num" style={{ width: 90 }} inputMode="decimal" defaultValue={b.technicalScore ?? (tender.technicalWeight ? "" : 0)} aria-label={t("tn_tech")} /></td>
+                <td>{committee.members ? <span className="num">{committee.out.get(b.id) ?? "-"}</span> : <input id={`t-${b.id}`} name={`technical_${b.id}`} className="num" style={{ width: 90 }} inputMode="decimal" defaultValue={b.technicalScore ?? (tender.technicalWeight ? "" : 0)} aria-label={t("tn_tech")} />}</td>
                 <td><input id={`n-${b.id}`} name={`note_${b.id}`} defaultValue={b.evaluationNote} aria-label={t("notes")} /></td>
                 <td><input id={`w-${b.id}`} name="winnerId" value={b.id} type="radio" style={{ width: "auto" }} defaultChecked={b.isWinner} aria-label={t("tn_winner")} /></td>
               </tr>
@@ -189,7 +214,7 @@ export default async function TenderPage({ params, searchParams }: { params: Pro
         </form>
       ) : null}
 
-      {write && next && next !== "evaluation" ? (
+      {write && next && next !== "evaluation" && !(next === "provisional" && awaitingAward) ? (
         <form action={recordStage} className="panel stack" key={next}>
           <h2>{t(`stage_${next}`)}</h2>
           <input type="hidden" name="id" value={id} /><input type="hidden" name="stage" value={next} />

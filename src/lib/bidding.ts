@@ -4,6 +4,7 @@ import type { Db, Tx } from "@/db";
 import { schema } from "@/db";
 import type { Ctx } from "./auth";
 import { UserError } from "./ledger";
+import { saveBidPrices } from "./boq";
 import { biddingOpen } from "./procurement";
 import { audit } from "./audit";
 
@@ -49,7 +50,7 @@ export async function advertFor(db: Db, ctx: Ctx, tenderId: string) {
 }
 
 /** Sends or replaces a bid. The bidder appears as a supplier in the buyer's books, the first time it bids to them. */
-export async function placeBid(tx: Tx, ctx: Ctx, tenderId: string, input: { amount: number; note: string; attachmentId: string | null }) {
+export async function placeBid(tx: Tx, ctx: Ctx, tenderId: string, input: { amount: number; note: string; attachmentId: string | null; prices?: { itemId: string; unitPrice: number }[] }) {
   const [tender] = await tx.select().from(schema.tenders).where(eq(schema.tenders.id, tenderId)).for("update");
   if (!tender || !tender.openToAll) throw new UserError("err_not_found");
   if (tender.companyId === ctx.company.id) throw new UserError("err_own_tender");
@@ -59,11 +60,12 @@ export async function placeBid(tx: Tx, ctx: Ctx, tenderId: string, input: { amou
     address: [ctx.company.address, ctx.company.city, ctx.company.country].filter(Boolean).join(", "), linkedCompanyId: ctx.company.id,
   }).onConflictDoNothing();
   const [partner] = await tx.select().from(schema.partners).where(and(eq(schema.partners.companyId, tender.companyId), eq(schema.partners.linkedCompanyId, ctx.company.id)));
-  await tx.insert(schema.bids).values({ companyId: tender.companyId, tenderId, partnerId: partner.id, amount: input.amount, note: input.note, attachmentId: input.attachmentId, submittedBy: ctx.user.id })
+  const [bid] = await tx.insert(schema.bids).values({ companyId: tender.companyId, tenderId, partnerId: partner.id, amount: input.amount, note: input.note, attachmentId: input.attachmentId, submittedBy: ctx.user.id })
     .onConflictDoUpdate({
       target: [schema.bids.tenderId, schema.bids.partnerId],
       set: { amount: input.amount, note: input.note, submittedBy: ctx.user.id, submittedAt: new Date(), ...(input.attachmentId ? { attachmentId: input.attachmentId } : {}) },
-    });
+    }).returning({ id: schema.bids.id });
+  if (input.prices) await saveBidPrices(tx, bid.id, input.prices);
   // While bids are sealed the buyer's audit trail says neither who bid nor how much. The bidder's own trail records it.
   await audit(tx, tender.companyId, null, "submit", "bid", tender.number);
   await audit(tx, ctx.company.id, ctx.user.id, "submit", "bid", tender.number, { amount: input.amount });

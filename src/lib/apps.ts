@@ -16,6 +16,7 @@ export function appWorkspaces(ctx: Ctx, t: T): (Workspace & { key: AppKey })[] {
   const scan: NavItem[] = ctx.can("journal", "write") ? [{ href: "/scan", label: t("nav_ai") }] : [];
   const buying: NavItem[] = [
     ...link("procurement", "/procurement", t("nav_tenders")),
+    ...link("requisitions", "/procurement/requisitions", t("rq_title")),
     ...link("procurement", "/procurement/orders", t("nav_purchase_orders")),
     ...link("procurement", "/procurement/suppliers", t("nav_supplier_accounts")),
     ...link("contracts", "/contracts", t("nav_contracts")),

@@ -78,6 +78,7 @@ export async function buildTenderPdf(ctx: Ctx, id: string, stageParam: string | 
 
   if (!stage) {
     const when = (d: Date | null) => d ? `${d.toISOString().slice(0, 16).replace("T", " ")} UTC` : "-";
+    const boq = await db.select().from(schema.tenderItems).where(eq(schema.tenderItems.tenderId, id)).orderBy(schema.tenderItems.sortOrder);
     const forms = await db.select({ description: schema.tenderForms.description }).from(schema.tenderForms)
       .where(eq(schema.tenderForms.tenderId, id)).orderBy(schema.tenderForms.sortOrder, schema.tenderForms.createdAt);
     const pdf = await letterPdf({
@@ -86,6 +87,7 @@ export async function buildTenderPdf(ctx: Ctx, id: string, stageParam: string | 
       body: [
         tender.description,
         tender.requirements ? `${t("tn_requirements")}:\n${tender.requirements}` : "",
+        boq.length ? `${t("boq_title")}:\n${boq.map((x) => `${x.sortOrder}. ${x.description} - ${x.quantity} ${x.unit}`.trim()).join("\n")}` : "",
         forms.length ? `${t("tn_forms")}:\n${forms.map((x, i) => `${i + 1}. ${x.description}`).join("\n")}` : "",
       ].filter(Boolean).join("\n\n"),
     });

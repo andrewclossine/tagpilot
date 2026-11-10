@@ -4,9 +4,9 @@ import type { ModuleKey, Role } from "@/db/schema";
 export type Area =
   | "dashboard" | "journal" | "sales" | "purchases" | "partners" | "banking" | "payroll"
   | "assets" | "inventory" | "budgets" | "reports" | "accounts" | "company" | "users" | "audit"
-  | "projects" | "achievements" | "vouchers" | "voucher_review" | "voucher_approve" | "voucher_authorize" | "voucher_pay" | "procurement" | "contracts" | "bidding";
+  | "projects" | "achievements" | "vouchers" | "voucher_review" | "voucher_approve" | "voucher_authorize" | "voucher_pay" | "procurement" | "contracts" | "bidding" | "requisitions";
 
-const ALL: Area[] = ["dashboard", "journal", "sales", "purchases", "partners", "banking", "payroll", "assets", "inventory", "budgets", "reports", "accounts", "company", "users", "audit", "projects", "achievements", "vouchers", "voucher_review", "voucher_approve", "voucher_authorize", "voucher_pay", "procurement", "contracts", "bidding"];
+const ALL: Area[] = ["dashboard", "journal", "sales", "purchases", "partners", "banking", "payroll", "assets", "inventory", "budgets", "reports", "accounts", "company", "users", "audit", "projects", "achievements", "vouchers", "voucher_review", "voucher_approve", "voucher_authorize", "voucher_pay", "procurement", "contracts", "bidding", "requisitions"];
 const BOOKS: Area[] = ["dashboard", "journal", "sales", "purchases", "partners", "banking", "assets", "inventory", "budgets", "reports", "accounts", "audit"];
 
 export const MODULES: ModuleKey[] = ["accounting", "projects", "procurement", "bidding"];
@@ -17,7 +17,7 @@ const AREA_MODULES: Partial<Record<Area, ModuleKey[]>> = {
   assets: ["accounting"], inventory: ["accounting"], budgets: ["accounting"], reports: ["accounting"], accounts: ["accounting"],
   partners: ["accounting", "procurement"],
   projects: ["projects"], achievements: ["projects"], vouchers: ["projects"], voucher_review: ["projects"], voucher_approve: ["projects"], voucher_authorize: ["projects"], voucher_pay: ["projects"],
-  procurement: ["procurement"], contracts: ["procurement"],
+  procurement: ["procurement"], contracts: ["procurement"], requisitions: ["procurement"],
   bidding: ["bidding"],
 };
 
@@ -41,17 +41,17 @@ export const rolesFor = (modules: ModuleKey[]) => ROLES.filter((r) => { const m 
 const MATRIX: Record<Role, { read: Area[]; write: Area[] }> = {
   admin: { read: ALL, write: ALL },
   accountant: {
-    read: [...BOOKS, "payroll", "projects", "achievements", "vouchers", "voucher_review", "voucher_pay", "procurement", "contracts"],
-    write: ([...BOOKS, "payroll", "vouchers", "voucher_review", "voucher_pay"] as Area[]).filter((a) => a !== "audit"),
+    read: [...BOOKS, "payroll", "projects", "achievements", "vouchers", "voucher_review", "voucher_pay", "procurement", "contracts", "requisitions"],
+    write: ([...BOOKS, "payroll", "vouchers", "voucher_review", "voucher_pay", "requisitions"] as Area[]).filter((a) => a !== "audit"),
   },
-  sales: { read: ["dashboard", "sales", "partners", "inventory"], write: ["sales", "partners"] },
-  purchases: { read: ["dashboard", "purchases", "partners", "journal", "inventory"], write: ["purchases", "partners", "journal"] },
-  payroll: { read: ["dashboard", "payroll"], write: ["payroll"] },
-  viewer: { read: [...BOOKS, "projects", "achievements", "vouchers", "procurement", "contracts", "bidding"], write: [] },
-  staff: { read: ["projects", "achievements", "vouchers"], write: ["vouchers", "achievements"] },
-  project_manager: { read: ["projects", "achievements", "vouchers", "voucher_approve"], write: ["projects", "achievements", "vouchers", "voucher_approve"] },
-  authorizer: { read: ["projects", "achievements", "vouchers", "voucher_authorize"], write: ["voucher_authorize"] },
-  procurement: { read: ["projects", "partners", "procurement", "contracts", "bidding"], write: ["partners", "procurement", "contracts", "bidding"] },
+  sales: { read: ["dashboard", "sales", "partners", "inventory"], write: ["sales", "partners", "requisitions"] },
+  purchases: { read: ["dashboard", "purchases", "partners", "journal", "inventory"], write: ["purchases", "partners", "journal", "requisitions"] },
+  payroll: { read: ["dashboard", "payroll"], write: ["payroll", "requisitions"] },
+  viewer: { read: [...BOOKS, "projects", "achievements", "vouchers", "procurement", "contracts", "bidding", "requisitions"], write: [] },
+  staff: { read: ["projects", "achievements", "vouchers"], write: ["vouchers", "achievements", "requisitions"] },
+  project_manager: { read: ["projects", "achievements", "vouchers", "voucher_approve"], write: ["projects", "achievements", "vouchers", "voucher_approve", "requisitions"] },
+  authorizer: { read: ["projects", "achievements", "vouchers", "voucher_authorize"], write: ["voucher_authorize", "requisitions"] },
+  procurement: { read: ["projects", "partners", "procurement", "contracts", "bidding"], write: ["partners", "procurement", "contracts", "bidding", "requisitions"] },
   supplier: { read: [], write: [] }, // suppliers invited by one organisation only use its supplier portal
 };
 

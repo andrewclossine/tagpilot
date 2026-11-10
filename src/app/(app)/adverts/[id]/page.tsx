@@ -11,6 +11,7 @@ import { biddingOpen, supplierSeesStage } from "@/lib/procurement";
 import type { TenderStage } from "@/db/schema";
 import { LocalTime } from "@/components/datetime";
 import { TenderSummary } from "@/components/TenderSummary";
+import { BidPriceFields } from "@/components/BidPriceFields";
 import { ErrorNote, PageHead, Pill } from "@/components/ui";
 import { submitAdvertBid } from "../actions";
 
@@ -61,7 +62,7 @@ export default async function AdvertPage({ params, searchParams }: { params: Pro
           {open ? (
             <form action={submitAdvertBid} className="stack">
               <input type="hidden" name="tenderId" value={id} />
-              <label className="f">{t("portal_amount")} ({buyer.currency})<input id="b-amount" name="amount" className="num" inputMode="decimal" required defaultValue={bid?.amount || ""} /></label>
+              <BidPriceFields tenderId={id} bid={bid ?? undefined} currency={buyer.currency} />
               <label className="f">{t("notes")}<textarea id="b-note" name="note" rows={3} defaultValue={bid?.note} /></label>
               <label className="f">{t("tn_bid_file")}<input id="b-file" name="file" type="file" accept="image/*,application/pdf" /></label>
               <div className="small muted">{t("portal_sealed_note")}</div>

@@ -777,6 +777,10 @@ export const tenders = pgTable("tenders", {
   attachmentId: uuid("attachment_id").references(() => attachments.id),
   status: text("status").$type<TenderStatus>().notNull().default("draft"),
   publishedAt: timestamp("published_at", { withTimezone: true }), // the issue date: when it was published to bidders
+  // Who approves the award the evaluation recommends, before any notification goes out. Optional.
+  awardApproverId: uuid("award_approver_id").references(() => users.id),
+  awardApprovedAt: timestamp("award_approved_at", { withTimezone: true }),
+  awardNote: text("award_note").notNull().default(""),
   createdBy: uuid("created_by").references(() => users.id),
   createdAt: created(),
 }, (t) => [uniqueIndex("tenders_company_number").on(t.companyId, t.number)]);
@@ -792,6 +796,36 @@ export const tenderForms = pgTable("tender_forms", {
   createdBy: uuid("created_by").references(() => users.id),
   createdAt: created(),
 }, (t) => [index("tender_forms_tender").on(t.tenderId)]);
+
+/** The bill of quantities: what is to be supplied, line by line. Bidders price each line. */
+export const tenderItems = pgTable("tender_items", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  tenderId: uuid("tender_id").notNull().references(() => tenders.id, { onDelete: "cascade" }),
+  sortOrder: integer("sort_order").notNull().default(0),
+  description: text("description").notNull(),
+  unit: text("unit").notNull().default(""),
+  quantity: numeric("quantity", { precision: 18, scale: 3, mode: "number" }).notNull(),
+}, (t) => [index("tender_items_tender").on(t.tenderId)]);
+
+/** Who evaluates the bids. Each member declares having no conflict of interest before scoring. */
+export const tenderCommittee = pgTable("tender_committee", {
+  tenderId: uuid("tender_id").notNull().references(() => tenders.id, { onDelete: "cascade" }),
+  userId: uuid("user_id").notNull().references(() => users.id),
+  isChair: boolean("is_chair").notNull().default(false),
+  declaredAt: timestamp("declared_at", { withTimezone: true }),
+  submittedAt: timestamp("submitted_at", { withTimezone: true }), // scores sent; they can no longer change
+}, (t) => [primaryKey({ columns: [t.tenderId, t.userId] })]);
+
+/** Technical criteria with the points each is worth; together they make the technical score out of 100. */
+export const tenderCriteria = pgTable("tender_criteria", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  tenderId: uuid("tender_id").notNull().references(() => tenders.id, { onDelete: "cascade" }),
+  sortOrder: integer("sort_order").notNull().default(0),
+  name: text("name").notNull(),
+  maxPoints: integer("max_points").notNull(),
+}, (t) => [index("tender_criteria_tender").on(t.tenderId)]);
 
 export const tenderInvites = pgTable("tender_invites", {
   tenderId: uuid("tender_id").notNull().references(() => tenders.id, { onDelete: "cascade" }),
@@ -817,6 +851,23 @@ export const bids = pgTable("bids", {
   isWinner: boolean("is_winner").notNull().default(false),
 }, (t) => [uniqueIndex("bids_tender_partner").on(t.tenderId, t.partnerId)]);
 
+/** A bidder's unit price for each line of the bill of quantities. Sealed like the bid itself. */
+export const bidItems = pgTable("bid_items", {
+  bidId: uuid("bid_id").notNull().references(() => bids.id, { onDelete: "cascade" }),
+  itemId: uuid("item_id").notNull().references(() => tenderItems.id, { onDelete: "cascade" }),
+  unitPrice: money("unit_price"),
+}, (t) => [primaryKey({ columns: [t.bidId, t.itemId] })]);
+
+/** One committee member's points for one bid on one criterion. */
+export const committeeScores = pgTable("committee_scores", {
+  tenderId: uuid("tender_id").notNull().references(() => tenders.id, { onDelete: "cascade" }),
+  bidId: uuid("bid_id").notNull().references(() => bids.id, { onDelete: "cascade" }),
+  userId: uuid("user_id").notNull().references(() => users.id),
+  criterionId: uuid("criterion_id").notNull().references(() => tenderCriteria.id, { onDelete: "cascade" }),
+  points: numeric("points", { precision: 6, scale: 2, mode: "number" }).notNull(),
+  comment: text("comment").notNull().default(""),
+}, (t) => [primaryKey({ columns: [t.bidId, t.userId, t.criterionId] })]);
+
 export const tenderStages = pgTable("tender_stages", {
   id: uuid("id").primaryKey().defaultRandom(),
   companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
@@ -828,6 +879,63 @@ export const tenderStages = pgTable("tender_stages", {
   createdBy: uuid("created_by").references(() => users.id),
   createdAt: created(),
 }, (t) => [uniqueIndex("tender_stages_unique").on(t.tenderId, t.stage)]);
+
+// ---------- purchase requisitions ----------
+export type RequisitionStatus = "draft" | "submitted" | "approved" | "rejected" | "converted" | "cancelled";
+
+/** A request to buy, raised by anyone, approved level by level, then turned into a request for quotation or tender. */
+export const requisitions = pgTable("requisitions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  number: text("number").notNull(),
+  title: text("title").notNull(),
+  justification: text("justification").notNull().default(""),
+  department: text("department").notNull().default(""),
+  projectId: uuid("project_id").references(() => projects.id),
+  budgetItemId: uuid("budget_item_id").references(() => logframeItems.id),
+  neededBy: date("needed_by", { mode: "string" }),
+  total: money("total"),
+  status: text("status").$type<RequisitionStatus>().notNull().default("draft"),
+  requestedBy: uuid("requested_by").notNull().references(() => users.id),
+  submittedAt: timestamp("submitted_at", { withTimezone: true }),
+  tenderId: uuid("tender_id").references(() => tenders.id), // the request for quotation or tender made from it
+  createdAt: created(),
+}, (t) => [uniqueIndex("requisitions_company_number").on(t.companyId, t.number), index("requisitions_requested_by").on(t.requestedBy)]);
+
+export const requisitionLines = pgTable("requisition_lines", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  requisitionId: uuid("requisition_id").notNull().references(() => requisitions.id, { onDelete: "cascade" }),
+  sortOrder: integer("sort_order").notNull().default(0),
+  description: text("description").notNull(),
+  unit: text("unit").notNull().default(""),
+  quantity: numeric("quantity", { precision: 18, scale: 3, mode: "number" }).notNull(),
+  unitCost: money("unit_cost"),
+  amount: money("amount"),
+}, (t) => [index("requisition_lines_req").on(t.requisitionId)]);
+
+/** The organisation's approval levels: a level applies when the request reaches its amount, and its approver signs in order. */
+export const requisitionLevels = pgTable("requisition_levels", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  sortOrder: integer("sort_order").notNull().default(0),
+  name: text("name").notNull(),
+  minAmount: money("min_amount"),
+  approverId: uuid("approver_id").notNull().references(() => users.id),
+}, (t) => [index("requisition_levels_company").on(t.companyId)]);
+
+export type StepStatus = "waiting" | "pending" | "approved" | "rejected";
+
+/** The approvals one request needs, copied from the levels when it is submitted. */
+export const requisitionSteps = pgTable("requisition_steps", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  requisitionId: uuid("requisition_id").notNull().references(() => requisitions.id, { onDelete: "cascade" }),
+  sortOrder: integer("sort_order").notNull(),
+  name: text("name").notNull(),
+  approverId: uuid("approver_id").notNull().references(() => users.id),
+  status: text("status").$type<StepStatus>().notNull().default("waiting"),
+  note: text("note").notNull().default(""),
+  decidedAt: timestamp("decided_at", { withTimezone: true }),
+}, (t) => [index("requisition_steps_req").on(t.requisitionId), index("requisition_steps_approver").on(t.approverId)]);
 
 // ---------- contract management ----------
 export const contracts = pgTable("contracts", {

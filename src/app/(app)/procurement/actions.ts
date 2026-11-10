@@ -13,6 +13,8 @@ import {
   newContractNumber, notifySuppliers, recordEvaluation, STAGE_RULES, standstillOver, type Scores,
 } from "@/lib/procurement";
 import { optionalUpload } from "@/lib/upload";
+import { readItemLines } from "@/lib/item-lines";
+import { committeeTechnical } from "@/lib/committee";
 import { audit } from "@/lib/audit";
 import type { TenderStage } from "@/db/schema";
 
@@ -61,6 +63,26 @@ export async function removeTenderForm(fd: FormData) {
   } catch (e) { fail(e, back); }
   refresh(id);
   redirect(`${back}#forms`);
+}
+
+/** Replaces the bill of quantities while the request is a draft. Bidders then price each line. */
+export async function saveTenderItems(fd: FormData) {
+  const ctx = await requireWrite("procurement");
+  const id = str(fd, "id"), back = `/procurement/${id}`;
+  try {
+    const tender = await getTender(ctx.company.id, id);
+    if (tender.status !== "draft") throw new UserError("err_tender_state");
+    const lines = readItemLines(fd).filter((l) => l.description);
+    if (lines.some((l) => !(l.quantity > 0))) throw new UserError("err_boq_quantity");
+    const db = await getDb();
+    await db.transaction(async (tx) => {
+      await tx.delete(schema.tenderItems).where(eq(schema.tenderItems.tenderId, id));
+      if (lines.length) await tx.insert(schema.tenderItems).values(lines.map((l, i) => ({ companyId: ctx.company.id, tenderId: id, sortOrder: i + 1, description: l.description.slice(0, 500), unit: l.unit.slice(0, 40), quantity: l.quantity })));
+      await audit(tx, ctx.company.id, ctx.user.id, "boq", "tender", tender.number, { lines: lines.length });
+    });
+  } catch (e) { fail(e, back); }
+  refresh(id);
+  redirect(`${back}#boq`);
 }
 
 /** Saves the request for quotation or tender document while it is still a draft. */
@@ -165,13 +187,16 @@ export async function evaluateBids(fd: FormData) {
       if (!tender) throw new UserError("err_not_found");
       if (!STAGE_RULES.evaluation.from.includes(tender.status)) throw new UserError("err_tender_state");
       const bids = await tx.select().from(schema.bids).where(eq(schema.bids.tenderId, id));
+      const committee = await committeeTechnical(tx, id);
+      if (committee.members && committee.sent < committee.members) throw new UserError("err_committee_pending");
       const scores: Scores = bids.map((b) => ({
         bidId: b.id, responsive: fd.get(`responsive_${b.id}`) === "on",
-        technical: Math.min(100, Math.max(0, parseAmount(fd.get(`technical_${b.id}`)))), note: str(fd, `note_${b.id}`),
+        technical: committee.members ? committee.out.get(b.id) ?? 0 : Math.min(100, Math.max(0, parseAmount(fd.get(`technical_${b.id}`)))), note: str(fd, `note_${b.id}`),
       }));
       await recordEvaluation(tx, ctx.company.id, ctx.user.id, tender, scores, isUuid(str(fd, "winnerId")) ? str(fd, "winnerId") : "");
       await upsertStage(tx, ctx.company.id, ctx.user.id, id, "evaluation", date, str(fd, "body"), attachmentId);
-      await tx.update(schema.tenders).set({ status: STAGE_RULES.evaluation.to }).where(eq(schema.tenders.id, id));
+      // A new evaluation needs the award approved again.
+      await tx.update(schema.tenders).set({ status: STAGE_RULES.evaluation.to, awardApprovedAt: null }).where(eq(schema.tenders.id, id));
     });
   } catch (e) { fail(e, back); }
   refresh(id);
@@ -206,6 +231,7 @@ export async function recordStage(fd: FormData) {
       if (stage === "opening" && (!tender.deadline || tender.deadline.getTime() > Date.now())) throw new UserError("err_opening_early");
       const bids = await tx.select().from(schema.bids).where(eq(schema.bids.tenderId, id));
       const winner = bids.find((b) => b.isWinner);
+      if (stage === "provisional" && tender.awardApproverId && !tender.awardApprovedAt) throw new UserError("err_award_not_approved");
       if (stage === "final") {
         const [prov] = await tx.select().from(schema.tenderStages).where(and(eq(schema.tenderStages.tenderId, id), eq(schema.tenderStages.stage, "provisional")));
         if (!prov || !standstillOver(prov.date, tender.standstillDays)) throw new UserError("err_standstill");
