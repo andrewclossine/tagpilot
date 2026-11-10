@@ -19,6 +19,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Search
         <h1>{t("login_title")}</h1>
         <ErrorNote message={err(q("error"))} />
         {q("reset") ? <div className="note ok small">{t("reset_done")}</div> : null}
+        {q("registered") ? <div className="note ok small">{t("reg_done")}</div> : null}
         <label className="f">{t("login_name")}<input id="login" name="login" autoComplete="username" autoCapitalize="none" required /></label>
         <label className="f">{t("password")}<input id="password" name="password" type="password" autoComplete="current-password" required /></label>
         <button type="submit" className="btn primary">{t("login_btn")}</button>

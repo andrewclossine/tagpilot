@@ -19,6 +19,7 @@ export function appWorkspaces(ctx: Ctx, t: T): (Workspace & { key: AppKey })[] {
     ...link("procurement", "/procurement/dashboard", t("dash_proc_title")),
     ...link("requisitions", "/procurement/requisitions", t("rq_title")),
     ...link("procurement", "/procurement/orders", t("nav_purchase_orders")),
+    ...link("procurement", "/procurement/suppliers/registry", t("reg_register_title")),
     ...link("procurement", "/procurement/suppliers", t("nav_supplier_accounts")),
     ...link("contracts", "/contracts", t("nav_contracts")),
     ...(ctx.can("procurement") ? link("partners", "/partners", t("nav_partners")) : []),

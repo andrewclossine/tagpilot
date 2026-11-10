@@ -29,6 +29,9 @@ export async function canReadAttachment(db: Db, ctx: Ctx, attachmentId: string):
   const [tender] = await db.select().from(schema.tenders).where(form ? eq(schema.tenders.id, form.tenderId) : eq(schema.tenders.attachmentId, attachmentId));
   if (tender) return supplier ? tender.status !== "draft" && supplierCanSee(db, tender, supplier) : ctx.can("procurement") && tender.companyId === ctx.company.id;
 
+  const [sdoc] = await db.select().from(schema.supplierDocuments).where(eq(schema.supplierDocuments.attachmentId, attachmentId));
+  if (sdoc) return sdoc.companyId === ctx.company.id && (supplier ? sdoc.partnerId === supplier : ctx.can("procurement"));
+
   const [stage] = await db.select().from(schema.tenderStages).where(eq(schema.tenderStages.attachmentId, attachmentId));
   if (stage) {
     if (!supplier) return ctx.can("procurement");

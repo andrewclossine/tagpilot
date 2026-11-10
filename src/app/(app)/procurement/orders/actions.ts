@@ -8,6 +8,7 @@ import { isIsoDate, isUuid, parseAmount, str, today } from "@/lib/format";
 import { UserError } from "@/lib/ledger";
 import { closePurchaseOrder, deletePurchaseOrder, issuePurchaseOrder, savePurchaseOrder } from "@/lib/purchase-orders";
 import { receiveGoods, voidReceipt } from "@/lib/receipts";
+import { rateOrder } from "@/lib/suppliers";
 import { optionalUpload } from "@/lib/upload";
 
 const BASE = "/procurement/orders";
@@ -112,4 +113,17 @@ export async function voidOrderReceipt(fd: FormData) {
   refresh();
   revalidatePath(back);
   redirect(`${back}#receipts`);
+}
+
+/** Rates how the supplier did on this order, once something was received. Rating again replaces it. */
+export async function rateOrderAction(fd: FormData) {
+  const ctx = await requireWrite("procurement");
+  const id = str(fd, "id"), back = `${BASE}/${id}`;
+  try {
+    if (!isUuid(id)) throw new UserError("err_not_found");
+    const db = await getDb();
+    await db.transaction((tx) => rateOrder(tx, ctx, id, { quality: Number(str(fd, "quality")), delivery: Number(str(fd, "delivery")), service: Number(str(fd, "service")), comment: str(fd, "comment") }));
+  } catch (e) { fail(e, back); }
+  revalidatePath(back);
+  redirect(`${back}#rating`);
 }

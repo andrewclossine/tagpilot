@@ -100,6 +100,9 @@ export const companies = pgTable("companies", {
   policies: text("policies").notNull().default(""),
   settings: jsonb("settings").$type<CompanySettings>().notNull(),
   createdAt: created(),
+  // Suppliers register themselves through a link with this code, while registration is open.
+  supplierRegCode: text("supplier_reg_code"),
+  supplierRegOpen: boolean("supplier_reg_open").notNull().default(false),
 });
 
 export const memberships = pgTable("memberships", {
@@ -144,8 +147,66 @@ export const partners = pgTable("partners", {
   openingDate: date("opening_date", { mode: "string" }),
   openingDocId: uuid("opening_doc_id"), // the invoice or bill that carries the opening balance
   linkedCompanyId: uuid("linked_company_id"), // a supplier organisation on TAGPILOT that bid on an advert
+  // For suppliers that registered themselves: under review, approved, rejected or suspended. Empty means added by the
+  // organisation itself, which counts as approved.
+  supplierStatus: text("supplier_status").$type<SupplierStatus>(),
+  statusNote: text("status_note").notNull().default(""),
   createdAt: created(),
 }, (t) => [index("partners_company").on(t.companyId), uniqueIndex("partners_linked_company").on(t.companyId, t.linkedCompanyId)]);
+
+export type SupplierStatus = "registered" | "approved" | "rejected" | "suspended";
+
+/** What the organisation buys, used to group and prequalify suppliers: IT equipment, stationery, works... */
+export const supplierCategories = pgTable("supplier_categories", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  sortOrder: integer("sort_order").notNull().default(0),
+}, (t) => [index("supplier_categories_company").on(t.companyId)]);
+
+/** A supplier's prequalification in one category. */
+export const partnerCategories = pgTable("partner_categories", {
+  partnerId: uuid("partner_id").notNull().references(() => partners.id, { onDelete: "cascade" }),
+  categoryId: uuid("category_id").notNull().references(() => supplierCategories.id, { onDelete: "cascade" }),
+  status: text("status").$type<"pending" | "prequalified" | "rejected">().notNull().default("pending"),
+  note: text("note").notNull().default(""),
+  validUntil: date("valid_until", { mode: "string" }),
+  decidedAt: timestamp("decided_at", { withTimezone: true }),
+}, (t) => [primaryKey({ columns: [t.partnerId, t.categoryId] })]);
+
+export type SupplierDocKind = "rdb" | "rra" | "rssb" | "other";
+
+/** A supplier's legal document: registration certificate, tax clearance, social security clearance... */
+export const supplierDocuments = pgTable("supplier_documents", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  partnerId: uuid("partner_id").notNull().references(() => partners.id, { onDelete: "cascade" }),
+  kind: text("kind").$type<SupplierDocKind>().notNull(),
+  label: text("label").notNull().default(""),
+  reference: text("reference").notNull().default(""),
+  expiresOn: date("expires_on", { mode: "string" }),
+  attachmentId: uuid("attachment_id").notNull().references(() => attachments.id),
+  status: text("status").$type<"pending" | "accepted" | "rejected">().notNull().default("pending"),
+  note: text("note").notNull().default(""),
+  uploadedBy: uuid("uploaded_by").references(() => users.id),
+  uploadedAt: timestamp("uploaded_at", { withTimezone: true }).notNull().defaultNow(),
+  reviewedBy: uuid("reviewed_by").references(() => users.id),
+  reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+}, (t) => [index("supplier_documents_partner").on(t.partnerId)]);
+
+/** How a supplier performed on one order, from 1 to 5 on each point. */
+export const supplierRatings = pgTable("supplier_ratings", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  partnerId: uuid("partner_id").notNull().references(() => partners.id, { onDelete: "cascade" }),
+  orderId: uuid("order_id").references(() => purchaseOrders.id, { onDelete: "cascade" }),
+  quality: integer("quality").notNull(),
+  delivery: integer("delivery").notNull(),
+  service: integer("service").notNull(),
+  comment: text("comment").notNull().default(""),
+  ratedBy: uuid("rated_by").references(() => users.id),
+  createdAt: created(),
+}, (t) => [index("supplier_ratings_partner").on(t.partnerId), uniqueIndex("supplier_ratings_order").on(t.orderId)]);
 
 export const projects = pgTable("projects", {
   id: uuid("id").primaryKey().defaultRandom(),

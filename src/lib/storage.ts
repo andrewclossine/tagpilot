@@ -10,7 +10,8 @@ export const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gi
 export const MAX_UPLOAD = 15 * 1024 * 1024;
 
 /** Saves an uploaded supporting document and records it. Returns the attachment id. */
-export async function saveAttachment(companyId: string, userId: string, file: File): Promise<{ id: string; bytes: Buffer }> {
+/** Saves an uploaded file. The uploader is empty only for a supplier registering, before its account exists. */
+export async function saveAttachment(companyId: string, userId: string | null, file: File): Promise<{ id: string; bytes: Buffer }> {
   const bytes = Buffer.from(await file.arrayBuffer());
   const ext = path.extname(file.name).toLowerCase().replace(/[^.a-z0-9]/g, "").slice(0, 8);
   const rel = path.join(companyId, `${new Date().toISOString().slice(0, 7)}`, crypto.randomUUID() + ext);

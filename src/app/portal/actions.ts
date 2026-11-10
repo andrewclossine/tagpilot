@@ -12,6 +12,7 @@ import { submitSupplierBill } from "@/lib/purchasing";
 import { optionalUpload } from "@/lib/upload";
 import { audit } from "@/lib/audit";
 import { itemsOf, readBidPrices, saveBidPrices } from "@/lib/boq";
+import { addDocument, canBid } from "@/lib/suppliers";
 
 /** Sends or replaces the supplier's own bid or quotation. The deadline is checked on the server, against its clock. */
 export async function submitBid(fd: FormData) {
@@ -25,6 +26,8 @@ export async function submitBid(fd: FormData) {
       const [tender] = await tx.select().from(schema.tenders).where(and(eq(schema.tenders.id, tenderId), eq(schema.tenders.companyId, ctx.company.id))).for("update");
       if (!tender || !(await supplierCanSee(tx, tender, ctx.partnerId))) throw new UserError("err_not_found");
       if (!biddingOpen(tender)) throw new UserError("err_not_bidding");
+      const [me] = await tx.select().from(schema.partners).where(eq(schema.partners.id, ctx.partnerId));
+      if (!me || !canBid(me)) throw new UserError("err_supplier_not_approved");
       const note = str(fd, "note");
       const items = await itemsOf(tx, tenderId);
       const priced = items.length ? readBidPrices(fd, items) : null;
@@ -80,4 +83,22 @@ export async function supplierAmendment(fd: FormData) {
   } catch (e) { fail(e, back); }
   revalidatePath(back);
   redirect(back);
+}
+
+/** The supplier adds or renews one of its documents from the portal; it is checked again by the organisation. */
+export async function uploadSupplierDocument(fd: FormData) {
+  const ctx = await requireSupplier();
+  const back = "/portal/profile";
+  try {
+    const kind = str(fd, "kind") as "rdb" | "rra" | "rssb" | "other";
+    const expires = str(fd, "expiresOn");
+    if (expires && !isIsoDate(expires)) throw new UserError("err_required");
+    const attachmentId = await optionalUpload(ctx.company.id, ctx.user.id, fd);
+    if (!attachmentId) throw new UserError("err_file_required");
+    const db = await getDb();
+    await db.transaction((tx) => addDocument(tx, ctx.company.id, ctx.partnerId, ctx.user.id, { kind, label: str(fd, "label"), reference: str(fd, "reference"), expiresOn: expires || null, attachmentId }));
+    await audit(db, ctx.company.id, ctx.user.id, "upload_document", "supplier", kind);
+  } catch (e) { fail(e, back); }
+  revalidatePath(back);
+  redirect(`${back}?saved=1`);
 }

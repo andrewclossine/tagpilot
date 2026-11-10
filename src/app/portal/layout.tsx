@@ -16,7 +16,7 @@ export default async function PortalLayout({ children }: { children: React.React
       <aside className="side">
         <div style={{ padding: "0 6px" }}><Logo size={30} onDark /></div>
         <div style={{ padding: "0 8px", fontWeight: 600, color: "#fff" }}>{ctx.company.name}</div>
-        <NavLinks items={[{ group: t("portal_title") }, { href: "/portal", label: t("portal_tenders") }, { href: "/portal/contracts", label: t("nav_contracts") }]} />
+        <NavLinks items={[{ group: t("portal_title") }, { href: "/portal", label: t("portal_tenders") }, { href: "/portal/contracts", label: t("nav_contracts") }, { href: "/portal/profile", label: t("reg_my_profile") }]} />
         <div className="foot">
           <div>{partner?.name}<div className="small" style={{ opacity: .7 }}>@{ctx.user.username} · {ctx.user.name}</div></div>
           <form action={setLang} className="row" style={{ gap: 6 }}>

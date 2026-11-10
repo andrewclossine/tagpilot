@@ -9,7 +9,7 @@ import { isUuid, round2 } from "@/lib/format";
 import { orderProgress, statusOf } from "@/lib/purchase-orders";
 import { ConfirmButton } from "@/components/editors";
 import { ErrorNote, PageHead, Pill } from "@/components/ui";
-import { closeOrder, deleteOrder, issueOrder, receiveOrder, voidOrderReceipt } from "../actions";
+import { closeOrder, deleteOrder, issueOrder, rateOrderAction, receiveOrder, voidOrderReceipt } from "../actions";
 import { matchBill, receiptsOf, receivedByLine } from "@/lib/receipts";
 import { today } from "@/lib/format";
 import { OrderForm } from "../OrderForm";
@@ -47,6 +47,8 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
     db.select().from(schema.bills).where(and(eq(schema.bills.purchaseOrderId, id), eq(schema.bills.companyId, ctx.company.id))),
   ]);
   const matches = await Promise.all(bills.map(async (b) => ({ b, m: await matchBill(db, b.id) })));
+  const [rating] = await db.select().from(schema.supplierRatings).where(eq(schema.supplierRatings.orderId, id));
+  const delivered = notes.some((n) => n.r.status === "received");
   const outstanding = (lineId: string, qty: number) => round2(qty - (got.get(lineId)?.accepted ?? 0));
   const lineOf = (lineId: string) => lines.find((l) => l.id === lineId);
   return (
@@ -111,6 +113,24 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
               ) : null}
             </div>
           ))}
+        </div>
+      ) : null}
+
+      {delivered && (write || rating) ? (
+        <div className="panel stack" id="rating">
+          <h2>{t("rate_title")}</h2>
+          {rating ? <div className="small">{t("rate_quality")} <b>{rating.quality}</b> · {t("rate_delivery")} <b>{rating.delivery}</b> · {t("rate_service")} <b>{rating.service}</b>{rating.comment ? ` · ${rating.comment}` : ""}</div> : <div className="small muted">{t("rate_help")}</div>}
+          {write ? (
+            <form action={rateOrderAction} className="fields" style={{ alignItems: "end" }}>
+              <input type="hidden" name="id" value={o.id} />
+              {(["quality", "delivery", "service"] as const).map((k) => (
+                <label key={k} className="f">{t(`rate_${k}`)}
+                  <select name={k} defaultValue={String(rating?.[k] ?? 4)}>{[5, 4, 3, 2, 1].map((n) => <option key={n} value={n}>{"★".repeat(n)} {n}</option>)}</select></label>
+              ))}
+              <label className="f">{t("cm_comment")}<input name="comment" defaultValue={rating?.comment ?? ""} /></label>
+              <div><button type="submit" className="btn">{t(rating ? "rate_update" : "rate_save")}</button></div>
+            </form>
+          ) : null}
         </div>
       ) : null}
 

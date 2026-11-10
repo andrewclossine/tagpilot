@@ -162,6 +162,13 @@
       "when": 1794294657315,
       "tag": "0022_receipts_matching",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1794303168199,
+      "tag": "0023_supplier_registry",
+      "breakpoints": true
     }
   ]
 }

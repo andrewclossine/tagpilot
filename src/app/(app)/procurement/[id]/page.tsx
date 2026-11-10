@@ -13,6 +13,7 @@ import { LocalTime } from "@/components/datetime";
 import { ErrorNote, PageHead, Pill } from "@/components/ui";
 import { addTenderForm, cancelTender, evaluateBids, publishTender, recordStage, removeTenderForm, saveTenderItems } from "../actions";
 import { itemsOf, pricesOf } from "@/lib/boq";
+import { canBid, registry } from "@/lib/suppliers";
 import { committeeTechnical } from "@/lib/committee";
 import { ItemLines } from "@/components/ItemLines";
 import { PriceComparison } from "@/components/PriceComparison";
@@ -47,7 +48,7 @@ export default async function TenderPage({ params, searchParams }: { params: Pro
   const [stages, invites, suppliers, bidCount, items, committee] = await Promise.all([
     db.select().from(schema.tenderStages).where(eq(schema.tenderStages.tenderId, id)),
     db.select().from(schema.tenderInvites).where(eq(schema.tenderInvites.tenderId, id)),
-    db.select().from(schema.partners).where(and(eq(schema.partners.companyId, ctx.company.id), inArray(schema.partners.kind, ["supplier", "both"]))).orderBy(schema.partners.name),
+    registry(db, ctx.company.id).then((r) => r.suppliers.filter((s) => canBid(s.p))),
     countBids(db, id),
     itemsOf(db, id),
     committeeTechnical(db, id),
@@ -130,12 +131,16 @@ export default async function TenderPage({ params, searchParams }: { params: Pro
             <h2>{t("tn_invite")}</h2>
             <input type="hidden" name="id" value={id} />
             {tender.openToAll ? <div className="note info small">{t("tn_open_to_all")}</div> : null}
-            {suppliers.length ? suppliers.map((p) => (
+            {suppliers.length ? suppliers.map(({ p, docFlag, rating, categories }) => (
               <label key={p.id} className="row small" style={{ gap: 8 }}>
                 <input id={`inv-${p.id}`} name="invite" value={p.id} type="checkbox" style={{ width: "auto" }} defaultChecked={invites.some((i) => i.partnerId === p.id)} />
                 {p.name}{hasAccount(p.id) ? null : <span className="muted"> · {t("tn_no_account")}</span>}
+                {categories.filter((c) => c.status === "prequalified").map((c) => <span key={c.categoryId} className="muted"> · {c.name}</span>)}
+                {rating ? <span className="muted"> · {rating.avg} ★</span> : null}
+                {docFlag === "expired" || docFlag === "expiring" ? <span style={{ color: docFlag === "expired" ? "var(--bad)" : "var(--warn, #b45309)" }}> · {t(`sdst_${docFlag}`)}</span> : null}
               </label>
             )) : <div className="small muted">{t("nothing_yet")}</div>}
+            <div className="small muted">{t("reg_invite_help")}</div>
             <div className="small"><Link href="/procurement/suppliers">{t("nav_supplier_accounts")} →</Link></div>
             <div><button type="submit" className="btn primary">{t("tn_publish")}</button></div>
           </form>

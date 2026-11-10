@@ -24,9 +24,11 @@ export default async function PortalPage() {
   }
   // Tenders still open first; the ones this supplier never bid on disappear once closed.
   const rows = visible.filter(({ x, bid }) => bid || biddingOpen(x));
+  const [me] = await db.select({ status: schema.partners.supplierStatus }).from(schema.partners).where(eq(schema.partners.id, ctx.partnerId));
   return (
     <div className="stack">
       <PageHead title={t("portal_tenders")} />
+      {me?.status && me.status !== "approved" ? <div className="note info">{t(me.status === "registered" ? "reg_under_review" : "err_supplier_not_approved")} <Link href="/portal/profile">{t("reg_my_profile")} →</Link></div> : null}
       <p className="muted" style={{ margin: 0, maxWidth: "70ch" }}>{t("portal_sub")}</p>
       <div className="panel">
         {rows.length ? (

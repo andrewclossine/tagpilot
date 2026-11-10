@@ -1,10 +1,10 @@
 import "server-only";
-import { and, eq, inArray, isNull, lt, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, isNull, lt, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { schema } from "@/db";
 import { dict, type Key } from "./i18n-dict";
 import { mailConfigured, sendMail } from "./mail";
-import { today } from "./format";
+import { addDays, today } from "./format";
 import { receivedByLine } from "./purchase-orders";
 
 const DAY = 86400000;
@@ -84,6 +84,19 @@ export async function runDailyNotices(db: Db, now = new Date()) {
     if (stage === "evaluation" && t.status === "evaluated" && t.awardApproverId && !t.awardApprovedAt) {
       await once(`award-remind:${t.id}`, await emailOf(t.awardApproverId), both("ntc_award", { number: t.number, title: t.title }));
     }
+  }
+
+  // Supplier documents: 30 days before they expire, and when they have expired.
+  const docs = await db.select({ d: schema.supplierDocuments, p: schema.partners }).from(schema.supplierDocuments)
+    .innerJoin(schema.partners, eq(schema.partners.id, schema.supplierDocuments.partnerId))
+    .where(and(inArray(schema.supplierDocuments.companyId, ids), eq(schema.supplierDocuments.status, "accepted"), lt(schema.supplierDocuments.expiresOn, addDays(today(), 31))));
+  for (const { d, p } of docs) {
+    // Only the latest document of its kind counts: a renewed one replaces it.
+    const [newer] = await db.select({ id: schema.supplierDocuments.id }).from(schema.supplierDocuments)
+      .where(and(eq(schema.supplierDocuments.partnerId, d.partnerId), eq(schema.supplierDocuments.kind, d.kind), gt(schema.supplierDocuments.uploadedAt, d.uploadedAt)));
+    if (newer || !d.expiresOn) continue;
+    const expired = d.expiresOn < today();
+    await once(`doc-${expired ? "expired" : "expiring"}:${d.id}`, p.email, both(expired ? "ntc_doc_expired" : "ntc_doc_expiring", { doc: dict.en[`sdoc_${d.kind}`], date: d.expiresOn, buyer: nameOf(d.companyId) }));
   }
 
   // Deliveries past their expected date with something still to receive.
