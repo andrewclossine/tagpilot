@@ -290,6 +290,8 @@ export const purchaseOrders = pgTable("purchase_orders", {
   status: text("status").$type<"draft" | "issued" | "closed" | "cancelled">().notNull().default("draft"),
   notes: text("notes").notNull().default(""),
   closeNote: text("close_note").notNull().default(""),
+  // Three-way match: a bill may only take what was received and accepted, at no more than the ordered price.
+  requireReceipt: boolean("require_receipt").notNull().default(false),
   subtotal: money("subtotal"),
   vat: money("vat"),
   total: money("total"),
@@ -316,6 +318,42 @@ export const purchaseOrderBillings = pgTable("purchase_order_billings", {
   quantity: numeric("quantity", { precision: 18, scale: 3, mode: "number" }).notNull(),
   amount: money("amount"),
 }, (t) => [index("po_billings_line").on(t.lineId), index("po_billings_bill").on(t.billId)]);
+
+export type ReceiptChecks = { quantity: boolean; specification: boolean; condition: boolean; documents: boolean };
+
+/**
+ * A goods received note against a purchase order: what arrived, what passed inspection and what was rejected.
+ * It books nothing; the bill does, and may take no more than what was accepted when the order asks for a match.
+ */
+export const orderReceipts = pgTable("order_receipts", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  orderId: uuid("order_id").notNull().references(() => purchaseOrders.id, { onDelete: "cascade" }),
+  number: text("number").notNull(),
+  date: date("date", { mode: "string" }).notNull(),
+  deliveryNote: text("delivery_note").notNull().default(""),
+  checks: jsonb("checks").$type<ReceiptChecks>().notNull(),
+  defects: text("defects").notNull().default(""),
+  attachmentId: uuid("attachment_id").references(() => attachments.id),
+  status: text("status").$type<"received" | "void">().notNull().default("received"),
+  voidNote: text("void_note").notNull().default(""),
+  receivedBy: uuid("received_by").references(() => users.id),
+  createdAt: created(),
+}, (t) => [uniqueIndex("order_receipts_company_number").on(t.companyId, t.number), index("order_receipts_order").on(t.orderId)]);
+export const orderReceiptLines = pgTable("order_receipt_lines", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  receiptId: uuid("receipt_id").notNull().references(() => orderReceipts.id, { onDelete: "cascade" }),
+  lineId: uuid("line_id").notNull().references(() => purchaseOrderLines.id, { onDelete: "cascade" }),
+  received: numeric("received", { precision: 18, scale: 3, mode: "number" }).notNull(),
+  accepted: numeric("accepted", { precision: 18, scale: 3, mode: "number" }).notNull(),
+  note: text("note").notNull().default(""),
+}, (t) => [index("order_receipt_lines_line").on(t.lineId)]);
+
+/** Reminders already sent, so the daily run sends each one once. */
+export const noticeLog = pgTable("notice_log", {
+  key: text("key").primaryKey(),
+  sentAt: timestamp("sent_at", { withTimezone: true }).notNull().defaultNow(),
+});
 
 /** A quotation to a customer. Nothing is booked until it becomes an invoice. */
 export const proformas = pgTable("proformas", {

@@ -38,6 +38,7 @@ export async function OrderForm({ ctx, order, lines = [] }: { ctx: Ctx; order?: 
         <label className="f">{t("date")}<input id="po-date" name="date" type="date" required defaultValue={order?.date ?? today()} /></label>
         <label className="f">{t("po_expected")}<input id="po-expected" name="expectedDate" type="date" defaultValue={order?.expectedDate ?? ""} /></label>
       </div>
+      <label className="row small" style={{ gap: 8 }}><input id="po-match" name="requireReceipt" type="checkbox" style={{ width: "auto" }} defaultChecked={order ? order.requireReceipt : true} /> {t("po_require_receipt")}</label>
       <div className="tbl-wrap"><table className="lines">
         <thead><tr><th>{t("description")}</th><th className="num">{t("qty")}</th><th className="num">{t("unit_price")} ({ctx.company.currency})</th>{vat ? <th>{t("vat")}</th> : null}</tr></thead>
         <tbody>{Array.from({ length: ROWS }, (_, i) => (

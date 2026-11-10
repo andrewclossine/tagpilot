@@ -7,6 +7,8 @@ import { fail } from "@/lib/actions";
 import { isIsoDate, isUuid, parseAmount, str, today } from "@/lib/format";
 import { UserError } from "@/lib/ledger";
 import { closePurchaseOrder, deletePurchaseOrder, issuePurchaseOrder, savePurchaseOrder } from "@/lib/purchase-orders";
+import { receiveGoods, voidReceipt } from "@/lib/receipts";
+import { optionalUpload } from "@/lib/upload";
 
 const BASE = "/procurement/orders";
 const refresh = () => { revalidatePath(BASE); revalidatePath("/purchases/orders"); };
@@ -30,7 +32,7 @@ export async function saveOrder(fd: FormData) {
     const vatRate = ctx.company.vatRegistered ? ctx.company.vatRate : 0;
     const db = await getDb();
     saved = await db.transaction((tx) => savePurchaseOrder(tx, ctx.company.id, ctx.user.id, id || undefined, {
-      partnerId, projectId, date, expectedDate: expected || null, notes: str(fd, "notes"),
+      partnerId, projectId, date, expectedDate: expected || null, notes: str(fd, "notes"), requireReceipt: fd.get("requireReceipt") === "on",
     }, lines, vatRate));
   } catch (e) { fail(e, back); }
   refresh();
@@ -72,4 +74,42 @@ export async function closeOrder(fd: FormData) {
   } catch (e) { fail(e, `${BASE}/${id}`); }
   refresh();
   redirect(`${BASE}/${id}`);
+}
+
+/** Records a goods received note: what arrived on each line, what passed inspection, and any defects. */
+export async function receiveOrder(fd: FormData) {
+  const ctx = await requireWrite("procurement");
+  const id = str(fd, "id"), back = `${BASE}/${id}`;
+  try {
+    if (!isUuid(id)) throw new UserError("err_not_found");
+    const date = str(fd, "date") || today();
+    if (!isIsoDate(date)) throw new UserError("err_required");
+    const lineIds = fd.getAll("grnLine").map(String);
+    const lines = lineIds.map((lineId) => {
+      const received = parseAmount(fd.get(`received_${lineId}`));
+      const acceptedRaw = str(fd, `accepted_${lineId}`);
+      return { lineId, received, accepted: acceptedRaw === "" ? received : parseAmount(acceptedRaw), note: str(fd, `grnNote_${lineId}`) };
+    });
+    const attachmentId = await optionalUpload(ctx.company.id, ctx.user.id, fd);
+    const db = await getDb();
+    await db.transaction((tx) => receiveGoods(tx, ctx, id, {
+      date, deliveryNote: str(fd, "deliveryNote"), defects: str(fd, "defects"), attachmentId, lines,
+      checks: { quantity: fd.get("chkQuantity") === "on", specification: fd.get("chkSpecification") === "on", condition: fd.get("chkCondition") === "on", documents: fd.get("chkDocuments") === "on" },
+    }));
+  } catch (e) { fail(e, back); }
+  refresh();
+  revalidatePath(back);
+  redirect(`${back}#receipts`);
+}
+
+export async function voidOrderReceipt(fd: FormData) {
+  const ctx = await requireWrite("procurement");
+  const id = str(fd, "id"), back = `${BASE}/${id}`;
+  try {
+    const db = await getDb();
+    await db.transaction((tx) => voidReceipt(tx, ctx, str(fd, "receiptId"), str(fd, "note")));
+  } catch (e) { fail(e, back); }
+  refresh();
+  revalidatePath(back);
+  redirect(`${back}#receipts`);
 }

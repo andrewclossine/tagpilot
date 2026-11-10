@@ -8,7 +8,7 @@ import { round2 } from "./format";
 import { UserError } from "./ledger";
 
 export type PoLineInput = { description: string; quantity: number; unitPrice: number; vatApplies: boolean };
-export type PoHeader = { partnerId: string; projectId: string; date: string; expectedDate: string | null; notes: string };
+export type PoHeader = { partnerId: string; projectId: string; date: string; expectedDate: string | null; notes: string; requireReceipt: boolean };
 export type PoStatus = "draft" | "issued" | "partly_billed" | "billed" | "closed" | "cancelled";
 
 async function lockOrder(tx: Tx, companyId: string, id: string) {
@@ -93,6 +93,20 @@ export async function orderProgress(db: Db | Tx, orderIds: string[]) {
   return out;
 }
 
+/** How much of each order line was received and accepted, on notes that were not voided. */
+export async function receivedByLine(db: Db | Tx, orderIds: string[]) {
+  const out = new Map<string, { received: number; accepted: number }>();
+  if (!orderIds.length) return out;
+  const rows = await db.select({ lineId: schema.orderReceiptLines.lineId, received: schema.orderReceiptLines.received, accepted: schema.orderReceiptLines.accepted })
+    .from(schema.orderReceiptLines).innerJoin(schema.orderReceipts, eq(schema.orderReceipts.id, schema.orderReceiptLines.receiptId))
+    .where(and(inArray(schema.orderReceipts.orderId, orderIds), eq(schema.orderReceipts.status, "received")));
+  for (const r of rows) {
+    const p = out.get(r.lineId) ?? { received: 0, accepted: 0 };
+    out.set(r.lineId, { received: round2(p.received + r.received), accepted: round2(p.accepted + r.accepted) });
+  }
+  return out;
+}
+
 export function statusOf(o: { status: string; subtotal: number }, billed: number): PoStatus {
   if (o.status !== "issued") return o.status as PoStatus;
   if (billed <= 0) return "issued";
@@ -108,6 +122,7 @@ export async function billFromOrder(tx: Tx, companyId: string, userId: string, i
   if (o.status !== "issued") throw new UserError("err_po_state");
   const lines = await tx.select().from(schema.purchaseOrderLines).where(eq(schema.purchaseOrderLines.orderId, id)).orderBy(asc(schema.purchaseOrderLines.lineNo));
   const done = (await orderProgress(tx, [id])).get(id)?.byLine ?? new Map<string, number>();
+  const accepted = o.requireReceipt ? await receivedByLine(tx, [id]) : null;
   const wanted = input.lines.filter((l) => l.quantity > 0);
   if (!wanted.length) throw new UserError("err_required");
   const accounts = await tx.select({ id: schema.accounts.id, type: schema.accounts.type, subtype: schema.accounts.subtype }).from(schema.accounts)
@@ -117,6 +132,10 @@ export async function billFromOrder(tx: Tx, companyId: string, userId: string, i
     if (!line) throw new UserError("err_not_found");
     if (w.quantity > round2(line.quantity - (done.get(line.id) ?? 0)) + 0.0005) throw new UserError("err_po_over");
     if (!(w.unitPrice > 0)) throw new UserError("err_amount");
+    if (accepted) {
+      if (w.quantity > round2((accepted.get(line.id)?.accepted ?? 0) - (done.get(line.id) ?? 0)) + 0.0005) throw new UserError("err_match_qty");
+      if (w.unitPrice > line.unitPrice + 0.005) throw new UserError("err_match_price");
+    }
     const a = accounts.find((x) => x.id === w.accountId);
     if (!a || (a.type !== "expense" && a.type !== "asset") || ["bank", "cash", "momo", "ar", "ap"].includes(a.subtype ?? "")) throw new UserError("err_account");
     return { line, description: line.description, quantity: w.quantity, unitPrice: w.unitPrice, vatApplies: line.vatApplies && input.vatRate > 0, accountId: w.accountId, projectId: o.projectId };

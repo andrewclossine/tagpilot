@@ -15,6 +15,7 @@ import {
 import { optionalUpload } from "@/lib/upload";
 import { readItemLines } from "@/lib/item-lines";
 import { committeeTechnical } from "@/lib/committee";
+import { notifyUser } from "@/lib/requisitions";
 import { audit } from "@/lib/audit";
 import type { TenderStage } from "@/db/schema";
 
@@ -154,6 +155,9 @@ export async function publishTender(fd: FormData) {
       }
     });
     await notifySuppliers(db, recipients, `${number} - ${ctx.company.name}`, `${t("mail_tender_published")}: ${number} - ${title}`);
+    // The committee can declare and get ready while bids come in.
+    const members = await db.select({ userId: schema.tenderCommittee.userId }).from(schema.tenderCommittee).where(eq(schema.tenderCommittee.tenderId, id));
+    for (const m of members) await notifyUser(m.userId, t("cm_mail_member"), `${t("cm_mail_member")}: ${number} - ${title}`);
   } catch (e) { fail(e, back); }
   refresh(id);
   redirect(back);

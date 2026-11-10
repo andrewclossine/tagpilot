@@ -74,6 +74,11 @@ export async function postDoc(tx: Tx, kind: DocKind, companyId: string, userId: 
   if (d.status !== "draft") throw new UserError("err_posted_locked");
   const docLines = await tx.select().from(t.lines).where(eq(t.fkCol, id));
   if (!docLines.length || d.total <= 0) throw new UserError("err_no_lines");
+  if (kind === "bill") {
+    const { matchBill } = await import("./receipts");
+    const m = await matchBill(tx, id);
+    if (m.applies && m.issues.length) throw new UserError(`err_match_${m.issues[0]}`);
+  }
 
   // Stock items: a bill puts them into inventory at its price; an invoice takes them out at average cost (IAS 2)
   // and books that cost of sales next to the revenue.
