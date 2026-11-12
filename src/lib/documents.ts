@@ -1,10 +1,11 @@
 import "server-only";
-import { and, count, eq } from "drizzle-orm";
+import { and, count, eq, ne } from "drizzle-orm";
 import type { Tx } from "@/db";
 import { schema } from "@/db";
 import { round2 } from "./format";
 import { accountIdByCode, reverseEntry, saveEntry, UserError, type LineInput } from "./ledger";
 import { audit } from "./audit";
+import { nextNumber as nextPrefixed } from "./numbering";
 import { linkMoves, loadItem, moveStock, reverseDocumentStock } from "./inventory";
 
 /** Invoices (sales) and bills (purchases) share one engine; `kind` picks the tables and the accounting. */
@@ -29,7 +30,8 @@ export function computeTotals(lines: DocLineInput[], vatRate: number) {
 
 async function nextNumber(tx: Tx, kind: DocKind, companyId: string) {
   const t = tables(kind);
-  const [{ n }] = await tx.select({ n: count() }).from(t.doc).where(eq(t.doc.companyId, companyId));
+  const [{ n }] = await tx.select({ n: count() }).from(t.doc)
+    .where(kind === "invoice" ? and(eq(schema.invoices.companyId, companyId), ne(schema.invoices.docType, "receipt")) : eq(t.doc.companyId, companyId));
   return `${t.prefix}${String(n + 1).padStart(4, "0")}`;
 }
 
@@ -185,6 +187,19 @@ export async function payDoc(tx: Tx, kind: DocKind, companyId: string, userId: s
   const paid = round2(d.amountPaid + amount);
   await tx.update(t.doc).set({ amountPaid: paid, status: paid >= d.total - 0.005 ? "paid" : "partial" }).where(eq(t.doc.id, id));
   await audit(tx, companyId, userId, "payment", kind, id, { amount, wht });
+}
+
+/**
+ * A sales receipt: a sale paid on the spot. The draft becomes a receipt with its own number, is issued, and its whole
+ * amount is received into the money account, all at once.
+ */
+export async function postSalesReceipt(tx: Tx, companyId: string, userId: string, id: string, p: { moneyAccountId: string; reference: string }, settings: typeof schema.companies.$inferSelect["settings"]) {
+  const d = await getDoc(tx, "invoice", companyId, id);
+  if (d.status !== "draft") throw new UserError("err_posted_locked");
+  const number = await nextPrefixed(tx, schema.invoices, { number: schema.invoices.number, companyId: schema.invoices.companyId }, companyId, "SR");
+  await tx.update(schema.invoices).set({ docType: "receipt", number, dueDate: d.date }).where(eq(schema.invoices.id, id));
+  await postDoc(tx, "invoice", companyId, userId, id, settings);
+  await payDoc(tx, "invoice", companyId, userId, id, { date: d.date, amount: d.total, moneyAccountId: p.moneyAccountId, reference: p.reference }, settings);
 }
 
 /** Voids an unpaid document: drafts are simply marked void, posted ones are reversed in the ledger. */

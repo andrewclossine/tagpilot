@@ -10,42 +10,44 @@ import { addDays, daysBetween, round2, today } from "@/lib/format";
 import { ConfirmButton, DocLinesEditor, type DLine, type ItemOpt } from "./editors";
 import { PartnerPicker } from "./PartnerPicker";
 import { Empty, ErrorNote, PageHead, Pill, Tabs } from "./ui";
-import { deleteDocDraft, payDocAction, saveDoc, voidDocAction } from "@/app/(app)/doc-actions";
+import { createCreditNote, deleteDocDraft, payDocAction, saveDoc, voidCreditNoteAction, voidDocAction } from "@/app/(app)/doc-actions";
+import { creditableLines } from "@/lib/credit-notes";
 import { sendInvoiceEmail } from "@/app/(app)/send-actions";
 
 export const docBase = (kind: DocKind) => (kind === "invoice" ? "/sales/invoices" : "/purchases/bills");
 const statusKey = { draft: "st_draft", open: "st_open", partial: "st_partial", paid: "st_paid", void: "st_void" } as const;
 
-type DocRow = Omit<typeof schema.invoices.$inferSelect, "sentAt" | "sentTo"> & Partial<Pick<typeof schema.invoices.$inferSelect, "sentAt" | "sentTo">> & Partial<Pick<typeof schema.bills.$inferSelect, "supplierRef" | "whtRate" | "attachmentId">>;
+type DocRow = Omit<typeof schema.invoices.$inferSelect, "sentAt" | "sentTo" | "docType"> & Partial<Pick<typeof schema.invoices.$inferSelect, "sentAt" | "sentTo" | "docType">> & Partial<Pick<typeof schema.bills.$inferSelect, "supplierRef" | "whtRate" | "attachmentId">>;
 
-async function loadDocs(kind: DocKind, companyId: string, statuses?: string[]) {
+async function loadDocs(kind: DocKind, companyId: string, statuses?: string[], receipts = false) {
   const db = await getDb();
   const doc = kind === "invoice" ? schema.invoices : schema.bills;
   const conds = [eq(doc.companyId, companyId)];
+  if (kind === "invoice") conds.push(eq(schema.invoices.docType, receipts ? "receipt" : "invoice"));
   if (statuses) conds.push(inArray(doc.status, statuses as ("draft" | "open" | "partial" | "paid" | "void")[]));
   return db.select({ d: doc, partner: schema.partners.name }).from(doc)
     .innerJoin(schema.partners, eq(schema.partners.id, doc.partnerId))
     .where(and(...conds)).orderBy(desc(doc.date), desc(doc.createdAt)).limit(500);
 }
 
-export async function DocList({ kind, ctx, status }: { kind: DocKind; ctx: Ctx; status: string }) {
+export async function DocList({ kind, ctx, status, receipts = false }: { kind: DocKind; ctx: Ctx; status: string; receipts?: boolean }) {
   const { t, money } = await getI18n();
   const base = docBase(kind);
   const filter = status === "unpaid" ? ["open", "partial"] : status && status in statusKey ? [status] : undefined;
-  const rows = await loadDocs(kind, ctx.company.id, filter);
+  const rows = await loadDocs(kind, ctx.company.id, filter, receipts);
   const due = rows.reduce((s, r) => s + (r.d.status === "open" || r.d.status === "partial" ? r.d.total - r.d.amountPaid : 0), 0);
   return (
     <div className="stack">
-      <PageHead title={t(kind === "invoice" ? "inv_title" : "bill_title")}>
-        <Link className="btn" href={kind === "invoice" ? "/reports/ar" : "/reports/ap"}>{t(kind === "invoice" ? "r_ar" : "r_ap")}</Link>
-        {ctx.can(kind === "invoice" ? "sales" : "purchases", "write") ? <Link className="btn primary" href={`${base}/new`}>{t(kind === "invoice" ? "inv_new" : "bill_new")}</Link> : null}
+      <PageHead title={t(receipts ? "sr_title" : kind === "invoice" ? "inv_title" : "bill_title")}>
+        {receipts ? null : <Link className="btn" href={kind === "invoice" ? "/reports/ar" : "/reports/ap"}>{t(kind === "invoice" ? "r_ar" : "r_ap")}</Link>}
+        {ctx.can(kind === "invoice" ? "sales" : "purchases", "write") ? <Link className="btn primary" href={receipts ? "/sales/receipts/new" : `${base}/new`}>{t(receipts ? "sr_new" : kind === "invoice" ? "inv_new" : "bill_new")}</Link> : null}
       </PageHead>
-      <Tabs current={status || "all"} items={[
+      {receipts ? null : <Tabs current={status || "all"} items={[
         { key: "all", href: base, label: t("all") },
         { key: "draft", href: `${base}?status=draft`, label: t("st_draft") },
         { key: "unpaid", href: `${base}?status=unpaid`, label: t("st_open") },
         { key: "paid", href: `${base}?status=paid`, label: t("st_paid") },
-      ]} />
+      ]} />}
       <div className="panel">
         {rows.length ? (
           <div className="tbl-wrap"><table>
@@ -73,7 +75,7 @@ export async function DocList({ kind, ctx, status }: { kind: DocKind; ctx: Ctx; 
   );
 }
 
-export async function DocForm({ kind, ctx, doc, lines, error }: { kind: DocKind; ctx: Ctx; doc?: DocRow; lines?: DLine[]; error: string }) {
+export async function DocForm({ kind, ctx, doc, lines, error, receipt = false }: { kind: DocKind; ctx: Ctx; doc?: DocRow; lines?: DLine[]; error: string; receipt?: boolean }) {
   const { t, accName } = await getI18n();
   const o = await bookOptions(ctx.company.id, accName);
   const db = await getDb();
@@ -89,11 +91,12 @@ export async function DocForm({ kind, ctx, doc, lines, error }: { kind: DocKind;
   const vatRate = ctx.company.vatRegistered ? ctx.company.vatRate : 0;
   const defaultAcc = o.accounts.find((a) => a.code === (kind === "invoice" ? "4200" : "6900"))?.id ?? "";
   const accountTypes = kind === "invoice" ? ["income", "liability"] as const : ["expense", "asset"] as const;
+  const moneyAccs = receipt ? (await moneyAccounts(db, ctx.company.id)).filter((a) => !a.currency) : [];
   return (
     <div className="stack">
-      <PageHead title={doc ? `${t(kind === "invoice" ? "inv_invoice" : "bill_bill")} ${doc.number}` : t(kind === "invoice" ? "inv_new" : "bill_new")}>
+      <PageHead title={receipt ? t("sr_new") : doc ? `${t(kind === "invoice" ? "inv_invoice" : "bill_bill")} ${doc.number}` : t(kind === "invoice" ? "inv_new" : "bill_new")}>
         {doc ? <Pill kind="draft">{t("st_draft")}</Pill> : null}
-        <Link className="btn ghost" href={docBase(kind)}>{t("back")}</Link>
+        <Link className="btn ghost" href={receipt ? "/sales/receipts" : docBase(kind)}>{t("back")}</Link>
       </PageHead>
       <ErrorNote message={error} />
       {doc && kind === "invoice" ? await creditWarning(ctx.company.id, doc.partnerId, doc.total, doc.id) : null}
@@ -106,7 +109,11 @@ export async function DocForm({ kind, ctx, doc, lines, error }: { kind: DocKind;
               labels={kind === "invoice" ? { add: t("cust_add_new"), title: t("cust_add_new_title"), name: t("name"), tin: t("tin"), phone: t("phone"), email: t("email"), save: t("save"), cancel: t("cancel") } : { add: t("supp_add_new"), title: t("supp_add_new_title"), name: t("name"), tin: t("tin"), phone: t("phone"), email: t("email"), save: t("save"), cancel: t("cancel") }} />
           </label>
           <label className="f">{t("date")}<input id="date" type="date" name="date" defaultValue={doc?.date ?? today()} required /></label>
-          <label className="f">{t("due_date")}<input id="dueDate" type="date" name="dueDate" defaultValue={doc?.dueDate ?? addDays(today(), 30)} required /></label>
+          {receipt ? <>
+            <label className="f">{t("paid_into")}
+              <select id="moneyAccountId" name="moneyAccountId" required>{moneyAccs.map((a) => <option key={a.id} value={a.id}>{a.code} · {accName(a)}</option>)}</select></label>
+            <label className="f">{t("reference")}<input id="payReference" name="payReference" /></label>
+          </> : <label className="f">{t("due_date")}<input id="dueDate" type="date" name="dueDate" defaultValue={doc?.dueDate ?? addDays(today(), 30)} required /></label>}
           <label className="f">{t("project")}
             <select id="projectId" name="projectId" defaultValue={doc?.projectId ?? ""}>
               <option value="">{t("none")}</option>
@@ -121,10 +128,12 @@ export async function DocForm({ kind, ctx, doc, lines, error }: { kind: DocKind;
         <DocLinesEditor accounts={o.accountOpts} projects={o.projectOpts} initial={lines ?? []} vatRate={vatRate}
           accountTypes={accountTypes} defaultAccountId={defaultAcc} labels={docLabels(t)} items={items} />
         <label className="f">{t("notes")}<textarea id="notes" name="notes" rows={2} defaultValue={doc?.notes ?? ""} /></label>
-        <div className="small muted">{t(kind === "invoice" ? "issued_note" : "approved_note")}{kind === "bill" ? ` ${t("wht_note")}` : ""}</div>
+        <div className="small muted">{receipt ? t("sr_note") : <>{t(kind === "invoice" ? "issued_note" : "approved_note")}{kind === "bill" ? ` ${t("wht_note")}` : ""}</>}</div>
         <div className="row">
-          <button type="submit" name="intent" value="post" className="btn primary">{t(kind === "invoice" ? "inv_issue" : "approve_bill")}</button>
-          <button type="submit" name="intent" value="draft" className="btn">{t("save_draft")}</button>
+          {receipt ? <button type="submit" name="intent" value="receipt" className="btn primary">{t("sr_save")}</button> : <>
+            <button type="submit" name="intent" value="post" className="btn primary">{t(kind === "invoice" ? "inv_issue" : "approve_bill")}</button>
+            <button type="submit" name="intent" value="draft" className="btn">{t("save_draft")}</button>
+          </>}
           <span className="spacer" />
           {doc ? <ConfirmButton className="btn danger" formAction={deleteDocDraft} confirmLabel={t("confirm")}>{t("delete_draft")}</ConfirmButton> : null}
         </div>
@@ -146,13 +155,19 @@ export async function DocView({ kind, ctx, doc, error }: { kind: DocKind; ctx: C
       .where(kind === "invoice" ? eq(schema.payments.invoiceId, doc.id) : eq(schema.payments.billId, doc.id)).orderBy(schema.payments.date),
     moneyAccounts(db, ctx.company.id),
   ]);
+  const [notes, creditable] = await Promise.all([
+    db.select().from(schema.creditNotes).where(kind === "invoice" ? eq(schema.creditNotes.invoiceId, doc.id) : eq(schema.creditNotes.billId, doc.id)).orderBy(schema.creditNotes.date),
+    creditableLines(db, kind, doc.id),
+  ]);
+  const credited = round2(notes.filter((n) => n.status === "posted").reduce((s, n) => s + n.total, 0));
+  const isReceipt = kind === "invoice" && doc.docType === "receipt";
   const balance = round2(doc.total - doc.amountPaid);
   const canPay = ctx.can(kind === "invoice" ? "sales" : "purchases", "write") && (doc.status === "open" || doc.status === "partial");
   return (
     <div className="stack">
-      <PageHead title={`${t(kind === "invoice" ? "inv_invoice" : "bill_bill")} ${doc.number}`}>
+      <PageHead title={`${t(isReceipt ? "sr_receipt" : kind === "invoice" ? "inv_invoice" : "bill_bill")} ${doc.number}`}>
         <Pill kind={doc.status}>{t(statusKey[doc.status])}</Pill>
-        <Link className="btn ghost" href={docBase(kind)}>{t("back")}</Link>
+        <Link className="btn ghost" href={isReceipt ? "/sales/receipts" : docBase(kind)}>{t("back")}</Link>
       </PageHead>
       <ErrorNote message={error} />
       {kind === "invoice" && (doc.status === "open" || doc.status === "partial") ? await creditWarning(ctx.company.id, doc.partnerId, 0, doc.id) : null}
@@ -221,7 +236,8 @@ export async function DocView({ kind, ctx, doc, error }: { kind: DocKind; ctx: C
               <tr><td colSpan={4} className="num">{t("subtotal")}</td><td className="num">{money(doc.subtotal, 2)}</td></tr>
               <tr><td colSpan={4} className="num">{t("vat")}</td><td className="num">{money(doc.vat, 2)}</td></tr>
               <tr className="total"><td colSpan={4} className="num">{t("total")}</td><td className="num">{money(doc.total, 2)}</td></tr>
-              <tr><td colSpan={4} className="num">{t("amount_paid")}</td><td className="num">{money(doc.amountPaid, 2)}</td></tr>
+              {credited ? <tr><td colSpan={4} className="num">{t("cn_credited")}</td><td className="num">{money(credited, 2)}</td></tr> : null}
+              <tr><td colSpan={4} className="num">{t("amount_paid")}</td><td className="num">{money(round2(doc.amountPaid - credited), 2)}</td></tr>
               <tr className="total"><td colSpan={4} className="num">{t("balance_due")}</td><td className="num">{money(balance, 2)}</td></tr>
             </tbody>
           </table></div>
@@ -236,6 +252,49 @@ export async function DocView({ kind, ctx, doc, error }: { kind: DocKind; ctx: C
                     <td><Link href={`/journal/${p.entryId}`} className="small">→</Link></td></tr>
                 ))}
               </tbody></table>
+            </div>
+          ) : null}
+          {notes.length || canPay ? (
+            <div className="stack" style={{ gap: 8, borderTop: "1px solid var(--line)", paddingTop: 12 }} id="credit-notes">
+              <h3>{t("cn_title")}</h3>
+              {notes.length ? (
+                <table><tbody>
+                  {notes.map((n) => (
+                    <tr key={n.id} style={n.status === "void" ? { opacity: 0.55 } : undefined}>
+                      <td><a href={`/api/pdf/credit-note/${n.id}`} target="_blank" rel="noopener"><b>{n.number}</b></a>{n.status === "void" ? ` · ${t("st_void")}` : ""}</td>
+                      <td className="num" style={{ textAlign: "left" }}>{n.date}</td><td className="small">{n.reason}</td>
+                      <td className="num">{money(n.total, 2)}</td>
+                      <td>{n.entryId ? <Link href={`/journal/${n.entryId}`} className="small">→</Link> : null}</td>
+                      <td>{n.status === "posted" && ctx.can(kind === "invoice" ? "sales" : "purchases", "write") ? (
+                        <form action={voidCreditNoteAction}><input type="hidden" name="kind" value={kind} /><input type="hidden" name="id" value={doc.id} /><input type="hidden" name="creditNoteId" value={n.id} />
+                          <ConfirmButton className="btn sm ghost danger" confirmLabel={t("confirm")}>{t("void_doc")}</ConfirmButton></form>
+                      ) : null}</td>
+                    </tr>
+                  ))}
+                </tbody></table>
+              ) : null}
+              {canPay && !isReceipt ? (
+                <details>
+                  <summary className="btn sm" style={{ display: "inline-block" }}>{t("cn_new")}</summary>
+                  <form action={createCreditNote} className="stack" style={{ marginTop: 10 }}>
+                    <input type="hidden" name="kind" value={kind} /><input type="hidden" name="id" value={doc.id} />
+                    <div className="small muted">{t(kind === "invoice" ? "cn_help_invoice" : "cn_help_bill")}</div>
+                    <div className="tbl-wrap"><table>
+                      <thead><tr><th>{t("description")}</th><th className="num">{t("amount")}</th><th className="num">{t("cn_left")}</th><th className="num">{t("cn_amount")}</th></tr></thead>
+                      <tbody>{creditable.map((l) => (
+                        <tr key={l.id}><td>{l.description}{l.isStock ? <div className="small muted">{t("cn_stock_line")}</div> : null}</td><td className="num">{money(l.amount, 2)}</td><td className="num">{money(l.left, 2)}</td>
+                          <td>{l.isStock || l.left <= 0 ? null : <input name={`credit_${l.lineNo}`} className="num" style={{ width: 120 }} inputMode="decimal" aria-label={`${t("cn_amount")} ${l.description}`} />}</td></tr>
+                      ))}</tbody>
+                    </table></div>
+                    <div className="fields">
+                      <label className="f">{t("date")}<input type="date" name="date" defaultValue={today()} required /></label>
+                      {kind === "bill" ? <label className="f">{t("cn_supplier_ref")}<input name="supplierRef" /></label> : null}
+                    </div>
+                    <label className="f">{t("cn_reason")}<input name="reason" required placeholder={t("cn_reason_example")} /></label>
+                    <div><button type="submit" className="btn primary">{t("cn_post")}</button></div>
+                  </form>
+                </details>
+              ) : null}
             </div>
           ) : null}
           {!pays.length && !lines.length ? <Empty>{t("nothing_yet")}</Empty> : null}

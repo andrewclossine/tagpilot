@@ -8,10 +8,13 @@ import { fail, withParam } from "@/lib/actions";
 import { str } from "@/lib/format";
 import { getI18n } from "@/lib/i18n";
 import { UserError } from "@/lib/ledger";
-import { sendMail } from "@/lib/mail";
+import { mailConfigured, sendMail } from "@/lib/mail";
 import { buildInvoicePdf, buildPayslipPdf } from "@/lib/pdf-data";
+import { buildStatementPdf } from "@/lib/statements";
 import { audit } from "@/lib/audit";
 
+/** On the live site, sending needs the email server set up: say so instead of failing. */
+const mailReady = () => { if (!mailConfigured() && process.env.NODE_ENV === "production") throw new UserError("err_mail_off"); };
 const isEmail = (s: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
 const html = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!)).replace(/\n/g, "<br>");
 
@@ -23,6 +26,7 @@ export async function sendInvoiceEmail(fd: FormData) {
   const { t, money } = await getI18n();
   try {
     if (!isEmail(to)) throw new UserError("err_email_invalid");
+    mailReady();
     const { pdf, invoice, customer, filename } = await buildInvoicePdf(ctx, id);
     const balance = invoice.total - invoice.amountPaid;
     const message = str(fd, "message") || (balance > 0
@@ -68,4 +72,27 @@ export async function sendPayslipsEmail(fd: FormData) {
     await audit(db, ctx.company.id, ctx.user.id, "email", "payslips", run.month, { sent, skipped, failed });
   } catch (e) { fail(e, back); }
   redirect(withParam(back, "mailed", `${sent}/${skipped}/${failed}`));
+}
+
+/** Emails a customer their statement for a period as a PDF. */
+export async function sendStatementEmail(fd: FormData) {
+  const ctx = await requireWrite("sales");
+  const customerId = str(fd, "customer"), from = str(fd, "from"), to = str(fd, "to");
+  const back = `/sales/statements?customer=${customerId}&from=${from}&to=${to}`;
+  const email = str(fd, "email").toLowerCase();
+  const { t, money } = await getI18n();
+  try {
+    if (!isEmail(email)) throw new UserError("err_email_invalid");
+    mailReady();
+    const { pdf, statement, filename } = await buildStatementPdf(ctx, customerId, from, to);
+    const message = str(fd, "message") || `${t("stm_message_default")} ${from} - ${to}. ${t("stm_balance_due")}: ${money(statement.closing, 2)} ${ctx.company.currency}.`;
+    await sendMail(email, `${t("stm_title")} - ${ctx.company.name}`,
+      `${t("reset_mail_hello")} ${statement.customer.name},\n\n${message}\n\n${ctx.company.name}`,
+      `<p>${t("reset_mail_hello")} ${html(statement.customer.name)},</p><p>${html(message)}</p><p>${html(ctx.company.name)}</p>`,
+      [{ filename, content: pdf, contentType: "application/pdf" }]);
+    const db = await getDb();
+    if (!statement.customer.email) await db.update(schema.partners).set({ email }).where(eq(schema.partners.id, statement.customer.id));
+    await audit(db, ctx.company.id, ctx.user.id, "email", "statement", statement.customer.name, { to: email, from, until: to });
+  } catch (e) { fail(e, back); }
+  redirect(withParam(back, "sent", email));
 }

@@ -239,7 +239,7 @@ export type AiInfo = {
   newPartner?: { name: string; tin: string; kind: "customer" | "supplier" } | null;
 };
 
-export type EntrySource = "manual" | "ai" | "invoice" | "invoice_payment" | "bill" | "bill_payment" | "payroll" | "bank" | "reversal" | "voucher" | "receipt" | "check" | "deposit" | "transfer" | "fx";
+export type EntrySource = "manual" | "ai" | "invoice" | "invoice_payment" | "bill" | "bill_payment" | "payroll" | "bank" | "reversal" | "voucher" | "receipt" | "check" | "deposit" | "transfer" | "fx" | "credit_note" | "expense";
 
 export const journalEntries = pgTable("journal_entries", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -319,6 +319,8 @@ const docLineColumns = () => ({
 
 export const invoices = pgTable("invoices", {
   ...documentColumns(),
+  // A sales receipt is a sale paid on the spot: issued and paid in one step, numbered on its own (SR-0001).
+  docType: text("doc_type").$type<"invoice" | "receipt">().notNull().default("invoice"),
   sentAt: timestamp("sent_at", { withTimezone: true }), // last time the PDF was emailed to the customer
   sentTo: text("sent_to").notNull().default(""),
 }, (t) => [uniqueIndex("invoices_company_number").on(t.companyId, t.number)]);
@@ -465,6 +467,40 @@ export const goodsReceiptLines = pgTable("goods_receipt_lines", {
   amount: money("amount"),
 });
 
+/**
+ * A credit note takes back part or all of an invoice (to a customer) or of a bill (from a supplier): it reverses the
+ * income or expense and the VAT, and reduces what is still owed on that document.
+ */
+export const creditNotes = pgTable("credit_notes", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  kind: text("kind").$type<"invoice" | "bill">().notNull(),
+  number: text("number").notNull(),
+  invoiceId: uuid("invoice_id").references(() => invoices.id),
+  billId: uuid("bill_id").references(() => bills.id),
+  partnerId: uuid("partner_id").notNull().references(() => partners.id),
+  date: date("date", { mode: "string" }).notNull(),
+  reason: text("reason").notNull().default(""),
+  supplierRef: text("supplier_ref").notNull().default(""), // the supplier's own credit note number
+  subtotal: money("subtotal"),
+  vat: money("vat"),
+  total: money("total"),
+  status: text("status").$type<"posted" | "void">().notNull().default("posted"),
+  entryId: uuid("entry_id").references(() => journalEntries.id),
+  createdBy: uuid("created_by").references(() => users.id),
+  createdAt: created(),
+}, (t) => [uniqueIndex("credit_notes_company_number").on(t.companyId, t.number), index("credit_notes_invoice").on(t.invoiceId), index("credit_notes_bill").on(t.billId)]);
+export const creditNoteLines = pgTable("credit_note_lines", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  creditNoteId: uuid("credit_note_id").notNull().references(() => creditNotes.id, { onDelete: "cascade" }),
+  lineNo: integer("line_no").notNull(),
+  description: text("description").notNull(),
+  accountId: uuid("account_id").notNull().references(() => accounts.id),
+  projectId: uuid("project_id").references(() => projects.id),
+  vatApplies: boolean("vat_applies").notNull().default(false),
+  amount: money("amount"),
+});
+
 export const payments = pgTable("payments", {
   id: uuid("id").primaryKey().defaultRandom(),
   companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
@@ -497,7 +533,7 @@ export const bankLines = pgTable("bank_lines", {
 }, (t) => [index("bank_lines_account").on(t.companyId, t.accountId, t.date)]);
 
 /** A cheque, deposit, transfer or foreign currency movement. The journal entry is the accounting; this is what the bank page lists. */
-export type BankTransactionKind = "check" | "deposit" | "transfer" | "fx_in" | "fx_out" | "fx_exchange" | "fx_revaluation";
+export type BankTransactionKind = "check" | "expense" | "deposit" | "transfer" | "fx_in" | "fx_out" | "fx_exchange" | "fx_revaluation";
 
 export const bankTransactions = pgTable("bank_transactions", {
   id: uuid("id").primaryKey().defaultRandom(),

@@ -6,6 +6,7 @@ import type { Key, T } from "./i18n";
 import { balances, listAccounts } from "./ledger";
 import type { Column, Report, Row } from "./financial-reports";
 import { orderProgress } from "./purchase-orders";
+import { creditedAsAt } from "./credit-notes";
 
 export const VENDOR_TITLES = {
   ap: "r_ap", "ap-aging-detail": "r_ap_aging_detail", "ap-balance-summary": "r_ap_balance_summary", "ap-balance-detail": "r_ap_balance_detail", "ap-unpaid": "r_ap_unpaid", vendors: "r_vendors", "po-open": "r_po_open",
@@ -13,31 +14,49 @@ export const VENDOR_TITLES = {
 export type VendorKind = keyof typeof VENDOR_TITLES;
 export const isVendorKind = (k: string): k is VendorKind => k in VENDOR_TITLES;
 
+/** The same reports for customers: what they owe instead of what is owed to suppliers. */
+export const CUSTOMER_TITLES = {
+  "ar-aging-detail": "r_ar_aging_detail", "ar-balance-summary": "r_ar_balance_summary", "ar-balance-detail": "r_ar_balance_detail", "ar-unpaid": "r_ar_unpaid", customers: "r_customers",
+} as const satisfies Record<string, Key>;
+export type CustomerKind = keyof typeof CUSTOMER_TITLES;
+export const isCustomerKind = (k: string): k is CustomerKind => k in CUSTOMER_TITLES;
+const AS_VENDOR: Record<CustomerKind, VendorKind> = { "ar-aging-detail": "ap-aging-detail", "ar-balance-summary": "ap-balance-summary", "ar-balance-detail": "ap-balance-detail", "ar-unpaid": "ap-unpaid", customers: "vendors" };
+type Side = "ap" | "ar";
+
 const BUCKETS = ["aging_current", "aging_30", "aging_60", "aging_90", "aging_over"] as const;
 const bucketOf = (due: string, on: string) => { const d = daysBetween(due, on); return d <= 0 ? 0 : d <= 30 ? 1 : d <= 60 ? 2 : d <= 90 ? 3 : 4; };
 
 /** Every approved bill up to a date, with what was still owed on that date: a payment made later does not count yet. */
-async function billsAsAt(companyId: string, on: string) {
+async function billsAsAt(companyId: string, on: string, side: Side = "ap") {
   const db = await getDb();
-  const rows = await db.select({ b: schema.bills, vendor: schema.partners.name }).from(schema.bills)
-    .innerJoin(schema.partners, eq(schema.partners.id, schema.bills.partnerId))
-    .where(and(eq(schema.bills.companyId, companyId), ne(schema.bills.status, "draft"), ne(schema.bills.status, "void"), lte(schema.bills.date, on)))
-    .orderBy(asc(schema.bills.dueDate), asc(schema.bills.number));
+  const doc = side === "ap" ? schema.bills : schema.invoices;
+  const payCol = side === "ap" ? schema.payments.billId : schema.payments.invoiceId;
+  const rows = await db.select({ b: doc, vendor: schema.partners.name }).from(doc)
+    .innerJoin(schema.partners, eq(schema.partners.id, doc.partnerId))
+    .where(and(eq(doc.companyId, companyId), ne(doc.status, "draft"), ne(doc.status, "void"), lte(doc.date, on)))
+    .orderBy(asc(doc.dueDate), asc(doc.number));
   const ids = rows.map((r) => r.b.id);
-  const pays = ids.length ? await db.select({ billId: schema.payments.billId, amount: schema.payments.amount }).from(schema.payments)
-    .where(and(inArray(schema.payments.billId, ids), lte(schema.payments.date, on))) : [];
-  const paid = new Map<string, number>();
+  const pays = ids.length ? await db.select({ billId: payCol, amount: schema.payments.amount }).from(schema.payments)
+    .where(and(inArray(payCol, ids), lte(schema.payments.date, on))) : [];
+  // A credit note settles part of a document just as a payment does.
+  const paid = await creditedAsAt(db, side === "ap" ? "bill" : "invoice", ids, on);
   for (const p of pays) if (p.billId) paid.set(p.billId, round2((paid.get(p.billId) ?? 0) + p.amount));
   return rows.map(({ b, vendor }) => ({ id: b.id, number: b.number, date: b.date, dueDate: b.dueDate, partnerId: b.partnerId, vendor, notes: b.notes, total: b.total, paid: paid.get(b.id) ?? 0, balance: round2(b.total - (paid.get(b.id) ?? 0)) }));
 }
 
-export async function buildVendorReport(kind: VendorKind, o: { companyId: string; apAccount: string; from: string; to: string; t: T }): Promise<Report> {
+export async function buildCustomerReport(kind: CustomerKind, o: { companyId: string; arAccount: string; from: string; to: string; t: T }): Promise<Report> {
+  return buildVendorReport(AS_VENDOR[kind], { ...o, apAccount: o.arAccount }, "ar");
+}
+
+export async function buildVendorReport(kind: VendorKind, o: { companyId: string; apAccount: string; from: string; to: string; t: T }, side: Side = "ap"): Promise<Report> {
   const { companyId, from, to, t } = o;
+  const who = t(side === "ap" ? "supplier" : "customer");
+  const sign = side === "ap" ? -1 : 1;
   const db = await getDb();
   const asAt = `${t("as_at")} ${to}`, period = `${from} → ${to}`;
   const money = (l: string): Column => ({ label: l, type: "money" });
   const text = (l: string): Column => ({ label: l, type: "text" });
-  const billLink = (id: string) => `/purchases/bills/${id}`;
+  const billLink = (id: string) => (side === "ap" ? `/purchases/bills/${id}` : `/sales/invoices/${id}`);
   const head = (title: string): Row => ({ style: "head", cells: [title] });
   const vendorsOf = <X extends { vendor: string }>(list: X[]) => [...new Set(list.map((x) => x.vendor))].sort((a, b) => a.localeCompare(b));
   const add = (list: { balance: number }[]) => round2(list.reduce((s, x) => s + x.balance, 0));
@@ -47,19 +66,19 @@ export async function buildVendorReport(kind: VendorKind, o: { companyId: string
     const accounts = await listAccounts(db, companyId);
     const account = accounts.find((a) => a.code === o.apAccount);
     if (!account) return [];
-    const inLedger = round2(-((await balances(db, companyId, { to })).get(account.id)?.net ?? 0));
+    const inLedger = round2(sign * ((await balances(db, companyId, { to })).get(account.id)?.net ?? 0));
     const diff = round2(inLedger - owed);
-    return diff ? [{ style: "sub", cells: [`${t("r_ap_ledger_diff")} ${account.code}`, ...Array<null>(blanks).fill(null), diff] }] : [];
+    return diff ? [{ style: "sub", cells: [`${t(side === "ap" ? "r_ap_ledger_diff" : "r_ar_ledger_diff")} ${account.code}`, ...Array<null>(blanks).fill(null), diff] }] : [];
   };
 
   if (kind === "vendors") {
     const [partners, bills] = await Promise.all([
-      db.select().from(schema.partners).where(and(eq(schema.partners.companyId, companyId), inArray(schema.partners.kind, ["supplier", "both"]))).orderBy(schema.partners.name),
-      billsAsAt(companyId, to),
+      db.select().from(schema.partners).where(and(eq(schema.partners.companyId, companyId), inArray(schema.partners.kind, [side === "ap" ? "supplier" : "customer", "both"]))).orderBy(schema.partners.name),
+      billsAsAt(companyId, to, side),
     ]);
     return {
       period: asAt,
-      columns: [text(t("supplier")), text(t("tin")), text(t("phone")), text(t("email")), text(t("address")), money(t("balance"))],
+      columns: [text(who), text(t("tin")), text(t("phone")), text(t("email")), text(t("address")), money(t("balance"))],
       rows: partners.length ? [
         ...partners.map((p): Row => ({ style: "line", cells: [p.name, p.tin, p.phone, p.email, p.address, add(bills.filter((b) => b.partnerId === p.id))] })),
         { style: "total", cells: [t("total"), null, null, null, null, add(bills)] },
@@ -93,7 +112,7 @@ export async function buildVendorReport(kind: VendorKind, o: { companyId: string
     };
   }
 
-  const bills = await billsAsAt(companyId, to);
+  const bills = await billsAsAt(companyId, to, side);
   const unpaid = bills.filter((b) => b.balance > 0.004);
   const owed = add(unpaid);
 
@@ -107,14 +126,14 @@ export async function buildVendorReport(kind: VendorKind, o: { companyId: string
       const totals = BUCKETS.map((_, i) => add(unpaid.filter((b) => bucketOf(b.dueDate, to) === i)));
       return {
         period: asAt,
-        columns: [text(t("supplier")), ...BUCKETS.map((b) => money(t(b))), money(t("total"))],
+        columns: [text(who), ...BUCKETS.map((b) => money(t(b))), money(t("total"))],
         rows: rows.length ? [...rows, { style: "total", cells: [t("total"), ...totals, owed] }, ...(await ledgerCheck(owed, 5))] : [],
       };
     }
     case "ap-aging-detail": {
       return {
         period: asAt,
-        columns: [text(t("date")), text(t("number")), text(t("supplier")), text(t("due_date")), text(t("r_days_late")), money(t("total")), money(t("balance"))],
+        columns: [text(t("date")), text(t("number")), text(who), text(t("due_date")), text(t("r_days_late")), money(t("total")), money(t("balance"))],
         rows: unpaid.length ? [
           ...BUCKETS.flatMap((bucket, i): Row[] => {
             const mine = unpaid.filter((b) => bucketOf(b.dueDate, to) === i);
@@ -131,7 +150,7 @@ export async function buildVendorReport(kind: VendorKind, o: { companyId: string
     case "ap-balance-summary": {
       return {
         period: asAt,
-        columns: [text(t("supplier")), money(t("balance"))],
+        columns: [text(who), money(t("balance"))],
         rows: unpaid.length ? [
           ...vendorsOf(unpaid).map((vendor): Row => ({ style: "line", cells: [vendor, add(unpaid.filter((b) => b.vendor === vendor))] })),
           { style: "total", cells: [t("total"), owed] },
@@ -140,18 +159,24 @@ export async function buildVendorReport(kind: VendorKind, o: { companyId: string
       };
     }
     case "ap-balance-detail": {
-      const opening = await billsAsAt(companyId, addDays(from, -1));
+      const opening = await billsAsAt(companyId, addDays(from, -1), side);
       const inPeriod = bills.filter((b) => b.date >= from);
       const ids = bills.map((b) => b.id);
-      const pays = ids.length ? await db.select().from(schema.payments).where(and(inArray(schema.payments.billId, ids), lte(schema.payments.date, to))).orderBy(asc(schema.payments.date)) : [];
+      const payCol = side === "ap" ? schema.payments.billId : schema.payments.invoiceId;
+      const noteCol = side === "ap" ? schema.creditNotes.billId : schema.creditNotes.invoiceId;
+      const rawPays = ids.length ? await db.select().from(schema.payments).where(and(inArray(payCol, ids), lte(schema.payments.date, to))).orderBy(asc(schema.payments.date)) : [];
+      const pays = rawPays.map((p) => ({ ...p, billId: side === "ap" ? p.billId : p.invoiceId }));
+      const rawNotes = ids.length ? await db.select().from(schema.creditNotes).where(and(inArray(noteCol, ids), eq(schema.creditNotes.status, "posted"), lte(schema.creditNotes.date, to))) : [];
+      const notes = rawNotes.map((n) => ({ ...n, docId: (side === "ap" ? n.billId : n.invoiceId)! }));
       const billOf = new Map(bills.map((b) => [b.id, b]));
       type Move = { date: string; type: string; number: string; id: string; memo: string; amount: number };
-      const names = vendorsOf([...inPeriod, ...opening.filter((b) => b.balance > 0.004), ...pays.filter((p) => p.date >= from).map((p) => ({ vendor: billOf.get(p.billId!)?.vendor ?? "" }))]);
+      const names = vendorsOf([...inPeriod, ...opening.filter((b) => b.balance > 0.004), ...pays.filter((p) => p.date >= from).map((p) => ({ vendor: billOf.get(p.billId!)?.vendor ?? "" })), ...notes.filter((n) => n.date >= from).map((n) => ({ vendor: billOf.get(n.docId)?.vendor ?? "" }))]);
       let closingAll = 0;
       const rows = names.flatMap((vendor): Row[] => {
         const start = add(opening.filter((b) => b.vendor === vendor));
         const moves: Move[] = [
-          ...inPeriod.filter((b) => b.vendor === vendor).map((b): Move => ({ date: b.date, type: t("r_bill"), number: b.number, id: b.id, memo: b.notes, amount: b.total })),
+          ...inPeriod.filter((b) => b.vendor === vendor).map((b): Move => ({ date: b.date, type: t(side === "ap" ? "r_bill" : "inv_invoice"), number: b.number, id: b.id, memo: b.notes, amount: b.total })),
+          ...notes.filter((n) => n.date >= from && billOf.get(n.docId)?.vendor === vendor).map((n): Move => ({ date: n.date, type: t("cn_note"), number: n.number, id: n.docId, memo: n.reason, amount: -n.total })),
           ...pays.filter((p) => p.date >= from && billOf.get(p.billId!)?.vendor === vendor).map((p): Move => ({ date: p.date, type: t("r_payment"), number: billOf.get(p.billId!)!.number, id: p.billId!, memo: p.reference, amount: -p.amount })),
         ].sort((a, b) => a.date.localeCompare(b.date));
         let run = start;

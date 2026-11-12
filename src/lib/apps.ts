@@ -36,12 +36,16 @@ export function appWorkspaces(ctx: Ctx, t: T): (Workspace & { key: AppKey })[] {
         ...group(t("nav_sales"), ctx.can("sales") ? [
           ...link("sales", "/sales/invoices", t("nav_invoices")),
           ...link("sales", "/sales/proformas", t("nav_proforma")),
+          ...link("sales", "/sales/receipts", t("sr_title")),
           ...link("sales", "/sales/payments", t("nav_receive_payments")),
           ...link("partners", "/sales/customers", t("nav_customers")),
+          ...link("sales", "/sales/statements", t("stm_page_title")),
+          ...link("sales", "/sales/reports", t("nav_customer_reports")),
           ...scan,
         ] : []),
         ...group(t("nav_purchases"), ctx.can("purchases") ? [
           ...(ctx.can("purchases", "write") ? link("purchases", "/purchases/bills/new", t("nav_enter_bill")) : []),
+          ...link("purchases", "/purchases/expenses", t("exp_title")),
           ...link("purchases", "/purchases/pay", t("nav_pay_bill")),
           ...link("purchases", "/purchases/receive-items", t("nav_receive_items")),
           ...link("purchases", "/purchases/bill-received", t("nav_bill_received")),

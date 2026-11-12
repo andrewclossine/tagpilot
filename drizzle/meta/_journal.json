@@ -169,6 +169,13 @@
       "when": 1794303168199,
       "tag": "0023_supplier_registry",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1794480678485,
+      "tag": "0024_credit_notes_receipts",
+      "breakpoints": true
     }
   ]
 }

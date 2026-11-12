@@ -53,7 +53,7 @@ export async function buildInvoicePdf(ctx: Ctx, id: string) {
   const pdf = await invoicePdf({
     company: await printedCompany(ctx), lang, vatRate: ctx.company.vatRegistered ? ctx.company.vatRate : 0,
     labels: {
-      title: t("inv_invoice"), number: t("number"), date: t("date"), due: t("due_date"), billTo: t("pdf_bill_to"), description: t("description"),
+      title: t(inv.docType === "receipt" ? "sr_receipt" : "inv_invoice"), number: t("number"), date: t("date"), due: t("due_date"), billTo: t("pdf_bill_to"), description: t("description"),
       qty: t("qty"), price: t("unit_price"), vat: t("vat"), amount: t("amount"), subtotal: t("subtotal"), total: t("total"),
       paid: t("amount_paid"), balance: t("balance_due"), notes: t("notes"), footer: t("pdf_footer"), tin: t("tin"),
     },

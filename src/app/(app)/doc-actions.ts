@@ -6,11 +6,12 @@ import { getDb, schema, type Tx } from "@/db";
 import { requireWrite } from "@/lib/auth";
 import { fail } from "@/lib/actions";
 import { isIsoDate, parseAmount, str, today } from "@/lib/format";
-import { getDoc, payDoc, postDoc, saveDocDraft, voidDoc, type DocKind } from "@/lib/documents";
+import { getDoc, payDoc, postDoc, postSalesReceipt, saveDocDraft, voidDoc, type DocKind } from "@/lib/documents";
 import { UserError } from "@/lib/ledger";
 import { parseDocLines } from "@/lib/parse";
 import { getI18n } from "@/lib/i18n";
 import { audit } from "@/lib/audit";
+import { creditableLines, postCreditNote, voidCreditNote } from "@/lib/credit-notes";
 
 const kindOf = (fd: FormData): DocKind => (str(fd, "kind") === "bill" ? "bill" : "invoice");
 const docBase = (kind: DocKind) => (kind === "invoice" ? "/sales/invoices" : "/purchases/bills");
@@ -20,10 +21,11 @@ export async function saveDoc(fd: FormData) {
   const ctx = await requireWrite(kind === "invoice" ? "sales" : "purchases");
   const base = docBase(kind);
   const id = str(fd, "id") || undefined;
-  const post = str(fd, "intent") === "post";
+  const receipt = kind === "invoice" && str(fd, "intent") === "receipt";
+  const post = str(fd, "intent") === "post" || receipt;
   let savedId: string;
   try {
-    const partnerId = str(fd, "partnerId"), date = str(fd, "date"), dueDate = str(fd, "dueDate");
+    const partnerId = str(fd, "partnerId"), date = str(fd, "date"), dueDate = receipt ? str(fd, "date") : str(fd, "dueDate");
     if (!partnerId || !isIsoDate(date) || !isIsoDate(dueDate)) throw new UserError("err_required");
     const lines = parseDocLines(fd);
     const vatRate = ctx.company.vatRegistered ? ctx.company.vatRate : 0;
@@ -39,7 +41,8 @@ export async function saveDoc(fd: FormData) {
     try {
       savedId = await db.transaction(async (tx) => {
         const docId = await draft(tx);
-        if (post) await postDoc(tx, kind, ctx.company.id, ctx.user.id, docId, ctx.company.settings);
+        if (receipt) await postSalesReceipt(tx, ctx.company.id, ctx.user.id, docId, { moneyAccountId: str(fd, "moneyAccountId"), reference: str(fd, "payReference") }, ctx.company.settings);
+        else if (post) await postDoc(tx, kind, ctx.company.id, ctx.user.id, docId, ctx.company.settings);
         return docId;
       });
     } catch (e) {
@@ -48,8 +51,9 @@ export async function saveDoc(fd: FormData) {
       const keptId = await db.transaction((tx) => draft(tx));
       fail(e, `${base}/${keptId}`);
     }
-  } catch (e) { fail(e, id ? `${base}/${id}` : `${base}/new`); }
+  } catch (e) { fail(e, id ? `${base}/${id}` : receipt ? "/sales/receipts/new" : `${base}/new`); }
   revalidatePath(base);
+  revalidatePath("/sales/receipts");
   redirect(`${base}/${savedId}`);
 }
 
@@ -115,4 +119,36 @@ export async function deleteDocDraft(fd: FormData) {
   } catch (e) { fail(e, `${base}/${id}`); }
   revalidatePath(base);
   redirect(base);
+}
+
+/** A credit note against an open invoice or bill: an amount to take back on each line, and why. */
+export async function createCreditNote(fd: FormData) {
+  const kind = kindOf(fd);
+  const ctx = await requireWrite(kind === "invoice" ? "sales" : "purchases");
+  const base = docBase(kind), id = str(fd, "id");
+  try {
+    const date = str(fd, "date");
+    if (!isIsoDate(date)) throw new UserError("err_required");
+    const db = await getDb();
+    const lines = await creditableLines(db, kind, id);
+    const amounts = new Map(lines.map((l) => [l.lineNo, parseAmount(fd.get(`credit_${l.lineNo}`))]));
+    await db.transaction((tx) => postCreditNote(tx, kind, ctx.company.id, ctx.user.id, id, { date, reason: str(fd, "reason"), supplierRef: str(fd, "supplierRef"), amounts }, ctx.company.settings));
+  } catch (e) { fail(e, `${base}/${id}`); }
+  revalidatePath(base);
+  redirect(`${base}/${id}#credit-notes`);
+}
+
+export async function voidCreditNoteAction(fd: FormData) {
+  const kind = kindOf(fd);
+  const ctx = await requireWrite(kind === "invoice" ? "sales" : "purchases");
+  const base = docBase(kind), id = str(fd, "id");
+  const { t } = await getI18n();
+  try {
+    const db = await getDb();
+    const [c] = await db.select().from(schema.creditNotes).where(and(eq(schema.creditNotes.id, str(fd, "creditNoteId")), eq(schema.creditNotes.companyId, ctx.company.id)));
+    if (!c || c.kind !== kind) throw new UserError("err_not_found");
+    await db.transaction((tx) => voidCreditNote(tx, ctx.company.id, ctx.user.id, c.id, today(), t("void_doc")));
+  } catch (e) { fail(e, `${base}/${id}`); }
+  revalidatePath(base);
+  redirect(`${base}/${id}#credit-notes`);
 }

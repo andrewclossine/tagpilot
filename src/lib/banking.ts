@@ -4,7 +4,8 @@ import type { Db, Tx } from "@/db";
 import { schema } from "@/db";
 import { audit } from "./audit";
 import { round2 } from "./format";
-import { balances, saveEntry, UserError, type LineInput } from "./ledger";
+import { accountIdByCode, balances, saveEntry, UserError, type LineInput } from "./ledger";
+import { nextNumber } from "./numbering";
 
 export type BankLine = { accountId: string; amount: number; description: string; projectId: string | null };
 type Common = { date: string; reference: string; memo: string; partnerId: string | null; payee: string };
@@ -73,6 +74,30 @@ export async function writeCheck(tx: Tx, companyId: string, userId: string, bank
   }, true);
   const id = await register(tx, { companyId, kind: "check", number, date: c.date, accountId: bankId, partnerId: c.partnerId, payee: c.payee, memo, amount, entryId, createdBy: userId });
   await audit(tx, companyId, userId, "write_check", "bank_transaction", id, { number, amount });
+  return id;
+}
+
+/**
+ * An expense paid on the spot from cash, mobile money or the bank, with no bill: debit each line (and the VAT on
+ * the lines that carry it), credit the money account. Numbered EXP-0001 onwards.
+ */
+export async function recordExpense(tx: Tx, companyId: string, userId: string, moneyId: string, c: Common & { attachmentId: string | null },
+  lines: (BankLine & { vatApplies: boolean })[], vat: { rate: number; accountCode: string }) {
+  await homeBank(tx, companyId, moneyId);
+  await checkLines(tx, companyId, moneyId, lines, false);
+  const found = await accountsOf(tx, companyId, lines.map((l) => l.accountId));
+  if (lines.some((l) => !["expense", "asset"].includes(found.get(l.accountId)?.type ?? ""))) throw new UserError("err_account");
+  const number = await nextNumber(tx, schema.bankTransactions, { number: schema.bankTransactions.number, companyId: schema.bankTransactions.companyId }, companyId, "EXP");
+  const net = round2(lines.reduce((s, l) => s + l.amount, 0));
+  const vatAmount = vat.rate ? round2(lines.reduce((s, l) => s + (l.vatApplies ? round2((l.amount * vat.rate) / 100) : 0), 0)) : 0;
+  const amount = round2(net + vatAmount);
+  const memo = c.memo || c.payee;
+  const ledger: LineInput[] = lines.map((l) => ({ accountId: l.accountId, debit: l.amount, credit: 0, description: l.description || memo, projectId: l.projectId, partnerId: c.partnerId }));
+  if (vatAmount) ledger.push({ accountId: await accountIdByCode(tx, companyId, vat.accountCode), debit: vatAmount, credit: 0, description: "VAT" });
+  ledger.push({ accountId: moneyId, debit: 0, credit: amount, description: `${number} ${c.payee}`.trim() });
+  const entryId = await saveEntry(tx, companyId, userId, { date: c.date, reference: c.reference || number, memo, partnerId: c.partnerId, source: "expense", attachmentId: c.attachmentId, lines: ledger }, true);
+  const id = await register(tx, { companyId, kind: "expense", number, date: c.date, accountId: moneyId, partnerId: c.partnerId, payee: c.payee, memo, amount, entryId, createdBy: userId });
+  await audit(tx, companyId, userId, "expense", "bank_transaction", id, { number, amount });
   return id;
 }
 
