@@ -51,10 +51,18 @@ async function assertAccounts(tx: Tx, companyId: string, lines: LineInput[], sou
   if (source !== "fx" && source !== "reversal" && found.some((a) => a.currency)) throw new UserError("err_fx_account");
 }
 
+/** Nothing can be posted on or before the date the books are closed through. */
+async function assertOpenPeriod(tx: Tx, companyId: string, date: string) {
+  const [c] = await tx.select({ settings: schema.companies.settings }).from(schema.companies).where(eq(schema.companies.id, companyId));
+  const closed = c?.settings.closedThrough;
+  if (closed && date <= closed) throw new UserError("err_period_closed");
+}
+
 /** Creates or replaces an entry. With `post`, it is validated, numbered and locked. */
 export async function saveEntry(tx: Tx, companyId: string, userId: string, input: EntryInput, post: boolean): Promise<string> {
   const lines = cleanLines(input.lines);
   if (post) { const err = checkLines(lines); if (err) throw new UserError(err); }
+  if (post) await assertOpenPeriod(tx, companyId, input.date);
   await assertAccounts(tx, companyId, lines, input.source ?? "manual");
 
   let id = input.id;
@@ -103,6 +111,7 @@ export async function postDraft(tx: Tx, companyId: string, userId: string, id: s
     .where(and(eq(schema.journalEntries.id, id), eq(schema.journalEntries.companyId, companyId)));
   if (!e) throw new UserError("err_not_found");
   if (e.status === "posted") return;
+  await assertOpenPeriod(tx, companyId, e.date);
   const lines = await tx.select().from(schema.journalLines).where(eq(schema.journalLines.entryId, id));
   const err = checkLines(lines.map((l) => ({ accountId: l.accountId, debit: l.debit, credit: l.credit })));
   if (err) throw new UserError(err);

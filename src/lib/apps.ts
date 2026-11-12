@@ -85,6 +85,7 @@ export function appWorkspaces(ctx: Ctx, t: T): (Workspace & { key: AppKey })[] {
           ...link("accounts", "/accounts", t("nav_coa")),
           ...link("budgets", "/budgets", t("nav_budgets")),
           ...link("journal", "/recurring", t("rec_title")),
+          ...link("journal", "/close-books", t("cb_title")),
           ...link("reports", "/reports", t("nav_reports")),
         ]),
       ],

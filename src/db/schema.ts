@@ -19,6 +19,8 @@ export type CompanySettings = {
   payroll?: PayrollSettings | LegacyPayrollSettings;
   /** Days between automatic reminders of overdue invoices; 0 or missing means none are sent by themselves. */
   reminderDays?: number;
+  /** The books are closed through this date: nothing dated on or before it can be posted. */
+  closedThrough?: string;
 };
 
 /** One payroll tax or contribution. The company's list of these is its payroll law. */
