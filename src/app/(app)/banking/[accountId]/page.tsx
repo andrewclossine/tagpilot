@@ -8,7 +8,7 @@ import { sp, type SearchParams } from "@/lib/actions";
 import { balances } from "@/lib/ledger";
 import { daysBetween, isUuid } from "@/lib/format";
 import { Empty, ErrorNote, PageHead, Pill } from "@/components/ui";
-import { bookLine, ignoreLine, importStatement, matchLine, suggestWithAi } from "../actions";
+import { bookLine, ignoreLine, importStatement, matchLine, runRules, suggestWithAi } from "../actions";
 
 export const metadata = { title: "Bank account" };
 
@@ -55,7 +55,8 @@ export default async function BankAccountPage({ params, searchParams }: { params
         <Link className="btn ghost" href="/banking">{t("back")}</Link>
       </PageHead>
       <ErrorNote message={err(q("error"))} />
-      {q("imported") ? <div className="note ok small">{q("imported")} {t("bank_imported")}</div> : null}
+      {q("imported") ? <div className="note ok small">{q("imported")} {t("bank_imported")}{Number(q("ruled")) ? ` · ${q("ruled")} ${t("rule_booked_n")}` : ""}</div> : null}
+      {q("suggested") || q("ruled") && !q("imported") ? <div className="note ok small">{t("rule_ran").replace("{booked}", q("ruled") || "0").replace("{suggested}", q("suggested") || "0")}</div> : null}
       <div className="kpis">
         <div className="panel kpi"><div className="label">{t("bank_books")}</div><div className="v">{money(bal.get(acc.id)?.net ?? 0)}</div></div>
         <div className="panel kpi"><div className="label">{t("bank_open")}</div><div className="v">{open.length}</div></div>
@@ -64,6 +65,10 @@ export default async function BankAccountPage({ params, searchParams }: { params
 
       <div className="panel stack">
         <div className="row"><h2 style={{ flex: 1 }}>{t("bank_open")}</h2>
+          {ctx.can("banking", "write") ? <Link className="btn" href="/banking/rules">{t("rule_title")}</Link> : null}
+          {ctx.can("banking", "write") && open.length ? (
+            <form action={runRules}><input type="hidden" name="back" value={`/banking/${acc.id}`} /><button type="submit" className="btn">{t("rule_run")}</button></form>
+          ) : null}
           {ctx.can("banking", "write") && open.length ? (
             <form action={suggestWithAi}><input type="hidden" name="accountId" value={acc.id} /><button type="submit" className="btn">{t("bank_suggest_ai")}</button></form>
           ) : null}
@@ -77,7 +82,7 @@ export default async function BankAccountPage({ params, searchParams }: { params
                 return (
                   <tr key={l.id}>
                     <td className="num" style={{ textAlign: "left" }}>{l.date}</td>
-                    <td>{l.description}{l.reference ? <div className="small muted">{l.reference}</div> : null}</td>
+                    <td>{l.description}{l.reference ? <div className="small muted">{l.reference}</div> : null}{l.ruleId ? <div className="small" style={{ color: "var(--accent)" }}>{t("rule_suggested")}</div> : null}</td>
                     <td className="num">{l.amount > 0 ? money(l.amount, 2) : ""}</td>
                     <td className="num">{l.amount < 0 ? money(-l.amount, 2) : ""}</td>
                     <td style={{ minWidth: 320 }}>
@@ -94,7 +99,7 @@ export default async function BankAccountPage({ params, searchParams }: { params
                             <select name="counterId" id={`ctr-${l.id}`} defaultValue={l.suggestedAccountId ?? ""} style={{ flex: 1, minWidth: 160 }} aria-label={t("bank_counter")}>
                               <option value="">—</option>{accountOptions}
                             </select>
-                            <select name="projectId" id={`prj-${l.id}`} defaultValue="" style={{ width: 90 }} aria-label={t("project")}>
+                            <select name="projectId" id={`prj-${l.id}`} defaultValue={l.suggestedProjectId ?? ""} style={{ width: 90 }} aria-label={t("project")}>
                               <option value="">—</option>{projects.map((p) => <option key={p.id} value={p.id}>{p.code}</option>)}
                             </select>
                             <button type="submit" className="btn sm primary">{t("bank_book")}</button>

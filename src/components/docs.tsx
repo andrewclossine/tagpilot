@@ -12,12 +12,13 @@ import { PartnerPicker } from "./PartnerPicker";
 import { Empty, ErrorNote, PageHead, Pill, Tabs } from "./ui";
 import { createCreditNote, deleteDocDraft, payDocAction, saveDoc, voidCreditNoteAction, voidDocAction } from "@/app/(app)/doc-actions";
 import { creditableLines } from "@/lib/credit-notes";
+import { MakeRecurring } from "./MakeRecurring";
 import { sendInvoiceEmail } from "@/app/(app)/send-actions";
 
 export const docBase = (kind: DocKind) => (kind === "invoice" ? "/sales/invoices" : "/purchases/bills");
 const statusKey = { draft: "st_draft", open: "st_open", partial: "st_partial", paid: "st_paid", void: "st_void" } as const;
 
-type DocRow = Omit<typeof schema.invoices.$inferSelect, "sentAt" | "sentTo" | "docType"> & Partial<Pick<typeof schema.invoices.$inferSelect, "sentAt" | "sentTo" | "docType">> & Partial<Pick<typeof schema.bills.$inferSelect, "supplierRef" | "whtRate" | "attachmentId">>;
+type DocRow = Omit<typeof schema.invoices.$inferSelect, "sentAt" | "sentTo" | "docType" | "remindedAt" | "reminders"> & Partial<Pick<typeof schema.invoices.$inferSelect, "sentAt" | "sentTo" | "docType" | "remindedAt" | "reminders">> & Partial<Pick<typeof schema.bills.$inferSelect, "supplierRef" | "whtRate" | "attachmentId">>;
 
 async function loadDocs(kind: DocKind, companyId: string, statuses?: string[], receipts = false) {
   const db = await getDb();
@@ -221,6 +222,7 @@ export async function DocView({ kind, ctx, doc, error }: { kind: DocKind; ctx: C
               <div><button type="submit" className="btn primary">{t("record_payment")}</button></div>
             </form>
           ) : null}
+          {ctx.can(kind === "invoice" ? "sales" : "purchases", "write") && doc.status !== "void" && !isReceipt ? <MakeRecurring kind={kind} sourceId={doc.id} date={doc.date} /> : null}
           {ctx.can(kind === "invoice" ? "sales" : "purchases", "write") && doc.status !== "void" && doc.amountPaid === 0 ? (
             <form action={voidDocAction}>
               <input type="hidden" name="kind" value={kind} /><input type="hidden" name="id" value={doc.id} />

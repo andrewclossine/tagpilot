@@ -40,6 +40,7 @@ export function appWorkspaces(ctx: Ctx, t: T): (Workspace & { key: AppKey })[] {
           ...link("sales", "/sales/payments", t("nav_receive_payments")),
           ...link("partners", "/sales/customers", t("nav_customers")),
           ...link("sales", "/sales/statements", t("stm_page_title")),
+          ...link("sales", "/sales/reminders", t("rem_title")),
           ...link("sales", "/sales/reports", t("nav_customer_reports")),
           ...scan,
         ] : []),
@@ -63,6 +64,7 @@ export function appWorkspaces(ctx: Ctx, t: T): (Workspace & { key: AppKey })[] {
           ...link("banking", "/banking/deposit", t("nav_make_deposit")),
           ...link("banking", "/banking/transfer", t("nav_transfer_funds")),
           ...link("banking", "/banking/reconcile", t("nav_reconcile")),
+          ...link("banking", "/banking/rules", t("rule_title")),
           ...link("banking", "/banking/foreign", t("nav_foreign")),
         ] : []),
         ...group(t("nav_inventory"), ctx.can("inventory") ? [
@@ -82,6 +84,7 @@ export function appWorkspaces(ctx: Ctx, t: T): (Workspace & { key: AppKey })[] {
           ...link("journal", "/journal", t("nav_journal")),
           ...link("accounts", "/accounts", t("nav_coa")),
           ...link("budgets", "/budgets", t("nav_budgets")),
+          ...link("journal", "/recurring", t("rec_title")),
           ...link("reports", "/reports", t("nav_reports")),
         ]),
       ],

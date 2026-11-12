@@ -10,6 +10,7 @@ import { ConfirmButton } from "@/components/editors";
 import { ErrorNote, PageHead, Pill } from "@/components/ui";
 import { EntryForm } from "../EntryForm";
 import { addPartnerFromAi, reverseJournal, setAdjusting } from "../actions";
+import { MakeRecurring } from "@/components/MakeRecurring";
 
 export const metadata = { title: "Journal entry" };
 
@@ -102,6 +103,7 @@ export default async function EntryPage({ params, searchParams }: { params: Prom
           <ConfirmButton className="btn" confirmLabel={t("confirm")}>{t("reverse")}</ConfirmButton>
         </form>
       ) : null}
+      {e.status === "posted" && ctx.can("journal", "write") && (e.source === "manual" || e.source === "ai") ? <MakeRecurring kind="journal" sourceId={e.id} date={e.date} /> : null}
     </div>
   );
 

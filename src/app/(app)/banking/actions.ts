@@ -1,7 +1,7 @@
 "use server";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { requireWrite } from "@/lib/auth";
 import { fail, withParam } from "@/lib/actions";
@@ -15,6 +15,7 @@ import { suggestBankAccounts } from "@/lib/ai";
 import { bookOptions } from "@/lib/data";
 import { getI18n } from "@/lib/i18n";
 import { audit } from "@/lib/audit";
+import { applyRules, bookBankLine } from "@/lib/bank-rules";
 
 async function moneyAccount(companyId: string, id: string) {
   const db = await getDb();
@@ -26,19 +27,20 @@ async function moneyAccount(companyId: string, id: string) {
 export async function importStatement(fd: FormData) {
   const ctx = await requireWrite("banking");
   const accountId = str(fd, "accountId"), back = `/banking/${accountId}`;
-  let n = 0;
+  let n = 0, booked = 0;
   try {
     await moneyAccount(ctx.company.id, accountId);
     const rows = parseStatement(String(fd.get("text") ?? ""));
     if (!rows.length) throw new UserError("err_required");
     const db = await getDb();
     const batch = new Date().toISOString();
-    await db.insert(schema.bankLines).values(rows.map((r) => ({ ...r, companyId: ctx.company.id, accountId, importBatch: batch })));
-    await audit(db, ctx.company.id, ctx.user.id, "import", "bank_statement", accountId, { lines: rows.length });
-    n = rows.length;
+    const added = await db.insert(schema.bankLines).values(rows.map((r) => ({ ...r, companyId: ctx.company.id, accountId, importBatch: batch }))).returning({ id: schema.bankLines.id });
+    const ruled = await db.transaction((tx) => applyRules(tx, ctx.company.id, ctx.user.id, added.map((x) => x.id)));
+    await audit(db, ctx.company.id, ctx.user.id, "import", "bank_statement", accountId, { lines: rows.length, ...ruled });
+    n = rows.length; booked = ruled.booked;
   } catch (e) { fail(e, back); }
   revalidatePath(back);
-  redirect(withParam(back, "imported", String(n)));
+  redirect(withParam(withParam(back, "imported", String(n)), "ruled", String(booked)));
 }
 
 async function openLine(companyId: string, id: string) {
@@ -74,22 +76,9 @@ export async function bookLine(fd: FormData) {
   try {
     const l = await openLine(ctx.company.id, str(fd, "id"));
     const counter = str(fd, "counterId");
-    if (!counter) throw new UserError("err_account");
-    const amt = Math.abs(l.amount);
+    if (!isUuid(counter)) throw new UserError("err_account");
     const db = await getDb();
-    await db.transaction(async (tx) => {
-      const entryId = await saveEntry(tx, ctx.company.id, ctx.user.id, {
-        date: l.date, reference: l.reference, memo: l.description, source: "bank", sourceId: l.id,
-        projectId: str(fd, "projectId") || null,
-        lines: l.amount > 0
-          ? [{ accountId: l.accountId, debit: amt, credit: 0, description: l.description }, { accountId: counter, debit: 0, credit: amt, description: l.description }]
-          : [{ accountId: counter, debit: amt, credit: 0, description: l.description }, { accountId: l.accountId, debit: 0, credit: amt, description: l.description }],
-      }, true);
-      const [bankSide] = await tx.select().from(schema.journalLines)
-        .where(and(eq(schema.journalLines.entryId, entryId), eq(schema.journalLines.accountId, l.accountId)));
-      await tx.update(schema.journalLines).set({ reconciled: true }).where(eq(schema.journalLines.id, bankSide.id));
-      await tx.update(schema.bankLines).set({ status: "booked", journalLineId: bankSide.id }).where(eq(schema.bankLines.id, l.id));
-    });
+    await db.transaction((tx) => bookBankLine(tx, ctx.company.id, ctx.user.id, l, counter, isUuid(str(fd, "projectId")) ? str(fd, "projectId") : null));
   } catch (e) { fail(e, back); }
   revalidatePath(back);
   redirect(back);
@@ -299,4 +288,63 @@ export async function saveRevaluation(fd: FormData) {
   } catch (e) { fail(e, back); }
   refreshBank();
   redirect(withParam(back, "saved", "1"));
+}
+
+// ---------- bank rules ----------
+const RULES = "/banking/rules";
+
+export async function saveRule(fd: FormData) {
+  const ctx = await requireWrite("banking");
+  try {
+    const name = str(fd, "name").slice(0, 80), contains = str(fd, "contains").slice(0, 120), accountId = str(fd, "accountId");
+    if (!name || !contains || !isUuid(accountId)) throw new UserError("err_required");
+    const direction = (["in", "out"].includes(str(fd, "direction")) ? str(fd, "direction") : "any") as "any" | "in" | "out";
+    const db = await getDb();
+    const ids = [accountId, str(fd, "bankAccountId")].filter(isUuid);
+    const found = await db.select().from(schema.accounts).where(and(eq(schema.accounts.companyId, ctx.company.id), inArray(schema.accounts.id, ids)));
+    const target = found.find((a) => a.id === accountId);
+    if (!target || target.currency || ["ar", "ap"].includes(target.subtype ?? "")) throw new UserError("err_account");
+    const bank = isUuid(str(fd, "bankAccountId")) ? found.find((a) => a.id === str(fd, "bankAccountId")) : null;
+    if (isUuid(str(fd, "bankAccountId")) && (!bank || !["bank", "cash", "momo"].includes(bank.subtype ?? ""))) throw new UserError("err_account");
+    const projectId = isUuid(str(fd, "projectId")) ? str(fd, "projectId") : null;
+    if (projectId) {
+      const [p] = await db.select({ id: schema.projects.id }).from(schema.projects).where(and(eq(schema.projects.id, projectId), eq(schema.projects.companyId, ctx.company.id)));
+      if (!p) throw new UserError("err_not_found");
+    }
+    const minAmount = parseAmount(fd.get("minAmount")), maxAmount = parseAmount(fd.get("maxAmount"));
+    if (maxAmount > 0 && minAmount > maxAmount) throw new UserError("err_amount");
+    const [{ n }] = await db.select({ n: sql<number>`count(*)` }).from(schema.bankRules).where(eq(schema.bankRules.companyId, ctx.company.id));
+    await db.insert(schema.bankRules).values({ companyId: ctx.company.id, name, contains, direction, minAmount, maxAmount, bankAccountId: bank?.id ?? null, accountId, projectId, autoBook: fd.get("autoBook") === "on", sortOrder: Number(n) + 1 });
+    await audit(db, ctx.company.id, ctx.user.id, "create", "bank_rule", name, { contains, autoBook: fd.get("autoBook") === "on" });
+  } catch (e) { fail(e, RULES); }
+  revalidatePath(RULES);
+  redirect(withParam(RULES, "saved", "1"));
+}
+
+export async function toggleRule(fd: FormData) {
+  const ctx = await requireWrite("banking");
+  const db = await getDb();
+  const [r] = await db.select().from(schema.bankRules).where(and(eq(schema.bankRules.id, str(fd, "ruleId")), eq(schema.bankRules.companyId, ctx.company.id)));
+  if (r) {
+    if (str(fd, "do") === "delete") {
+      await db.update(schema.bankLines).set({ ruleId: null }).where(eq(schema.bankLines.ruleId, r.id));
+      await db.delete(schema.bankRules).where(eq(schema.bankRules.id, r.id));
+    } else await db.update(schema.bankRules).set({ isActive: !r.isActive }).where(eq(schema.bankRules.id, r.id));
+    await audit(db, ctx.company.id, ctx.user.id, str(fd, "do") === "delete" ? "delete" : "toggle", "bank_rule", r.name);
+  }
+  revalidatePath(RULES);
+  redirect(RULES);
+}
+
+/** Runs the rules over every open statement line now, for lines imported before a rule existed. */
+export async function runRules(fd: FormData) {
+  const ctx = await requireWrite("banking");
+  const back = str(fd, "back").startsWith("/banking") ? str(fd, "back") : RULES;
+  let res = { suggested: 0, booked: 0 };
+  try {
+    const db = await getDb();
+    res = await db.transaction((tx) => applyRules(tx, ctx.company.id, ctx.user.id));
+  } catch (e) { fail(e, back); }
+  revalidatePath("/banking", "layout");
+  redirect(withParam(withParam(back, "ruled", String(res.booked)), "suggested", String(res.suggested)));
 }

@@ -17,6 +17,8 @@ export type AccountSubtype = "bank" | "cash" | "momo" | "ar" | "ap" | "vat_in" |
 export type CompanySettings = {
   arAccount: string; apAccount: string; vatIn: string; vatOut: string; whtAccount: string;
   payroll?: PayrollSettings | LegacyPayrollSettings;
+  /** Days between automatic reminders of overdue invoices; 0 or missing means none are sent by themselves. */
+  reminderDays?: number;
 };
 
 /** One payroll tax or contribution. The company's list of these is its payroll law. */
@@ -323,6 +325,8 @@ export const invoices = pgTable("invoices", {
   docType: text("doc_type").$type<"invoice" | "receipt">().notNull().default("invoice"),
   sentAt: timestamp("sent_at", { withTimezone: true }), // last time the PDF was emailed to the customer
   sentTo: text("sent_to").notNull().default(""),
+  remindedAt: timestamp("reminded_at", { withTimezone: true }), // last reminder of this overdue invoice
+  reminders: integer("reminders").notNull().default(0),
 }, (t) => [uniqueIndex("invoices_company_number").on(t.companyId, t.number)]);
 export const invoiceLines = pgTable("invoice_lines", {
   ...docLineColumns(),
@@ -528,9 +532,60 @@ export const bankLines = pgTable("bank_lines", {
   status: text("status").$type<"open" | "matched" | "booked" | "ignored">().notNull().default("open"),
   journalLineId: uuid("journal_line_id").references(() => journalLines.id),
   suggestedAccountId: uuid("suggested_account_id").references(() => accounts.id),
+  suggestedProjectId: uuid("suggested_project_id").references(() => projects.id),
+  ruleId: uuid("rule_id"), // the bank rule that suggested or booked it
   importBatch: text("import_batch").notNull(),
   createdAt: created(),
 }, (t) => [index("bank_lines_account").on(t.companyId, t.accountId, t.date)]);
+
+/**
+ * A bank rule: statement lines whose description contains the text (and fit the direction and amounts) go to this
+ * account. With autoBook they are booked as soon as they are imported; otherwise the account is only suggested.
+ */
+export const bankRules = pgTable("bank_rules", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  contains: text("contains").notNull(),
+  direction: text("direction").$type<"any" | "in" | "out">().notNull().default("any"),
+  minAmount: money("min_amount"), // 0 means no limit
+  maxAmount: money("max_amount"),
+  bankAccountId: uuid("bank_account_id").references(() => accounts.id), // only for this money account, or all
+  accountId: uuid("account_id").notNull().references(() => accounts.id),
+  projectId: uuid("project_id").references(() => projects.id),
+  autoBook: boolean("auto_book").notNull().default(false),
+  sortOrder: integer("sort_order").notNull().default(0),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: created(),
+}, (t) => [index("bank_rules_company").on(t.companyId)]);
+
+export type RecurringKind = "invoice" | "bill" | "journal";
+export type RecurringEvery = "week" | "month" | "quarter" | "year";
+export type RecurringPayload = {
+  partnerId?: string | null; projectId?: string | null; notes?: string; reference?: string; memo?: string; supplierRef?: string; whtRate?: number; termDays?: number;
+  docLines?: { description: string; quantity: number; unitPrice: number; vatApplies: boolean; accountId: string; projectId: string | null; itemId: string | null }[];
+  journalLines?: { accountId: string; debit: number; credit: number; description: string; projectId: string | null; partnerId: string | null }[];
+};
+
+/** An invoice, bill or journal entry made again on a schedule: rent, subscriptions, monthly accruals... */
+export const recurringTemplates = pgTable("recurring_templates", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  kind: text("kind").$type<RecurringKind>().notNull(),
+  name: text("name").notNull(),
+  every: text("every").$type<RecurringEvery>().notNull(),
+  nextDate: date("next_date", { mode: "string" }).notNull(),
+  endDate: date("end_date", { mode: "string" }),
+  autoPost: boolean("auto_post").notNull().default(true), // post it, or leave it as a draft to check
+  status: text("status").$type<"active" | "paused" | "ended">().notNull().default("active"),
+  payload: jsonb("payload").$type<RecurringPayload>().notNull(),
+  made: integer("made").notNull().default(0),
+  lastDate: date("last_date", { mode: "string" }),
+  lastError: text("last_error").notNull().default(""),
+  sourceId: uuid("source_id"), // the document or entry it was made from
+  createdBy: uuid("created_by").references(() => users.id),
+  createdAt: created(),
+}, (t) => [index("recurring_company_next").on(t.companyId, t.nextDate)]);
 
 /** A cheque, deposit, transfer or foreign currency movement. The journal entry is the accounting; this is what the bank page lists. */
 export type BankTransactionKind = "check" | "expense" | "deposit" | "transfer" | "fx_in" | "fx_out" | "fx_exchange" | "fx_revaluation";

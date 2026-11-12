@@ -176,6 +176,13 @@
       "when": 1794480678485,
       "tag": "0024_credit_notes_receipts",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1794484819844,
+      "tag": "0025_rules_recurring_reminders",
+      "breakpoints": true
     }
   ]
 }
