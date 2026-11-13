@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { getI18n } from "@/lib/i18n";
 
+/** The company that owns and runs TAGPILOT. */
+export const COMPANY = "Andovexa Ltd";
+
 /** Support contacts come from the server's settings, so they can change without a new release; empty ones are not shown. */
 export const supportContacts = () => ({ email: (process.env.SUPPORT_EMAIL ?? "").trim(), phone: (process.env.SUPPORT_PHONE ?? "").trim() });
 
@@ -10,7 +13,7 @@ export async function LegalFooter({ className = "legal-foot" }: { className?: st
   const { email, phone } = supportContacts();
   return (
     <footer className={className}>
-      <span>© {new Date().getFullYear()} TAGPILOT. {t("lg_rights")}</span>
+      <span>© {new Date().getFullYear()} {COMPANY} · TAGPILOT. {t("lg_rights")}</span>
       <Link href="/terms">{t("lg_terms")}</Link>
       <Link href="/privacy">{t("lg_privacy")}</Link>
       {email ? <a href={`mailto:${email}`}>{t("lg_support")}: {email}</a> : null}
