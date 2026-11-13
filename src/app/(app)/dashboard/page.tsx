@@ -7,6 +7,7 @@ import { balances, listAccounts } from "@/lib/ledger";
 import { daysBetween, round2, today } from "@/lib/format";
 import { Empty, PageHead, Pill } from "@/components/ui";
 import { ColumnChart, LineChart } from "@/components/charts";
+import { DashboardWidgets } from "@/components/DashboardWidgets";
 
 export const metadata = { title: "Dashboard" };
 
@@ -79,6 +80,8 @@ export default async function Dashboard() {
   return (
     <div className="stack">
       <PageHead title={ctx.company.name} />
+
+      <DashboardWidgets ctx={ctx} />
 
       {lowStock.length ? (
         <Link href="/inventory" className="note warn small" style={{ textDecoration: "none" }}>

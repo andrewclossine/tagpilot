@@ -13,10 +13,10 @@ export const metadata: Metadata = {
 export default async function Home() {
   if (await getCurrentUser()) redirect("/apps");
   const { c } = await siteText();
-  const apps: [string, string[], string][] = [
-    [c.app_accounting, c.acc_points, "#2563eb"],
-    [c.app_projects, c.proj_points, "#0f766e"],
-    [c.app_procurement, c.proc_points, "#7c3aed"],
+  const apps: [string, string[], string, string][] = [
+    [c.app_accounting, c.acc_points, "var(--app-accounting)", "accountant"],
+    [c.app_projects, c.proj_points, "var(--app-projects)", "colleagues"],
+    [c.app_procurement, c.proc_points, "var(--app-procurement)", "meeting"],
   ];
   return (
     <div className="site">
@@ -34,17 +34,12 @@ export default async function Home() {
               </div>
               <div className="small muted">{c.hero_note}</div>
             </div>
-            <div className="site-shot" aria-hidden="true">
-              <div className="site-shot-bar"><i /><i /><i /></div>
-              <div className="site-shot-body">
-                {c.steps.slice(0, 6).map(([title], i) => (
-                  <div key={title} className="site-shot-row">
-                    <span className="site-shot-dot" style={{ background: i < 4 ? "var(--ok)" : i === 4 ? "var(--accent)" : "var(--line)" }} />
-                    <span>{title}</span>
-                    <span className="site-shot-pill">{i < 4 ? "✓" : i === 4 ? "…" : ""}</span>
-                  </div>
-                ))}
-              </div>
+            <div className="site-hero-visual">
+              <figure className="site-frame site-hero-shot">
+                <div className="site-shot-bar" aria-hidden="true"><i /><i /><i /></div>
+                <img src="/images/screens/dashboard.webp" alt={c.shot_alt} width={1600} height={1000} fetchPriority="high" />
+              </figure>
+              <img className="site-hero-photo" src="/images/photos/work-laptop.webp" alt="" width={1600} height={900} />
             </div>
           </div>
         </section>
@@ -53,8 +48,9 @@ export default async function Home() {
           <div className="site-wrap stack" style={{ gap: 24 }}>
             <div className="site-head-block"><h2>{c.apps_title}</h2><p className="site-lead">{c.apps_sub}</p></div>
             <div className="site-cards3">
-              {apps.map(([name, points, color]) => (
-                <div key={name} className="panel site-card" style={{ borderTop: `4px solid ${color}` }}>
+              {apps.map(([name, points, color, photo]) => (
+                <div key={name} className="panel site-card has-photo" style={{ borderTop: `4px solid ${color}` }}>
+                  <img className="site-card-photo" src={`/images/photos/${photo}.webp`} alt="" loading="lazy" />
                   <h3>{name}</h3>
                   <ul className="site-ticks">{points.map((p) => <li key={p}>{p}</li>)}</ul>
                 </div>
@@ -80,16 +76,33 @@ export default async function Home() {
 
         <section className="site-section">
           <div className="site-wrap stack" style={{ gap: 24 }}>
-            <div className="site-head-block"><h2>{c.why_title}</h2></div>
-            <div className="site-cards3">
-              {c.why.map(([title, text]) => (
-                <div key={title} className="site-why"><h3>{title}</h3><p className="muted">{text}</p></div>
+            <div className="site-head-block"><h2>{c.tour_title}</h2><p className="site-lead">{c.tour_sub}</p></div>
+            <div className="site-tour">
+              {([["invoices", 1600, 911], ["report", 1600, 956], ["dashboard-phone", 560, 1212]] as const).map(([img, w, h], i) => (
+                <figure key={img} className={`site-tour-item${img.includes("phone") ? " phone" : ""}`}>
+                  <div className="site-frame"><img src={`/images/screens/${img}.webp`} alt={c.tour[i][0]} width={w} height={h} loading="lazy" /></div>
+                  <figcaption><b>{c.tour[i][0]}</b><span className="small muted">{c.tour[i][1]}</span></figcaption>
+                </figure>
               ))}
             </div>
           </div>
         </section>
 
         <section className="site-section site-alt">
+          <div className="site-wrap stack" style={{ gap: 24 }}>
+            <div className="site-head-block"><h2>{c.why_title}</h2></div>
+            <div className="site-why-split">
+              <img className="site-why-photo" src="/images/photos/team-couch.webp" alt="" width={1600} height={1067} loading="lazy" />
+              <div className="site-why-grid">
+                {c.why.map(([title, text]) => (
+                  <div key={title} className="site-why"><h3>{title}</h3><p className="muted">{text}</p></div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="site-section">
           <div className="site-wrap site-split">
             <div className="stack" style={{ gap: 10 }}>
               <h2>{c.suppliers_title}</h2>
@@ -99,7 +112,7 @@ export default async function Home() {
           </div>
         </section>
 
-        <section className="site-section">
+        <section className="site-section site-final-band">
           <div className="site-wrap site-final">
             <h2>{c.final_title}</h2>
             <p className="site-lead">{c.final_sub}</p>
@@ -109,6 +122,7 @@ export default async function Home() {
             </div>
           </div>
         </section>
+        <p className="site-wrap site-credit">{c.photo_credit}</p>
       </main>
       <SiteFooter />
     </div>

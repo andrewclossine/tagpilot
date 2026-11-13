@@ -3,6 +3,7 @@ import { getI18n } from "@/lib/i18n";
 import { siteCopy } from "@/lib/site-copy";
 import { setLang } from "@/app/session-actions";
 import { Logo } from "./Logo";
+import { LegalFooter } from "./LegalFooter";
 
 export async function siteText() {
   const { lang } = await getI18n();
@@ -58,7 +59,7 @@ export async function SiteFooter() {
           <Link className="small" href="/signup">{c.nav_trial}</Link>
         </div>
       </div>
-      <div className="site-wrap small muted" style={{ paddingTop: 16 }}>© {new Date().getFullYear()} TAGPILOT. {c.rights}</div>
+      <div className="site-wrap"><LegalFooter className="legal-foot site-legal" /></div>
     </footer>
   );
 }

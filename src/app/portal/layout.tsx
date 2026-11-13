@@ -5,6 +5,7 @@ import { getI18n } from "@/lib/i18n";
 import { setLang, signOut } from "@/app/session-actions";
 import { Logo } from "@/components/Logo";
 import { NavLinks } from "@/components/NavLinks";
+import { LegalFooter } from "@/components/LegalFooter";
 
 export default async function PortalLayout({ children }: { children: React.ReactNode }) {
   const ctx = await requireSupplier();
@@ -27,7 +28,7 @@ export default async function PortalLayout({ children }: { children: React.React
           <form action={signOut}><button type="submit" className="btn sm">{t("sign_out")}</button></form>
         </div>
       </aside>
-      <main className="main">{children}</main>
+      <main className="main">{children}<LegalFooter /></main>
     </div>
   );
 }

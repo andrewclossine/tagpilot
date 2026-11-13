@@ -7,5 +7,5 @@ export const metadata = { title: "Invoices" };
 export default async function Page({ searchParams }: { searchParams: SearchParams }) {
   const ctx = await requireView("sales");
   const q = await sp(searchParams);
-  return <DocList kind="invoice" ctx={ctx} status={q("status")} />;
+  return <DocList kind="invoice" ctx={ctx} status={q("status")} search={q("q")} />;
 }

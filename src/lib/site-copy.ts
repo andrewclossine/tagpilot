@@ -30,6 +30,14 @@ const en = {
     ["Goods received", "Inspection, accepted and rejected quantities, defects."],
     ["Three-way match and payment", "The bill takes only what was accepted, at the ordered price, then is paid."],
   ] as [string, string][],
+  shot_alt: "The TAGPILOT accounting dashboard: what to do, invoices, bank accounts and sales by month",
+  tour_title: "See it at work", tour_sub: "Real screens from TAGPILOT, with a sample organisation.",
+  tour: [
+    ["Invoices at a glance", "Search, filter, and record a payment from the list. Overdue ones stand out."],
+    ["Reports in one click", "Profit and loss, balance sheet, cash flow, VAT and more, to Excel or PDF."],
+    ["On your phone", "Install TAGPILOT on Android or iPhone and keep an eye on the business."],
+  ] as [string, string][],
+  photo_credit: "Photos: Vitaly Gariev, Iwaria Inc., Francis Odeyemi, Christina @ wocintechchat.com, Omoniyi David, on Unsplash. Kigali seen from the air by Omoniyi David.",
   why_title: "Why organisations choose TAGPILOT",
   why: [
     ["Connected, not stitched", "Procurement, projects and accounting share the same data. No re-typing between systems."],
@@ -96,6 +104,14 @@ const fr: Copy = {
     ["Réception", "Inspection, quantités acceptées et rejetées, défauts."],
     ["Rapprochement à trois et paiement", "La facture ne prend que ce qui a été accepté, au prix commandé, puis elle est payée."],
   ],
+  shot_alt: "Le tableau de bord comptable de TAGPILOT : à faire, factures, comptes bancaires et ventes par mois",
+  tour_title: "Voyez-le à l'œuvre", tour_sub: "De vrais écrans de TAGPILOT, avec une organisation d'exemple.",
+  tour: [
+    ["Les factures d'un coup d'œil", "Recherchez, filtrez et encaissez depuis la liste. Les retards ressortent."],
+    ["Les états en un clic", "Compte de résultat, bilan, trésorerie, TVA et plus, vers Excel ou PDF."],
+    ["Sur votre téléphone", "Installez TAGPILOT sur Android ou iPhone et suivez l'activité partout."],
+  ],
+  photo_credit: "Photos : Vitaly Gariev, Iwaria Inc., Francis Odeyemi, Christina @ wocintechchat.com, Omoniyi David, sur Unsplash. Kigali vue du ciel par Omoniyi David.",
   why_title: "Pourquoi les organisations choisissent TAGPILOT",
   why: [
     ["Relié, pas rafistolé", "Achats, projets et comptabilité partagent les mêmes données. Rien à ressaisir d'un système à l'autre."],

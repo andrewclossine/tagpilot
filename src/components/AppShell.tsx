@@ -72,8 +72,8 @@ function TopMenu({ items }: { items: NavItem[] }) {
  * keep a sidebar. A page that belongs to no app, such as Settings, stays in the last app. A page in two apps stays in
  * the one the person came from.
  */
-export function AppShell({ workspaces, common, allAppsLabel, brand, account, children }: {
-  workspaces: Workspace[]; common: NavItem[]; allAppsLabel: string; brand: React.ReactNode; account: React.ReactNode; children: React.ReactNode;
+export function AppShell({ workspaces, common, allAppsLabel, brand, account, quick, footer, children }: {
+  workspaces: Workspace[]; common: NavItem[]; allAppsLabel: string; brand: React.ReactNode; account: React.ReactNode; quick?: React.ReactNode; footer?: React.ReactNode; children: React.ReactNode;
 }) {
   const path = usePathname();
   const [last, setLast] = useState<string | null>(null);
@@ -98,10 +98,10 @@ export function AppShell({ workspaces, common, allAppsLabel, brand, account, chi
     return (
       <div className="top-shell">
         <header className="topbar">
-          <div className="topbar-row">{brand}{allApps}<span className="spacer" />{account}</div>
+          <div className="topbar-row">{brand}{allApps}{quick}<span className="spacer" />{account}</div>
           <div className="topbar-row">{title}<TopMenu items={[...active.items, ...common]} /></div>
         </header>
-        <main className="main">{children}</main>
+        <main className="main">{children}{footer}</main>
       </div>
     );
   }
@@ -115,7 +115,7 @@ export function AppShell({ workspaces, common, allAppsLabel, brand, account, chi
         {common.length ? <NavLinks items={common} /> : null}
         {account}
       </aside>
-      <main className="main">{children}</main>
+      <main className="main">{children}{footer}</main>
     </div>
   );
 }

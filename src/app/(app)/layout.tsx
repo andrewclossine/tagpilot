@@ -8,6 +8,8 @@ import { setLang, signOut } from "@/app/session-actions";
 import { AppShell } from "@/components/AppShell";
 import type { NavItem } from "@/components/NavLinks";
 import { Logo } from "@/components/Logo";
+import { QuickBar, type NewGroup } from "@/components/QuickBar";
+import { LegalFooter } from "@/components/LegalFooter";
 import { InstallApp } from "@/components/InstallApp";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -45,8 +47,17 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <form action={signOut}><button type="submit" className="btn sm">{t("sign_out")}</button></form>
     </div>
   );
+  // "+ New": what this person may create in Accounting, grouped like the menus.
+  const w = (area: Area, href: string, label: string) => (ctx.can(area, "write") ? [{ href, label }] : []);
+  const newGroups: NewGroup[] = ctx.has("accounting") ? [
+    { label: t("nav_sales"), links: [...w("sales", "/sales/invoices/new", t("inv_new")), ...w("sales", "/sales/receipts/new", t("sr_new")), ...w("sales", "/sales/payments", t("nav_receive_payments")), ...w("sales", "/sales/proformas/new", t("nav_proforma")), ...w("partners", "/sales/customers#form", t("nav_customers"))] },
+    { label: t("nav_purchases"), links: [...w("purchases", "/purchases/bills/new", t("bill_new")), ...w("purchases", "/purchases/expenses", t("exp_new")), ...w("purchases", "/purchases/pay", t("nav_pay_bill")), ...w("partners", "/purchases/suppliers#form", t("nav_suppliers"))] },
+    { label: t("nav_banking"), links: [...w("banking", "/banking/check", t("nav_write_check")), ...w("banking", "/banking/deposit", t("nav_make_deposit")), ...w("banking", "/banking/transfer", t("nav_transfer_funds"))] },
+    { label: t("nav_accountant"), links: [...w("journal", "/journal/new", t("qb_journal_entry")), ...w("assets", "/assets/new", t("qb_asset")), ...w("inventory", "/inventory/new", t("qb_item"))] },
+  ] : [];
+  const quick = ctx.has("accounting") ? <QuickBar groups={newGroups} labels={{ new: t("qb_new"), search: t("qb_search"), placeholder: t("qb_placeholder") }} /> : null;
   return (
-    <AppShell workspaces={workspaces} common={common} allAppsLabel={t("nav_all_apps")} brand={brand} account={account}>
+    <AppShell workspaces={workspaces} common={common} allAppsLabel={t("nav_all_apps")} brand={brand} account={account} quick={quick} footer={<LegalFooter />}>
       {ctx.locked ? <div className="note bad row" style={{ marginBottom: 16 }}><span style={{ flex: 1 }}>{t("trial_over")}</span>{ctx.isAdmin ? <a className="btn primary sm" href="/billing">{t("billing_pay")}</a> : null}</div>
         : ctx.trialDaysLeft !== null && ctx.isAdmin ? <div className="note info small row" style={{ marginBottom: 16 }}><span style={{ flex: 1 }}>{t("trial_left").replace("{n}", String(ctx.trialDaysLeft))}</span><a className="btn sm" href="/billing">{t("billing_pay")}</a></div> : null}
       {children}

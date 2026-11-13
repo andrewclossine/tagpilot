@@ -31,11 +31,16 @@ async function loadDocs(kind: DocKind, companyId: string, statuses?: string[], r
     .where(and(...conds)).orderBy(desc(doc.date), desc(doc.createdAt)).limit(500);
 }
 
-export async function DocList({ kind, ctx, status, receipts = false }: { kind: DocKind; ctx: Ctx; status: string; receipts?: boolean }) {
+export async function DocList({ kind, ctx, status, receipts = false, search = "" }: { kind: DocKind; ctx: Ctx; status: string; receipts?: boolean; search?: string }) {
   const { t, money } = await getI18n();
   const base = docBase(kind);
-  const filter = status === "unpaid" ? ["open", "partial"] : status && status in statusKey ? [status] : undefined;
-  const rows = await loadDocs(kind, ctx.company.id, filter, receipts);
+  const filter = status === "unpaid" || status === "overdue" ? ["open", "partial"] : status && status in statusKey ? [status] : undefined;
+  const needle = search.trim().toLowerCase();
+  const rows = (await loadDocs(kind, ctx.company.id, filter, receipts))
+    .filter((r) => status !== "overdue" || r.d.dueDate < today())
+    .filter((r) => !needle || r.d.number.toLowerCase().includes(needle) || r.partner.toLowerCase().includes(needle) || String(r.d.total).includes(needle.replace(/[\s,]/g, "")));
+  const write = ctx.can(kind === "invoice" ? "sales" : "purchases", "write");
+  const listBase = receipts ? "/sales/receipts" : base;
   const due = rows.reduce((s, r) => s + (r.d.status === "open" || r.d.status === "partial" ? r.d.total - r.d.amountPaid : 0), 0);
   return (
     <div className="stack">
@@ -47,13 +52,20 @@ export async function DocList({ kind, ctx, status, receipts = false }: { kind: D
         { key: "all", href: base, label: t("all") },
         { key: "draft", href: `${base}?status=draft`, label: t("st_draft") },
         { key: "unpaid", href: `${base}?status=unpaid`, label: t("st_open") },
+        { key: "overdue", href: `${base}?status=overdue`, label: t("db_overdue") },
         { key: "paid", href: `${base}?status=paid`, label: t("st_paid") },
       ]} />}
+      <form method="get" action={listBase} className="row list-search" role="search">
+        {status ? <input type="hidden" name="status" value={status} /> : null}
+        <input type="search" name="q" defaultValue={search} placeholder={t(kind === "invoice" ? "ls_search_invoices" : "ls_search_bills")} aria-label={t("qb_search")} />
+        <button type="submit" className="btn sm">{t("qb_search")}</button>
+        {search ? <a className="btn sm ghost" href={status ? `${listBase}?status=${status}` : listBase}>{t("ls_clear")}</a> : null}
+      </form>
       <div className="panel">
         {rows.length ? (
           <div className="tbl-wrap"><table>
             <thead><tr><th>{t("number")}</th><th>{t("date")}</th><th>{t(kind === "invoice" ? "customer" : "supplier")}</th><th>{t("due_date")}</th>
-              <th className="num">{t("total")}</th><th className="num">{t("balance_due")}</th><th>{t("status")}</th></tr></thead>
+              <th className="num">{t("total")}</th><th className="num">{t("balance_due")}</th><th>{t("status")}</th><th className="noprint">{t("ls_action")}</th></tr></thead>
             <tbody>
               {rows.map(({ d, partner }) => {
                 const overdue = (d.status === "open" || d.status === "partial") && d.dueDate < today();
@@ -64,10 +76,15 @@ export async function DocList({ kind, ctx, status, receipts = false }: { kind: D
                     <td className="num" style={{ textAlign: "left" }}>{d.dueDate}</td>
                     <td className="num">{money(d.total)}</td><td className="num">{d.status === "void" ? "" : money(d.total - d.amountPaid)}</td>
                     <td><Pill kind={overdue ? "overdue" : d.status}>{overdue ? `${daysBetween(d.dueDate, today())} ${t("days_overdue")}` : t(statusKey[d.status])}</Pill></td>
+                    <td className="noprint row-actions">
+                      {write && d.status === "draft" ? <Link className="btn sm" href={`${base}/${d.id}`}>{t("edit")}</Link> : null}
+                      {write && (d.status === "open" || d.status === "partial") ? <Link className="btn sm" href={`${base}/${d.id}#pay`}>{t(kind === "invoice" ? "receive_payment" : "pay_bill")}</Link> : null}
+                      {kind === "invoice" && d.status !== "draft" && d.status !== "void" ? <a className="btn sm ghost" href={`/api/pdf/invoice/${d.id}`} target="_blank" rel="noopener">PDF</a> : null}
+                    </td>
                   </tr>
                 );
               })}
-              <tr className="total"><td colSpan={5}>{t("balance_due")}</td><td className="num">{money(due)}</td><td /></tr>
+              <tr className="total"><td colSpan={5}>{t("balance_due")}</td><td className="num">{money(due)}</td><td colSpan={2} /></tr>
             </tbody>
           </table></div>
         ) : <Empty>{t("nothing_yet")}</Empty>}
@@ -206,7 +223,7 @@ export async function DocView({ kind, ctx, doc, error }: { kind: DocKind; ctx: C
             </div>
           ) : null}
           {canPay ? (
-            <form action={payDocAction} className="stack" style={{ borderTop: "1px solid var(--line)", paddingTop: 12 }}>
+            <form action={payDocAction} className="stack" id="pay" style={{ borderTop: "1px solid var(--line)", paddingTop: 12 }}>
               <h3>{t(kind === "invoice" ? "receive_payment" : "pay_bill")}</h3>
               <input type="hidden" name="kind" value={kind} /><input type="hidden" name="id" value={doc.id} />
               <div className="fields">

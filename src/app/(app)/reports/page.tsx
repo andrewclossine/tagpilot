@@ -1,7 +1,7 @@
-import Link from "next/link";
 import { requireView } from "@/lib/auth";
 import { getI18n, type Key } from "@/lib/i18n";
 import { PageHead } from "@/components/ui";
+import { ReportFinder } from "@/components/ReportFinder";
 
 export const metadata = { title: "Reports" };
 
@@ -57,10 +57,20 @@ const GROUPS: { title: Key; items: { kind: string; label: Key; help: Key }[] }[]
     ],
   },
   {
+    title: "nav_customer_reports",
+    items: [
+      { kind: "ar", label: "r_ar", help: "rh_ar" },
+      { kind: "ar-aging-detail", label: "r_ar_aging_detail", help: "rh_ar_aging_detail" },
+      { kind: "ar-balance-summary", label: "r_ar_balance_summary", help: "rh_ar_balance_summary" },
+      { kind: "ar-balance-detail", label: "r_ar_balance_detail", help: "rh_ar_balance_detail" },
+      { kind: "ar-unpaid", label: "r_ar_unpaid", help: "rh_ar_unpaid" },
+      { kind: "customers", label: "r_customers", help: "rh_customers" },
+    ],
+  },
+  {
     title: "r_group_other",
     items: [
       { kind: "vat", label: "r_vat", help: "rh_vat" },
-      { kind: "ar", label: "r_ar", help: "rh_ar" },
     ],
   },
 ];
@@ -68,22 +78,14 @@ const GROUPS: { title: Key; items: { kind: string; label: Key; help: Key }[] }[]
 export default async function ReportsIndex() {
   const ctx = await requireView("reports");
   const { t } = await getI18n();
+  const groups = GROUPS.map((g) => ({
+    title: t(g.title),
+    items: g.items.filter((i) => i.kind !== "audit" || ctx.can("audit")).map((i) => ({ kind: i.kind, label: t(i.label), help: t(i.help) })),
+  }));
   return (
     <div className="stack">
       <PageHead title={t("r_title")} />
-      {GROUPS.map((g) => (
-        <section key={g.title} className="panel stack">
-          <h2>{t(g.title)}</h2>
-          <ul className="report-list">
-            {g.items.filter((i) => i.kind !== "audit" || ctx.can("audit")).map((i) => (
-              <li key={i.kind}>
-                <Link href={`/reports/${i.kind}`}>{t(i.label)}</Link>
-                <span className="small muted">{t(i.help)}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ))}
+      <ReportFinder groups={groups} labels={{ search: t("rc_search"), favourites: t("rc_favourites"), star: t("rc_star"), unstar: t("rc_unstar"), none: t("rc_none") }} />
     </div>
   );
 }
