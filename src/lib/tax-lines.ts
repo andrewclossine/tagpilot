@@ -14,6 +14,7 @@ export function defaultTaxLine(a: TaxAccount): TaxLine {
   const c = a.code;
   if (a.type === "income") return /^4[12]/.test(c) ? "sales" : "other_income";
   if (c.startsWith("5")) return "cost_of_sales";
+  if (c === "6950") return "non_deductible"; // income tax itself
   if (c === "6100" || c === "6101") return "salaries";
   if (c === "6110" || c === "6120") return "rent";
   if (c === "6105" || c === "6180") return "transport";

@@ -10,11 +10,16 @@ import { UserError } from "@/lib/ledger";
 import { countStock, ensureInventoryAccounts, openingStock } from "@/lib/inventory";
 import { getI18n } from "@/lib/i18n";
 import { audit } from "@/lib/audit";
+import { CLASS_ACCOUNT, ensureManufacturingAccounts, saveBom } from "@/lib/manufacturing";
+import type { StockClass } from "@/db/schema";
+
+const CLASSES: StockClass[] = ["goods", "raw", "finished"];
 
 function itemValues(fd: FormData) {
   return {
     sku: str(fd, "sku").toUpperCase(), name: str(fd, "name"), unit: str(fd, "unit") || "pcs",
     kind: (str(fd, "kind") === "service" ? "service" : "stock") as "stock" | "service",
+    stockClass: (CLASSES as string[]).includes(str(fd, "stockClass")) ? str(fd, "stockClass") as StockClass : "goods",
     salePrice: parseAmount(fd.get("salePrice")), purchaseCost: parseAmount(fd.get("purchaseCost")),
     inventoryAccount: str(fd, "inventoryAccount") || "1300", incomeAccount: str(fd, "incomeAccount") || "4100",
     cogsAccount: str(fd, "cogsAccount") || "5100", expenseAccount: str(fd, "expenseAccount") || "6900",
@@ -33,6 +38,11 @@ export async function createItem(fd: FormData) {
     const db = await getDb();
     id = await db.transaction(async (tx) => {
       await ensureInventoryAccounts(tx, ctx.company.id);
+      // Raw materials and products are kept in their own accounts unless another one was chosen.
+      if (v.stockClass !== "goods") {
+        await ensureManufacturingAccounts(tx, ctx.company.id);
+        if (v.inventoryAccount === "1300") v.inventoryAccount = CLASS_ACCOUNT[v.stockClass];
+      }
       const [it] = await tx.insert(schema.items).values({ ...v, companyId: ctx.company.id }).returning({ id: schema.items.id });
       const qty = parseAmount(fd.get("openingQty"));
       if (v.kind === "stock" && qty > 0) {
@@ -55,6 +65,7 @@ export async function updateItem(fd: FormData) {
     const { kind: _kind, ...v } = itemValues(fd); // an item's kind cannot change once it has stock history
     if (!v.sku || !v.name) throw new UserError("err_required");
     const db = await getDb();
+    if (v.stockClass !== "goods") await ensureManufacturingAccounts(db, ctx.company.id);
     await db.update(schema.items).set(v).where(and(eq(schema.items.id, id), eq(schema.items.companyId, ctx.company.id)));
     await audit(db, ctx.company.id, ctx.user.id, "update", "item", v.sku);
   } catch (e) { fail(e, `/inventory/${id}`); }
@@ -80,4 +91,22 @@ export async function countItem(fd: FormData) {
   } catch (e) { fail(e, `/inventory/${id}`); }
   revalidatePath("/inventory");
   redirect(`/inventory/${id}?saved=1`);
+}
+
+/** Saves what one unit of a product is made of, and the labour and overhead per unit. */
+export async function saveItemBom(fd: FormData) {
+  const ctx = await requireWrite("inventory");
+  const id = str(fd, "id");
+  try {
+    if (!isUuid(id)) throw new UserError("err_not_found");
+    const comps = fd.getAll("componentId").map(String), qtys = fd.getAll("componentQty");
+    const lines = comps.map((componentId, i) => ({ componentId: isUuid(componentId) ? componentId : "", quantity: parseAmount(qtys[i] ?? "") }));
+    const db = await getDb();
+    await db.transaction(async (tx) => {
+      await ensureManufacturingAccounts(tx, ctx.company.id);
+      await saveBom(tx, ctx.company.id, ctx.user.id, id, lines, parseAmount(fd.get("conversionCost")));
+    });
+  } catch (e) { fail(e, `/inventory/${id}`); }
+  revalidatePath("/inventory");
+  redirect(`/inventory/${id}?saved=1#bom`);
 }

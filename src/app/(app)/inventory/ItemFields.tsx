@@ -1,7 +1,7 @@
 import type { T } from "@/lib/i18n";
 
 type Item = {
-  sku: string; name: string; unit: string; kind: string; salePrice: number; purchaseCost: number; reorderLevel: number;
+  sku: string; name: string; unit: string; kind: string; stockClass: string; salePrice: number; purchaseCost: number; reorderLevel: number;
   inventoryAccount: string; incomeAccount: string; cogsAccount: string; expenseAccount: string; isActive: boolean;
 };
 type Acc = { code: string; name: string; type: string };
@@ -22,6 +22,10 @@ export function ItemFields({ t, item, accounts, fixedKind }: { t: T; item?: Item
         <label className="f">{t("item_kind")}
           <select id="i-kind" name="kind" defaultValue={item?.kind ?? "stock"} disabled={fixedKind}>
             <option value="stock">{t("item_stock")}</option><option value="service">{t("item_service")}</option>
+          </select></label>
+        <label className="f">{t("sc_label")}
+          <select id="i-class" name="stockClass" defaultValue={item?.stockClass ?? "goods"}>
+            <option value="goods">{t("sc_goods")}</option><option value="raw">{t("sc_raw")}</option><option value="finished">{t("sc_finished")}</option>
           </select></label>
         <label className="f">{t("sale_price")}<input id="i-salePrice" name="salePrice" className="num" inputMode="decimal" defaultValue={item?.salePrice ?? ""} /></label>
         <label className="f">{t("purchase_cost")}<input id="i-purchaseCost" name="purchaseCost" className="num" inputMode="decimal" defaultValue={item?.purchaseCost ?? ""} /></label>

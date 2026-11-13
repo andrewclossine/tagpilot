@@ -2,11 +2,22 @@ import "server-only";
 import { eq } from "drizzle-orm";
 import type { Db, Tx } from "@/db";
 import { schema } from "@/db";
-import { STARTER_ACCOUNTS, STARTER_ASSET_CATEGORIES } from "./template";
+import { chartFor, STARTER_ACCOUNTS, STARTER_ASSET_CATEGORIES } from "./template";
 
-/** Adds starter accounts a company does not have yet (by code), leaving its own accounts untouched. */
+/** The starter chart that fits a company's legal form, sector and VAT status. */
+export async function companyChart(db: Db | Tx, companyId: string) {
+  const [c] = await db.select({ orgType: schema.companies.orgType, sector: schema.companies.sector, vatRegistered: schema.companies.vatRegistered })
+    .from(schema.companies).where(eq(schema.companies.id, companyId));
+  return chartFor(c ?? { orgType: "company", sector: "other", vatRegistered: true });
+}
+
+/**
+ * Adds starter accounts a company does not have yet (by code), leaving its own accounts untouched. Without codes it adds
+ * the chart for the company's profile; with codes it adds those, named as the company's profile names them.
+ */
 export async function ensureStarterAccounts(db: Db | Tx, companyId: string, codes?: string[]) {
-  const list = codes ? STARTER_ACCOUNTS.filter((a) => codes.includes(a.code)) : STARTER_ACCOUNTS;
+  const chart = await companyChart(db, companyId);
+  const list = codes ? codes.map((code) => chart.find((x) => x.code === code) ?? STARTER_ACCOUNTS.find((x) => x.code === code)).filter((x) => !!x) : chart;
   if (!list.length) return;
   await db.insert(schema.accounts).values(list.map((a) => ({
     companyId, code: a.code, nameEn: a.en, nameFr: a.fr, type: a.type, subtype: a.subtype ?? null,

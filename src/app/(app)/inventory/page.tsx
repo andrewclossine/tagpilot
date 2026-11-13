@@ -5,6 +5,7 @@ import { requireView } from "@/lib/auth";
 import { getI18n } from "@/lib/i18n";
 import { round2 } from "@/lib/format";
 import { Empty, PageHead, Pill } from "@/components/ui";
+import { InventoryTabs } from "./InventoryTabs";
 
 export const metadata = { title: "Inventory" };
 
@@ -22,6 +23,7 @@ export default async function InventoryPage() {
       <PageHead title={t("nav_inventory")}>
         {ctx.can("inventory", "write") ? <Link className="btn primary" href="/inventory/new">{t("item_new")}</Link> : null}
       </PageHead>
+      <InventoryTabs t={t} current="items" />
       <div className="kpis">
         <div className="panel kpi"><div className="label">{t("stock_value")} · {ctx.company.currency}</div><div className="v">{money(value)}</div></div>
         <div className="panel kpi"><div className="label">{t("items_count")}</div><div className="v">{items.length}</div></div>
@@ -40,7 +42,7 @@ export default async function InventoryPage() {
                   <tr key={i.id} className="click" style={{ opacity: i.isActive ? 1 : 0.5 }}>
                     <td><code className="k">{i.sku}</code></td>
                     <td><Link className="rowlink" href={`/inventory/${i.id}`}>{i.name}</Link></td>
-                    <td className="small">{t(i.kind === "stock" ? "item_stock" : "item_service")}</td>
+                    <td className="small">{i.kind === "stock" ? t(`sc_${i.stockClass}`) : t("item_service")}</td>
                     <td className="num">{i.kind === "stock" ? `${i.qtyOnHand} ${i.unit}` : "—"}</td>
                     <td className="num">{i.kind === "stock" ? money(i.avgCost, 2) : ""}</td>
                     <td className="num">{i.kind === "stock" ? money(i.qtyOnHand * i.avgCost) : ""}</td>

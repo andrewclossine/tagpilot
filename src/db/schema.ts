@@ -243,7 +243,7 @@ export type AiInfo = {
   newPartner?: { name: string; tin: string; kind: "customer" | "supplier" } | null;
 };
 
-export type EntrySource = "manual" | "ai" | "invoice" | "invoice_payment" | "bill" | "bill_payment" | "payroll" | "bank" | "reversal" | "voucher" | "receipt" | "check" | "deposit" | "transfer" | "fx" | "credit_note" | "expense";
+export type EntrySource = "manual" | "ai" | "invoice" | "invoice_payment" | "bill" | "bill_payment" | "payroll" | "bank" | "reversal" | "voucher" | "receipt" | "check" | "deposit" | "transfer" | "fx" | "credit_note" | "expense" | "production";
 
 export const journalEntries = pgTable("journal_entries", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -693,6 +693,10 @@ export const items = pgTable("items", {
   name: text("name").notNull(),
   unit: text("unit").notNull().default("pcs"),
   kind: text("kind").$type<"stock" | "service">().notNull().default("stock"),
+  // What the stock is for: bought to resell, raw material for production, or a product the company makes.
+  stockClass: text("stock_class").$type<StockClass>().notNull().default("goods"),
+  // Labour and overhead added to each unit made, on top of its materials (IAS 2.12 conversion costs).
+  conversionCost: money("conversion_cost"),
   salePrice: money("sale_price"),
   purchaseCost: money("purchase_cost"),       // default price on bills
   inventoryAccount: text("inventory_account").notNull().default("1300"), // account codes
@@ -712,18 +716,68 @@ export const stockMoves = pgTable("stock_moves", {
   companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
   itemId: uuid("item_id").notNull().references(() => items.id, { onDelete: "cascade" }),
   date: date("date", { mode: "string" }).notNull(),
-  kind: text("kind").$type<"opening" | "purchase" | "sale" | "adjustment" | "void">().notNull(),
+  kind: text("kind").$type<"opening" | "purchase" | "sale" | "adjustment" | "void" | "issue" | "produce">().notNull(),
   quantity: qty("quantity"),                  // in is positive, out is negative
   unitCost: numeric("unit_cost", { precision: 18, scale: 4, mode: "number" }).notNull().default(0),
   value: money("value"),                      // quantity x unit cost, signed
   qtyAfter: qty("qty_after"),
   avgCostAfter: numeric("avg_cost_after", { precision: 18, scale: 4, mode: "number" }).notNull().default(0),
-  sourceType: text("source_type").$type<"invoice" | "bill" | "adjustment" | "item" | "receipt">(),
+  sourceType: text("source_type").$type<"invoice" | "bill" | "adjustment" | "item" | "receipt" | "production">(),
   sourceId: uuid("source_id"),
   entryId: uuid("entry_id").references(() => journalEntries.id),
   notes: text("notes").notNull().default(""),
   createdAt: created(),
 }, (t) => [index("stock_moves_item").on(t.itemId, t.date)]);
+
+// ---------- manufacturing (IAS 2: materials and conversion costs, through work in progress) ----------
+export type StockClass = "goods" | "raw" | "finished";
+export type ProductionStatus = "draft" | "in_progress" | "done" | "cancelled";
+
+/** Bill of materials: what one unit of a product is made of. */
+export const bomLines = pgTable("bom_lines", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  itemId: uuid("item_id").notNull().references(() => items.id, { onDelete: "cascade" }),
+  componentId: uuid("component_id").notNull().references(() => items.id),
+  quantity: numeric("quantity", { precision: 18, scale: 4, mode: "number" }).notNull(), // per one unit made
+  sortOrder: integer("sort_order").notNull().default(0),
+}, (t) => [index("bom_lines_item").on(t.itemId)]);
+
+/**
+ * A production run. Starting it moves the materials from their stores into work in progress; finishing it moves work in
+ * progress, plus labour and overhead, into the finished product at what it actually cost.
+ */
+export const productionOrders = pgTable("production_orders", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  number: text("number").notNull(),
+  itemId: uuid("item_id").notNull().references(() => items.id),
+  quantity: qty("quantity"),                  // planned
+  quantityMade: qty("quantity_made"),
+  status: text("status").$type<ProductionStatus>().notNull().default("draft"),
+  plannedDate: date("planned_date", { mode: "string" }).notNull(),
+  startDate: date("start_date", { mode: "string" }),
+  finishDate: date("finish_date", { mode: "string" }),
+  wipAccount: text("wip_account").notNull().default("1320"),
+  materialsCost: money("materials_cost"),
+  conversionCost: money("conversion_cost"),  // labour and overhead absorbed when it is finished
+  startEntryId: uuid("start_entry_id").references(() => journalEntries.id),
+  finishEntryId: uuid("finish_entry_id").references(() => journalEntries.id),
+  notes: text("notes").notNull().default(""),
+  createdBy: uuid("created_by").references(() => users.id),
+  createdAt: created(),
+}, (t) => [uniqueIndex("production_orders_company_number").on(t.companyId, t.number)]);
+
+/** The materials of a production run: planned from the bill of materials, then what was actually issued. */
+export const productionLines = pgTable("production_lines", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  orderId: uuid("order_id").notNull().references(() => productionOrders.id, { onDelete: "cascade" }),
+  componentId: uuid("component_id").notNull().references(() => items.id),
+  quantity: qty("quantity"),                  // to issue
+  unitCost: numeric("unit_cost", { precision: 18, scale: 4, mode: "number" }).notNull().default(0),
+  value: money("value"),
+  sortOrder: integer("sort_order").notNull().default(0),
+}, (t) => [index("production_lines_order").on(t.orderId)]);
 
 // ---------- fixed assets (IAS 16) ----------
 export type DepMethod = "straight_line" | "reducing_balance";

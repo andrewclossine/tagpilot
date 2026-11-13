@@ -7,7 +7,8 @@ import { accountIdByCode, saveEntry, UserError } from "./ledger";
 import { ensureStarterAccounts } from "./setup";
 import { audit } from "./audit";
 
-type MoveKind = "opening" | "purchase" | "sale" | "adjustment" | "void";
+type MoveKind = "opening" | "purchase" | "sale" | "adjustment" | "void" | "issue" | "produce";
+type SourceType = "invoice" | "bill" | "adjustment" | "item" | "receipt" | "production";
 const r4 = (n: number) => Math.round(n * 10000) / 10000;
 const r3 = (n: number) => Math.round(n * 1000) / 1000;
 
@@ -27,7 +28,7 @@ export async function loadItem(db: Db | Tx, companyId: string, id: string) {
  */
 export async function moveStock(tx: Tx, companyId: string, m: {
   itemId: string; date: string; kind: MoveKind; quantity: number; unitCost?: number;
-  sourceType?: "invoice" | "bill" | "adjustment" | "item" | "receipt"; sourceId?: string | null; entryId?: string | null; notes?: string; allowNegative?: boolean;
+  sourceType?: SourceType; sourceId?: string | null; entryId?: string | null; notes?: string; allowNegative?: boolean;
 }) {
   const it = await loadItem(tx, companyId, m.itemId);
   const none = { value: 0, unitCost: 0, moveId: null as string | null };
@@ -62,8 +63,8 @@ export async function linkMoves(tx: Tx, moveIds: (string | null)[], entryId: str
   if (ids.length) await tx.update(schema.stockMoves).set({ entryId }).where(inArray(schema.stockMoves.id, ids));
 }
 
-/** Undoes the stock movements of a voided invoice, bill or delivery, at the cost they were booked at. */
-export async function reverseDocumentStock(tx: Tx, companyId: string, sourceType: "invoice" | "bill" | "receipt", sourceId: string, date: string) {
+/** Undoes the stock movements of a voided invoice, bill, delivery or production run, at the cost they were booked at. */
+export async function reverseDocumentStock(tx: Tx, companyId: string, sourceType: "invoice" | "bill" | "receipt" | "production", sourceId: string, date: string) {
   const moves = await tx.select().from(schema.stockMoves)
     .where(and(eq(schema.stockMoves.companyId, companyId), eq(schema.stockMoves.sourceType, sourceType), eq(schema.stockMoves.sourceId, sourceId)));
   for (const mv of moves.filter((x) => x.kind !== "void")) {

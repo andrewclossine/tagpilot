@@ -26,6 +26,7 @@ export default async function NewItemPage({ searchParams }: { searchParams: Sear
       <ErrorNote message={err(q("error"))} />
       <form action={createItem} className="panel stack">
         <ItemFields t={t} accounts={accounts} />
+        <div className="small muted">{t("sc_help")}</div>
         <h3>{t("inv_opening")}</h3>
         <div className="small muted">{t("inv_opening_help")}</div>
         <div className="fields">

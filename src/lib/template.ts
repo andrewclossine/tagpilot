@@ -1,56 +1,148 @@
 import type { AccountSubtype, AccountType, CompanySettings, PayrollComponent, PayrollSettings } from "@/db/schema";
 
-/** Starter chart of accounts (IFRS presentation) for any company. Companies can edit it freely. */
+/** Starter chart of accounts (IFRS presentation). Companies can edit it freely. */
 type StarterAccount = { code: string; type: AccountType; subtype?: AccountSubtype; en: string; fr: string };
 
+/** What decides the starter chart: the kind of organisation, its sector and whether it charges VAT. */
+export type ChartProfile = { orgType: string; sector: string; vatRegistered: boolean };
+
+const a = (code: string, type: AccountType, en: string, fr: string, subtype?: AccountSubtype): StarterAccount => ({ code, type, en, fr, subtype });
+
+/** Every account TAGPILOT may create, under its general name. The chart for an organisation picks from these. */
 export const STARTER_ACCOUNTS: StarterAccount[] = [
-  { code: "1100", type: "asset", subtype: "cash", en: "Cash on hand", fr: "Caisse" },
-  { code: "1110", type: "asset", subtype: "bank", en: "Bank account", fr: "Banque" },
-  { code: "1200", type: "asset", subtype: "ar", en: "Accounts receivable", fr: "Clients" },
-  { code: "1300", type: "asset", en: "Inventory", fr: "Stocks" },
-  { code: "1450", type: "asset", subtype: "vat_in", en: "VAT recoverable (input VAT)", fr: "TVA déductible" },
-  { code: "1500", type: "asset", en: "Prepayments", fr: "Charges constatées d'avance" },
-  { code: "1510", type: "asset", en: "Staff advances", fr: "Avances au personnel" },
+  a("1100", "asset", "Cash on hand", "Caisse", "cash"),
+  a("1110", "asset", "Bank account", "Banque", "bank"),
+  a("1200", "asset", "Accounts receivable", "Clients", "ar"),
+  a("1210", "asset", "Loans to customers", "Prêts à la clientèle"),
+  a("1219", "asset", "Loan loss allowance", "Provision pour pertes sur prêts"),
+  a("1220", "asset", "Receivable from medical insurers", "Créances sur assureurs maladie"),
+  a("1250", "asset", "Contract assets (work done not yet billed)", "Actifs sur contrats (travaux non facturés)"),
+  a("1260", "asset", "Retentions receivable", "Retenues de garantie à recevoir"),
+  a("1300", "asset", "Inventory", "Stocks"),
+  a("1310", "asset", "Raw materials", "Matières premières"),
+  a("1320", "asset", "Work in progress", "En-cours de production"),
+  a("1330", "asset", "Finished goods", "Produits finis"),
+  a("1450", "asset", "VAT recoverable (input VAT)", "TVA déductible", "vat_in"),
+  a("1500", "asset", "Prepayments", "Charges constatées d'avance"),
+  a("1510", "asset", "Staff advances", "Avances au personnel"),
   ...FIXED_ASSET_ACCOUNTS(),
-  { code: "2100", type: "liability", subtype: "ap", en: "Accounts payable", fr: "Fournisseurs" },
-  { code: "2150", type: "liability", en: "Goods received not invoiced", fr: "Marchandises reçues non facturées" },
-  { code: "2200", type: "liability", subtype: "vat_out", en: "VAT payable (output VAT)", fr: "TVA collectée" },
-  { code: "2300", type: "liability", en: "Income tax on salaries payable", fr: "Impôt sur salaires à payer" },
-  { code: "2310", type: "liability", en: "Social security contributions payable", fr: "Cotisations sociales à payer" },
-  { code: "2320", type: "liability", subtype: "wht", en: "Withholding tax payable", fr: "Retenue à la source à payer" },
-  { code: "2330", type: "liability", en: "Net salaries payable", fr: "Salaires nets à payer" },
-  { code: "2400", type: "liability", en: "Accrued expenses", fr: "Charges à payer" },
-  { code: "2500", type: "liability", en: "Loans", fr: "Emprunts" },
-  { code: "2600", type: "liability", en: "Deferred grant income", fr: "Subventions reçues d'avance" },
-  { code: "3100", type: "equity", en: "Share capital", fr: "Capital social" },
-  { code: "3200", type: "equity", en: "Retained earnings", fr: "Résultats reportés" },
-  { code: "3300", type: "equity", en: "Revaluation surplus", fr: "Écart de réévaluation" },
-  { code: "4100", type: "income", en: "Sales of goods", fr: "Ventes de marchandises" },
-  { code: "4200", type: "income", en: "Service revenue", fr: "Prestations de services" },
-  { code: "4300", type: "income", en: "Grants & donations", fr: "Subventions et dons" },
-  { code: "4800", type: "income", en: "Gain on disposal of assets", fr: "Plus-values de cession d'actifs" },
-  { code: "4850", type: "income", en: "Foreign exchange gains", fr: "Gains de change" },
-  { code: "4900", type: "income", en: "Other income", fr: "Autres produits" },
-  { code: "5100", type: "expense", en: "Cost of goods sold", fr: "Coût des marchandises vendues" },
-  { code: "5150", type: "expense", en: "Stock adjustments & losses", fr: "Ajustements et pertes de stock" },
-  { code: "6100", type: "expense", en: "Salaries & wages", fr: "Salaires et traitements" },
-  { code: "6101", type: "expense", en: "Employer social contributions", fr: "Charges sociales patronales" },
-  { code: "6105", type: "expense", en: "Transport & fuel", fr: "Transport et carburant" },
-  { code: "6110", type: "expense", en: "Rent", fr: "Loyer" },
-  { code: "6120", type: "expense", en: "Electricity & water", fr: "Eau et électricité" },
-  { code: "6130", type: "expense", en: "Communication & internet", fr: "Communication et internet" },
-  { code: "6140", type: "expense", en: "Office supplies", fr: "Fournitures de bureau" },
-  { code: "6150", type: "expense", en: "Repairs & maintenance", fr: "Entretien et réparations" },
-  { code: "6160", type: "expense", en: "Professional fees", fr: "Honoraires" },
-  { code: "6170", type: "expense", en: "Bank charges", fr: "Frais bancaires" },
-  { code: "6180", type: "expense", en: "Travel & accommodation", fr: "Déplacements et hébergement" },
-  { code: "6190", type: "expense", en: "Training & workshops", fr: "Formations et ateliers" },
-  { code: "6200", type: "expense", en: "Depreciation", fr: "Dotations aux amortissements" },
-  { code: "6210", type: "expense", en: "Impairment losses", fr: "Pertes de valeur" },
-  { code: "6800", type: "expense", en: "Loss on disposal of assets", fr: "Moins-values de cession d'actifs" },
-  { code: "6850", type: "expense", en: "Foreign exchange losses", fr: "Pertes de change" },
-  { code: "6900", type: "expense", en: "Other expenses", fr: "Autres charges" },
+  a("1660", "asset", "Investment property", "Immeubles de placement"),
+  a("1700", "asset", "Biological assets (livestock, plantations)", "Actifs biologiques (bétail, plantations)"),
+  a("2100", "liability", "Accounts payable", "Fournisseurs", "ap"),
+  a("2150", "liability", "Goods received not invoiced", "Marchandises reçues non facturées"),
+  a("2160", "liability", "Customer deposits", "Dépôts de la clientèle"),
+  a("2170", "liability", "Tenant security deposits", "Cautions des locataires"),
+  a("2180", "liability", "Retentions payable to subcontractors", "Retenues de garantie dues aux sous-traitants"),
+  a("2200", "liability", "VAT payable (output VAT)", "TVA collectée", "vat_out"),
+  a("2300", "liability", "Income tax on salaries payable", "Impôt sur salaires à payer"),
+  a("2310", "liability", "Social security contributions payable", "Cotisations sociales à payer"),
+  a("2320", "liability", "Withholding tax payable", "Retenue à la source à payer", "wht"),
+  a("2330", "liability", "Net salaries payable", "Salaires nets à payer"),
+  a("2340", "liability", "Corporate income tax payable", "Impôt sur les sociétés à payer"),
+  a("2350", "liability", "Patronage refunds payable to members", "Ristournes à payer aux membres"),
+  a("2400", "liability", "Accrued expenses", "Charges à payer"),
+  a("2450", "liability", "Contract liabilities (advances from customers)", "Passifs sur contrats (avances des clients)"),
+  a("2460", "liability", "Fees received in advance", "Frais perçus d'avance"),
+  a("2500", "liability", "Loans", "Emprunts"),
+  a("2600", "liability", "Deferred grant income", "Subventions reçues d'avance"),
+  a("3100", "equity", "Share capital", "Capital social"),
+  a("3150", "equity", "Reserves", "Réserves"),
+  a("3200", "equity", "Retained earnings", "Résultats reportés"),
+  a("3300", "equity", "Revaluation surplus", "Écart de réévaluation"),
+  a("4100", "income", "Sales of goods", "Ventes de marchandises"),
+  a("4110", "income", "Sales of products", "Ventes de produits"),
+  a("4200", "income", "Service revenue", "Prestations de services"),
+  a("4210", "income", "Fees from customers", "Honoraires et redevances"),
+  a("4220", "income", "Other operating revenue", "Autres produits d'exploitation"),
+  a("4300", "income", "Grants & donations", "Subventions et dons"),
+  a("4310", "income", "Restricted grants", "Subventions affectées"),
+  a("4800", "income", "Gain on disposal of assets", "Plus-values de cession d'actifs"),
+  a("4850", "income", "Foreign exchange gains", "Gains de change"),
+  a("4900", "income", "Other income", "Autres produits"),
+  a("4950", "income", "Fair value gains", "Gains de juste valeur"),
+  a("5100", "expense", "Cost of goods sold", "Coût des marchandises vendues"),
+  a("5110", "expense", "Direct materials and inputs", "Matières et intrants directs"),
+  a("5120", "expense", "Direct labour", "Main-d'œuvre directe"),
+  a("5130", "expense", "Production overheads", "Frais généraux de production"),
+  a("5150", "expense", "Stock adjustments & losses", "Ajustements et pertes de stock"),
+  a("5190", "expense", "Production costs absorbed into stock", "Coûts de production incorporés aux stocks"),
+  a("5200", "expense", "Cost of services (subcontractors)", "Coût des services (sous-traitance)"),
+  a("5210", "expense", "Interest expense on deposits", "Intérêts sur dépôts"),
+  a("6100", "expense", "Salaries & wages", "Salaires et traitements"),
+  a("6101", "expense", "Employer social contributions", "Charges sociales patronales"),
+  a("6105", "expense", "Transport & fuel", "Transport et carburant"),
+  a("6110", "expense", "Rent", "Loyer"),
+  a("6120", "expense", "Electricity & water", "Eau et électricité"),
+  a("6130", "expense", "Communication & internet", "Communication et internet"),
+  a("6135", "expense", "Software & subscriptions", "Logiciels et abonnements"),
+  a("6140", "expense", "Office supplies", "Fournitures de bureau"),
+  a("6150", "expense", "Repairs & maintenance", "Entretien et réparations"),
+  a("6155", "expense", "Vehicle maintenance, insurance & licences", "Entretien, assurance et licences des véhicules"),
+  a("6160", "expense", "Professional fees", "Honoraires"),
+  a("6170", "expense", "Bank charges", "Frais bancaires"),
+  a("6180", "expense", "Travel & accommodation", "Déplacements et hébergement"),
+  a("6190", "expense", "Training & workshops", "Formations et ateliers"),
+  a("6200", "expense", "Depreciation", "Dotations aux amortissements"),
+  a("6210", "expense", "Impairment losses", "Pertes de valeur"),
+  a("6220", "expense", "Expected credit losses on loans", "Pertes de crédit attendues sur prêts"),
+  a("6300", "expense", "Program activities", "Activités des programmes"),
+  a("6310", "expense", "Sub-grants to partners", "Sous-subventions aux partenaires"),
+  a("6800", "expense", "Loss on disposal of assets", "Moins-values de cession d'actifs"),
+  a("6850", "expense", "Foreign exchange losses", "Pertes de change"),
+  a("6900", "expense", "Other expenses", "Autres charges"),
+  a("6950", "expense", "Income tax expense", "Charge d'impôt sur le résultat"),
 ];
+
+/** Accounts every organisation gets: money, people, payroll, fixed assets and running costs. */
+const BASE = ["1100", "1110", "1200", "1500", "1510", "1610", "1620", "1630", "1640", "1650", "1691", "1692", "1693", "1694", "1695",
+  "2100", "2300", "2310", "2320", "2330", "2400", "2500", "3200", "3300", "4200", "4800", "4850", "4900",
+  "6100", "6101", "6105", "6110", "6120", "6130", "6140", "6150", "6160", "6170", "6180", "6190", "6200", "6210", "6800", "6850", "6900"];
+const GOODS = ["1300", "2150", "4100", "5100", "5150"];
+const VAT = ["1450", "2200"];
+
+type Extra = { codes: string[]; names?: Record<string, [string, string]> };
+
+/** Equity and tax follow the legal form: shareholders, an owner, members, or funds held for a purpose. */
+const BY_ORG_TYPE: Record<string, Extra> = {
+  company: { codes: ["3100", "2340", "6950"] },
+  other: { codes: ["3100", "2340", "6950"] },
+  sole_trader: { codes: ["3100", "3150"], names: { "3100": ["Owner's capital", "Capital de l'exploitant"], "3150": ["Owner's drawings", "Prélèvements de l'exploitant"], "3200": ["Accumulated profits", "Bénéfices cumulés"] } },
+  ngo: { codes: ["3100", "3150", "2600", "4300", "4310", "6300", "6310"], names: { "3100": ["Unrestricted funds", "Fonds non affectés"], "3150": ["Restricted funds", "Fonds affectés"], "3200": ["Accumulated surplus", "Excédents cumulés"], "4300": ["Unrestricted grants & donations", "Subventions et dons non affectés"] } },
+  cooperative: { codes: ["3100", "3150", "2350", "4300"], names: { "3100": ["Members' share capital", "Parts sociales des membres"], "3150": ["Statutory reserve", "Réserve statutaire"], "3200": ["Accumulated surplus", "Excédents cumulés"] } },
+  government: { codes: ["3100", "2600", "4300"], names: { "3100": ["Accumulated fund", "Fonds cumulés"], "3200": ["Accumulated surplus", "Excédents cumulés"], "4300": ["Government transfers & grants", "Transferts et subventions de l'État"] } },
+};
+
+/** What a sector buys, makes and earns. Accounts it does not need are left out; they come back when a module needs them. */
+const BY_SECTOR: Record<string, Extra & { goods?: boolean }> = {
+  manufacturing: { goods: true, codes: ["1310", "1320", "1330", "4110", "5110", "5120", "5130", "5190"], names: { "4110": ["Sales of manufactured products", "Ventes de produits fabriqués"] } },
+  retail: { goods: true, codes: [], names: { "1300": ["Merchandise inventory", "Stock de marchandises"] } },
+  wholesale: { goods: true, codes: [], names: { "1300": ["Merchandise inventory", "Stock de marchandises"] } },
+  fuel_station: { goods: true, codes: ["4110"], names: { "1300": ["Fuel & lubricants stock", "Stock de carburants et lubrifiants"], "4100": ["Fuel sales", "Ventes de carburant"], "4110": ["Lubricants & shop sales", "Ventes de lubrifiants et boutique"], "5150": ["Fuel losses & stock adjustments", "Pertes de carburant et ajustements de stock"] } },
+  hotel_restaurant: { goods: true, codes: ["4210"], names: { "1300": ["Food & beverage stock", "Stock d'aliments et boissons"], "4100": ["Food & beverage sales", "Ventes d'aliments et boissons"], "4210": ["Room revenue", "Hébergement"], "5100": ["Cost of food & beverages", "Coût des aliments et boissons"] } },
+  construction: { goods: true, codes: ["1250", "1260", "2180", "2450", "4210", "5110", "5120", "5200"], names: { "1300": ["Construction materials", "Matériaux de construction"], "4210": ["Contract revenue", "Produits des contrats"], "5110": ["Site materials used", "Matériaux utilisés sur chantier"], "5120": ["Site labour", "Main-d'œuvre de chantier"], "5200": ["Subcontractors", "Sous-traitants"] } },
+  consultancy: { codes: ["1250", "2450", "4210", "5200"], names: { "4210": ["Consulting fees", "Honoraires de conseil"] } },
+  ict: { goods: true, codes: ["1250", "2450", "4210", "5200", "6135"], names: { "4100": ["Hardware sales", "Ventes de matériel"], "4210": ["Software & IT services", "Logiciels et services informatiques"] } },
+  education: { codes: ["2460", "4210", "4220"], names: { "4210": ["Tuition fees", "Frais de scolarité"], "4220": ["Boarding & other school fees", "Internat et autres frais scolaires"] } },
+  finance: { codes: ["1210", "1219", "2160", "4210", "4220", "5210", "6220"], names: { "4210": ["Interest income on loans", "Intérêts sur prêts"], "4220": ["Fees & commissions", "Frais et commissions"] } },
+  health: { goods: true, codes: ["1220", "4210", "4220"], names: { "1300": ["Medicines & medical supplies", "Médicaments et fournitures médicales"], "4210": ["Patient fees", "Frais des patients"], "4220": ["Medical insurance claims", "Remboursements des assurances maladie"], "5100": ["Cost of medicines & supplies", "Coût des médicaments et fournitures"] } },
+  agriculture: { goods: true, codes: ["1700", "4110", "4950", "5110"], names: { "1300": ["Produce & farm inputs stock", "Stock de récoltes et intrants"], "4110": ["Sales of produce", "Ventes de récoltes"], "4950": ["Fair value gains on biological assets", "Gains de juste valeur sur actifs biologiques"], "5110": ["Seeds, fertiliser & farm inputs", "Semences, engrais et intrants"] } },
+  real_estate: { codes: ["1660", "2170", "4210", "4220", "4950"], names: { "4210": ["Rental income", "Revenus locatifs"], "4220": ["Service charges", "Charges locatives refacturées"], "4950": ["Fair value gains on investment property", "Gains de juste valeur sur immeubles de placement"] } },
+  transport: { codes: ["4210", "6155"], names: { "4210": ["Transport & freight revenue", "Produits du transport et du fret"] } },
+  ngo_programs: { codes: ["2600", "4300", "4310", "6300", "6310"] },
+  other: { goods: true, codes: [] },
+};
+
+/**
+ * The starter chart for one organisation: the base, then what its legal form, its sector and VAT need, with names that fit
+ * (an NGO has funds, not share capital; a hotel sells food and rooms). Sector names win over the legal form's.
+ */
+export function chartFor(p: ChartProfile): StarterAccount[] {
+  const org = BY_ORG_TYPE[p.orgType] ?? BY_ORG_TYPE.company;
+  const sec = BY_SECTOR[p.sector] ?? BY_SECTOR.other;
+  const codes = new Set([...BASE, ...org.codes, ...sec.codes, ...(sec.goods ? GOODS : []), ...(p.vatRegistered ? VAT : [])]);
+  const names = { ...org.names, ...sec.names };
+  return STARTER_ACCOUNTS.filter((x) => codes.has(x.code)).map((x) => (names[x.code] ? { ...x, en: names[x.code][0], fr: names[x.code][1] } : x));
+}
 
 /** Property, plant and equipment accounts, cost and accumulated depreciation side by side (IAS 16). */
 function FIXED_ASSET_ACCOUNTS(): StarterAccount[] {

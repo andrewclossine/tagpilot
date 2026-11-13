@@ -183,6 +183,13 @@
       "when": 1794484819844,
       "tag": "0025_rules_recurring_reminders",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1794574768387,
+      "tag": "0026_manufacturing",
+      "breakpoints": true
     }
   ]
 }

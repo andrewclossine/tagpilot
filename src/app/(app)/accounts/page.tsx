@@ -8,7 +8,8 @@ import { balances } from "@/lib/ledger";
 import { today } from "@/lib/format";
 import { ConfirmButton } from "@/components/editors";
 import { ErrorNote, PageHead } from "@/components/ui";
-import { deleteAccount, saveAccount } from "../settings/actions";
+import { addSuggestedAccounts, deleteAccount, saveAccount } from "../settings/actions";
+import { companyChart } from "@/lib/setup";
 
 export const metadata = { title: "Chart of accounts" };
 
@@ -18,13 +19,16 @@ const TYPES = ["asset", "liability", "equity", "income", "expense"] as const;
 /** The chart of accounts, grouped by type, with each account's balance today. */
 export default async function AccountsPage({ searchParams }: { searchParams: SearchParams }) {
   const ctx = await requireView("accounts");
-  const { t, err, money } = await getI18n();
+  const { t, err, money, lang } = await getI18n();
   const q = await sp(searchParams);
   const db = await getDb();
-  const [accounts, bal] = await Promise.all([
+  const [accounts, bal, chart] = await Promise.all([
     db.select().from(schema.accounts).where(eq(schema.accounts.companyId, ctx.company.id)).orderBy(schema.accounts.code),
     balances(db, ctx.company.id, { to: today() }),
+    companyChart(db, ctx.company.id),
   ]);
+  const have = new Set(accounts.map((a) => a.code));
+  const missing = chart.filter((a) => !have.has(a.code));
   const editing = accounts.find((a) => a.id === q("edit"));
   const canEdit = ctx.can("accounts", "write");
   const sign = (type: string) => (type === "asset" || type === "expense" ? 1 : -1);
@@ -35,6 +39,14 @@ export default async function AccountsPage({ searchParams }: { searchParams: Sea
       </PageHead>
       <ErrorNote message={err(q("error"))} />
       {q("saved") ? <div className="note ok small">{t("saved")}</div> : null}
+      {canEdit && missing.length ? (
+        <form action={addSuggestedAccounts} className="panel stack">
+          <h2>{t("coa_suggest_title")}</h2>
+          <div className="small muted">{t("coa_suggest_help").replace("{type}", t(`org_${ctx.company.orgType || "company"}` as never)).replace("{sector}", t(`sec_${ctx.company.sector || "other"}` as never)).replace("{vat}", t(ctx.company.vatRegistered ? "coa_vat_yes" : "coa_vat_no"))}</div>
+          <div className="small">{missing.map((a) => <span key={a.code} style={{ display: "inline-block", marginRight: 14 }}><code className="k">{a.code}</code> {lang === "fr" ? a.fr : a.en}</span>)}</div>
+          <div><button type="submit" className="btn">{t("coa_suggest_btn").replace("{n}", String(missing.length))}</button></div>
+        </form>
+      ) : null}
       <div className="panel tbl-wrap">
         <table>
           <thead><tr><th>{t("code")}</th><th>{t("name")}</th><th>{t("subtype")}</th><th className="num">{t("balance")} ({ctx.company.currency})</th><th /></tr></thead>

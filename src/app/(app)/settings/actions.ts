@@ -9,6 +9,7 @@ import { parseAmount, str } from "@/lib/format";
 import { UserError } from "@/lib/ledger";
 import { companyProfile, CURRENCIES } from "@/lib/template";
 import { audit } from "@/lib/audit";
+import { ensureStarterAccounts } from "@/lib/setup";
 import { saveAttachment } from "@/lib/storage";
 import type { AccountSubtype, AccountType } from "@/db/schema";
 
@@ -29,9 +30,21 @@ export async function saveCompanySettings(fd: FormData) {
       settings: { ...ctx.company.settings, arAccount: str(fd, "arAccount"), apAccount: str(fd, "apAccount"), vatIn: str(fd, "vatIn"), vatOut: str(fd, "vatOut"), whtAccount: str(fd, "whtAccount") },
     } : {}),
   }).where(eq(schema.companies.id, ctx.company.id));
+  // Registering for VAT needs the input and output VAT accounts.
+  if (vatRegistered && ctx.has("accounting")) await ensureStarterAccounts(db, ctx.company.id, ["1450", "2200"]);
   await audit(db, ctx.company.id, ctx.user.id, "update", "company", ctx.company.id);
   revalidatePath("/settings");
   redirect("/settings?saved=1");
+}
+
+/** Adds the accounts the starter chart suggests for the organisation's type, sector and VAT status that it does not have yet. */
+export async function addSuggestedAccounts() {
+  const ctx = await requireWrite("accounts");
+  const db = await getDb();
+  await ensureStarterAccounts(db, ctx.company.id);
+  await audit(db, ctx.company.id, ctx.user.id, "create", "account", "suggested");
+  revalidatePath("/accounts");
+  redirect("/accounts?saved=1");
 }
 
 /** Stores the organisation's logo (PNG or JPEG, the formats PDFs can embed). */

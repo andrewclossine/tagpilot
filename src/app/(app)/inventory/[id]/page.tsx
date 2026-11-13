@@ -9,7 +9,9 @@ import { isUuid, today } from "@/lib/format";
 import { ErrorNote, PageHead, Pill } from "@/components/ui";
 import { ConfirmButton } from "@/components/editors";
 import { ItemFields } from "../ItemFields";
-import { countItem, updateItem } from "../actions";
+import { countItem, saveItemBom, updateItem } from "../actions";
+import { bomOf } from "@/lib/manufacturing";
+import { round2 } from "@/lib/format";
 
 export const metadata = { title: "Item" };
 
@@ -22,17 +24,25 @@ export default async function ItemPage({ params, searchParams }: { params: Promi
   const db = await getDb();
   const [it] = await db.select().from(schema.items).where(and(eq(schema.items.id, id), eq(schema.items.companyId, ctx.company.id)));
   if (!it) notFound();
-  const [moves, accounts] = await Promise.all([
+  const [moves, accounts, bom, stockItems] = await Promise.all([
     db.select().from(schema.stockMoves).where(eq(schema.stockMoves.itemId, id)).orderBy(desc(schema.stockMoves.date), desc(schema.stockMoves.createdAt)).limit(200),
     db.select().from(schema.accounts).where(eq(schema.accounts.companyId, ctx.company.id)).orderBy(schema.accounts.code),
+    bomOf(db, ctx.company.id, id),
+    db.select({ id: schema.items.id, sku: schema.items.sku, name: schema.items.name, unit: schema.items.unit }).from(schema.items)
+      .where(and(eq(schema.items.companyId, ctx.company.id), eq(schema.items.kind, "stock"), eq(schema.items.isActive, true))).orderBy(schema.items.sku),
   ]);
+  const components = stockItems.filter((s) => s.id !== id);
+  const bomCost = round2(bom.reduce((s, b) => s + b.quantity * b.avgCost, 0));
+  const showBom = it.kind === "stock" && (it.stockClass === "finished" || bom.length > 0);
+  const blank = Math.max(3, 6 - bom.length);
   const accList = accounts.map((a) => ({ code: a.code, name: accName(a), type: a.type }));
   const canEdit = ctx.can("inventory", "write");
-  const link = (m: (typeof moves)[number]) => m.sourceType === "invoice" ? `/sales/invoices/${m.sourceId}` : m.sourceType === "bill" ? `/purchases/bills/${m.sourceId}` : m.entryId ? `/journal/${m.entryId}` : null;
+  const link = (m: (typeof moves)[number]) => m.sourceType === "invoice" ? `/sales/invoices/${m.sourceId}` : m.sourceType === "bill" ? `/purchases/bills/${m.sourceId}` : m.sourceType === "production" ? `/inventory/production/${m.sourceId}` : m.entryId ? `/journal/${m.entryId}` : null;
   return (
     <div className="stack">
       <PageHead title={`${it.sku} · ${it.name}`}>
         <Pill kind={it.isActive ? "posted" : "void"}>{t(it.isActive ? "active" : "inactive")}</Pill>
+        {canEdit && bom.length ? <Link className="btn primary" href={`/inventory/production/new?item=${it.id}`}>{t("mo_make")}</Link> : null}
         <Link className="btn ghost" href="/inventory">{t("back")}</Link>
       </PageHead>
       <ErrorNote message={err(q("error"))} />
@@ -53,6 +63,37 @@ export default async function ItemPage({ params, searchParams }: { params: Promi
               {canEdit ? <div><button type="submit" className="btn primary">{t("save")}</button></div> : null}
             </fieldset>
           </form>
+          {showBom ? (
+            <form action={saveItemBom} className="panel stack" id="bom">
+              <h2>{t("bom_title")}</h2>
+              <div className="small muted">{t("bom_help")}</div>
+              <input type="hidden" name="id" value={it.id} />
+              <fieldset disabled={!canEdit} style={{ border: 0, padding: 0, margin: 0 }} className="stack">
+                <div className="tbl-wrap"><table>
+                  <thead><tr><th>{t("bom_component")}</th><th className="num">{t("bom_qty_per").replace("{unit}", it.unit)}</th><th className="num">{t("avg_cost")}</th><th className="num">{t("amount")}</th></tr></thead>
+                  <tbody>
+                    {[...bom, ...Array.from({ length: blank }, () => null)].map((b, i) => (
+                      <tr key={b?.id ?? `n${i}`}>
+                        <td><select id={`bom-c-${i}`} name="componentId" defaultValue={b?.componentId ?? ""} aria-label={t("bom_component")}>
+                          <option value="">—</option>
+                          {components.map((c) => <option key={c.id} value={c.id}>{c.sku} · {c.name} ({c.unit})</option>)}
+                        </select></td>
+                        <td className="num"><input id={`bom-q-${i}`} name="componentQty" className="num" inputMode="decimal" defaultValue={b?.quantity ?? ""} style={{ maxWidth: 110 }} aria-label={t("qty")} /></td>
+                        <td className="num">{b ? money(b.avgCost, 2) : ""}</td>
+                        <td className="num">{b ? money(b.quantity * b.avgCost, 2) : ""}</td>
+                      </tr>
+                    ))}
+                    <tr className="total"><td colSpan={3}>{t("mo_materials")}</td><td className="num">{money(bomCost, 2)}</td></tr>
+                  </tbody>
+                </table></div>
+                <div className="fields">
+                  <label className="f">{t("bom_conversion")}<input id="bom-conv" name="conversionCost" className="num" inputMode="decimal" defaultValue={it.conversionCost || ""} /></label>
+                  <div className="f"><span>{t("bom_est_cost")}</span><b style={{ paddingTop: 8 }}>{money(round2(bomCost + it.conversionCost), 2)} / {it.unit}</b></div>
+                </div>
+                {canEdit ? <div><button type="submit" className="btn primary">{t("bom_save")}</button></div> : null}
+              </fieldset>
+            </form>
+          ) : null}
           {canEdit && it.kind === "stock" ? (
             <form action={countItem} className="panel stack">
               <h2>{t("stock_count")}</h2>

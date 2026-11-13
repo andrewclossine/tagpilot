@@ -34,6 +34,7 @@ export default async function OnboardingPage({ searchParams }: { searchParams: S
         <p className="muted small" style={{ margin: 0 }}>{t("modules_sub")}</p>
         <ModulePicker t={t} lang={lang} prices={modulePrices()} currency={planPrices([]).currency} selected={MODULES.filter((m) => m === wanted)} />
         <CompanyFields t={t} />
+        <div className="note small">{t("co_chart_note")}</div>
         <div className="small muted">{t("trial_note")}</div>
         <button type="submit" className="btn primary">{t("onb_btn")}</button>
       </form>

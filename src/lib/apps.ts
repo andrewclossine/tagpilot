@@ -69,6 +69,8 @@ export function appWorkspaces(ctx: Ctx, t: T): (Workspace & { key: AppKey })[] {
         ] : []),
         ...group(t("nav_inventory"), ctx.can("inventory") ? [
           ...link("inventory", "/inventory", t("nav_items")),
+          ...link("inventory", "/inventory/production", t("mo_title")),
+          ...link("inventory", "/inventory/valuation", t("val_title")),
         ] : []),
         ...group(t("nav_employees"), [
           ...link("payroll", "/payroll?tab=employees", t("nav_employees")),
