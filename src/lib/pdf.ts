@@ -2,6 +2,7 @@ import "server-only";
 import PDFDocument from "pdfkit";
 import type { PayrollComponent, PayslipRow } from "@/db/schema";
 import { money as fmt, type Lang } from "./format";
+import { trimSignature } from "./signature";
 
 // The built-in PDF fonts lack the narrow spaces French number formatting uses; plain spaces print the same.
 const amount = (n: number, lang: Lang) => fmt(n, lang, 2).replace(/[  ]/g, " ");
@@ -218,7 +219,8 @@ export function voucherPdf(d: VoucherPdfData): Promise<Buffer> {
       doc.font("Helvetica").fontSize(8).fillColor(MUTED).text(s.at || " ", x, y + 26, { width: 115 });
       if (s.image) {
         // A signature that cannot be drawn must not stop the document: the name and time are still printed.
-        try { doc.image(Buffer.from(s.image.split(",")[1], "base64"), x, y + 38, { fit: [112, 38] }); } catch { /* the name stands */ }
+        // Cut to the ink first, so the signature fills its box instead of shrinking with the empty pad around it.
+        try { doc.image(Buffer.from(trimSignature(s.image).split(",")[1], "base64"), x, y + 38, { fit: [112, 38], align: "center", valign: "center" }); } catch { /* the name stands */ }
       }
       doc.moveTo(x, y + 80).lineTo(x + 112, y + 80).lineWidth(0.5).strokeColor(LINE).stroke();
       doc.font("Helvetica").fontSize(8).fillColor(MUTED).text(s.image ? l.signedElectronically : l.signature, x, y + 84, { width: 115 });

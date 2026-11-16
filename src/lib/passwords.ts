@@ -7,6 +7,7 @@ import { appUrl } from "./billing";
 import { audit } from "./audit";
 import { sendMail } from "./mail";
 import { UserError } from "./ledger";
+import { localDateTime, timeZoneOf } from "./format";
 
 /** How long a one-time password from the platform owner works. */
 export const TEMP_PASSWORD_HOURS = 2;
@@ -39,7 +40,7 @@ export async function ownerResetPassword(userId: string, companyId: string, owne
     await tx.delete(schema.loginFailures).where(or(eq(schema.loginFailures.key, `u:${u.username}`), eq(schema.loginFailures.key, `u:${(u.email ?? "").toLowerCase()}`)));
     await audit(tx, companyId, null, "platform_reset_password", "user", u.username, { by: ownerEmail, until: expires.toISOString() });
   });
-  const until = `${expires.toISOString().slice(0, 16).replace("T", " ")} UTC`;
+  const until = localDateTime(expires, timeZoneOf(null));
   const login = `${await appUrl()}/login`;
   let sent = false;
   if (u.email) {

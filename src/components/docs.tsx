@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { localDateTime, timeZoneOf } from "@/lib/format";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import type { Ctx } from "@/lib/auth";
@@ -211,7 +212,7 @@ export async function DocView({ kind, ctx, doc, error }: { kind: DocKind; ctx: C
                 <h3 style={{ flex: 1 }}>{t("pdf_send_title")}</h3>
                 <a className="btn sm" href={`/api/pdf/invoice/${doc.id}`} target="_blank" rel="noopener">{t("pdf_download")}</a>
               </div>
-              {doc.sentAt ? <div className="note ok small">{t("pdf_sent_to")} {doc.sentTo} · {doc.sentAt.toISOString().slice(0, 16).replace("T", " ")}</div> : null}
+              {doc.sentAt ? <div className="note ok small">{t("pdf_sent_to")} {doc.sentTo} · {localDateTime(doc.sentAt, timeZoneOf(ctx.company.country))}</div> : null}
               {ctx.can("sales", "write") ? (
                 <form action={sendInvoiceEmail} className="stack" style={{ gap: 8 }}>
                   <input type="hidden" name="id" value={doc.id} />

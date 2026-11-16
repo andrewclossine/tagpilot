@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { desc, eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { getI18n } from "@/lib/i18n";
-import { addDays, isUuid, today } from "@/lib/format";
+import { addDays, isUuid, localDateTime, timeZoneOf, today } from "@/lib/format";
 import { companyStatus, requirePlatformOwner } from "@/lib/platform";
 import { sp, type SearchParams } from "@/lib/actions";
 import { ConfirmButton } from "@/components/editors";
@@ -65,7 +65,7 @@ export default async function PlatformCompanyPage({ params, searchParams }: { pa
           <tbody>{people.map(({ u, role }) => (
             <tr key={u.id}><td>{u.name}</td><td>{u.username}</td><td>{u.email}</td><td>{t(`role_${role}`)}</td><td>{u.createdAt.toISOString().slice(0, 10)}</td>
               <td style={{ whiteSpace: "nowrap" }}>
-                {u.mustChangePassword && u.tempPasswordExpiresAt ? <div className="small muted">{t(u.tempPasswordExpiresAt.getTime() > Date.now() ? "pw_pending_until" : "pw_expired").replace("{time}", u.tempPasswordExpiresAt.toISOString().slice(0, 16).replace("T", " "))}</div> : null}
+                {u.mustChangePassword && u.tempPasswordExpiresAt ? <div className="small muted">{t(u.tempPasswordExpiresAt.getTime() > Date.now() ? "pw_pending_until" : "pw_expired").replace("{time}", localDateTime(u.tempPasswordExpiresAt, timeZoneOf(c.country)))}</div> : null}
                 {flash?.userId === u.id ? <div className="note warn small">{t("pw_code_not_sent")} <code className="k" style={{ fontSize: 16 }}>{flash.code}</code></div> : null}
                 <form action={resetUserPassword}><input type="hidden" name="userId" value={u.id} /><input type="hidden" name="id" value={c.id} />
                   <ConfirmButton className="btn sm" confirmLabel={t("confirm")}>{t("pw_reset_btn")}</ConfirmButton></form>

@@ -1,4 +1,5 @@
 import "server-only";
+import { localDateTime, timeZoneOf } from "./format";
 import { and, eq, gt, inArray, isNull, lt, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { schema } from "@/db";
@@ -54,7 +55,7 @@ export async function runDailyNotices(db: Db, now = new Date()) {
       const waiting = invited.map((i) => i.partnerId).filter((p) => !bids.some((b) => b.partnerId === p));
       if (waiting.length) {
         const partners = await db.select().from(schema.partners).where(inArray(schema.partners.id, waiting));
-        for (const p of partners) await once(`bid-reminder:${t.id}:${p.id}`, p.email, both("ntc_bid_deadline", { number: t.number, title: t.title, buyer: nameOf(t.companyId), deadline: t.deadline.toISOString().slice(0, 16).replace("T", " ") + " UTC" }));
+        for (const p of partners) await once(`bid-reminder:${t.id}:${p.id}`, p.email, both("ntc_bid_deadline", { number: t.number, title: t.title, buyer: nameOf(t.companyId), deadline: localDateTime(t.deadline, timeZoneOf(active.find((c) => c.id === t.companyId)?.country)) }));
       }
     }
     if (left <= 0) await once(`ready-open:${t.id}`, await emailOf(t.createdBy), both("ntc_ready_open", { number: t.number, title: t.title }));

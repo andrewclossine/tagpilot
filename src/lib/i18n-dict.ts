@@ -1234,7 +1234,7 @@ const en = {
 
   err_logframe_depth: "Inputs are the last level of the budget.", err_line_has_vouchers: "Vouchers or tenders already use this budget line, so it cannot be split or deleted.", err_logframe_has_children: "Delete the rows under this one first.",
   err_budget_below_execution: "The budget cannot be lower than what has already been executed on this line.", err_not_budget_line: "Choose an activity or sub-activity with no rows under it.", err_voucher_state: "This cannot be done at its current status.",
-  err_voucher_not_yours: "Only the person who wrote this request can change it.", err_over_budget: "This request is more than the balance on the budget line.", err_self_approval: "You cannot approve your own request. Someone else must approve it.", err_reason_required: "Give the reason for refusing.",
+  err_voucher_not_yours: "Only the person who wrote this request can change it.", err_over_budget: "This request takes the budget line more than 10% over its budget. Reduce the amount or revise the budget.", err_self_approval: "You cannot approve your own request. Someone else must approve it.", err_reason_required: "Give the reason for refusing.",
   err_tender_state: "This step is not possible at the current status of the procurement.", err_deadline: "Set a deadline in the future before publishing.", err_no_invites: "Invite at least one supplier, or open it to all suppliers.",
   err_opening_early: "Bids cannot be opened before the deadline.", err_standstill: "The standstill period has not ended yet.", err_no_responsive_bid: "At least one bid must be responsive and have a price.", err_winner_not_responsive: "The winner must be a responsive bid.",
   err_file_required: "Attach the document.", err_not_bidding: "Bidding is closed for this procurement.", err_contract_closed: "This contract is closed.", err_amendment_pending: "An amendment is already waiting for a decision.",
@@ -1425,6 +1425,7 @@ const en = {
   err_batch_bank: "Choose the bank or cash account.",
   err_no_access: "Your role does not allow this.",
   batch_post_now: "Post them",
+  pv_over_budget_allowed: "This request takes a budget line over its budget. It is allowed because it stays within 10% over; reviewers will see it.",
 } as const;
 
 export type Key = keyof typeof en;
@@ -2665,7 +2666,7 @@ const fr: Record<Key, string> = {
 
   err_logframe_depth: "Les intrants sont le dernier niveau du budget.", err_line_has_vouchers: "Des pièces ou des appels d'offres utilisent déjà cette ligne : elle ne peut être ni divisée ni supprimée.", err_logframe_has_children: "Supprimez d'abord les lignes qui en dépendent.",
   err_budget_below_execution: "Le budget ne peut pas être inférieur à ce qui est déjà exécuté sur cette ligne.", err_not_budget_line: "Choisissez une activité ou sous-activité sans ligne en dessous.", err_voucher_state: "Impossible à ce statut.",
-  err_voucher_not_yours: "Seul l'auteur de la demande peut la modifier.", err_over_budget: "Cette demande dépasse le solde de la ligne budgétaire.", err_self_approval: "Vous ne pouvez pas approuver votre propre demande. Une autre personne doit l'approuver.", err_reason_required: "Indiquez le motif du refus.",
+  err_voucher_not_yours: "Seul l'auteur de la demande peut la modifier.", err_over_budget: "Cette demande dépasse de plus de 10 % le budget de la ligne. Réduisez le montant ou révisez le budget.", err_self_approval: "Vous ne pouvez pas approuver votre propre demande. Une autre personne doit l'approuver.", err_reason_required: "Indiquez le motif du refus.",
   err_tender_state: "Cette étape n'est pas possible au statut actuel de la procédure.", err_deadline: "Fixez une date limite future avant de publier.", err_no_invites: "Invitez au moins un fournisseur, ou ouvrez à tous les fournisseurs.",
   err_opening_early: "Les offres ne peuvent pas être ouvertes avant la date limite.", err_standstill: "Le délai d'attente n'est pas terminé.", err_no_responsive_bid: "Au moins une offre doit être conforme et avoir un prix.", err_winner_not_responsive: "L'attributaire doit être une offre conforme.",
   err_file_required: "Joignez le document.", err_not_bidding: "Les offres sont closes pour cette procédure.", err_contract_closed: "Ce contrat est clôturé.", err_amendment_pending: "Un avenant attend déjà une décision.",
@@ -2856,6 +2857,7 @@ const fr: Record<Key, string> = {
   err_batch_bank: "Choisissez le compte bancaire ou la caisse.",
   err_no_access: "Votre rôle ne le permet pas.",
   batch_post_now: "Les comptabiliser",
+  pv_over_budget_allowed: "Cette demande dépasse le budget d'une ligne. Elle est permise car elle reste dans la limite de 10 % ; les vérificateurs le verront.",
 };
 
 export const dict = { en, fr } as const;

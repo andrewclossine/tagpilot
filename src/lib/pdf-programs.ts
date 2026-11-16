@@ -5,7 +5,7 @@ import type { TenderStage } from "@/db/schema";
 import type { Ctx } from "./auth";
 import { canSeeVoucher } from "./access";
 import { advertFor } from "./bidding";
-import { isUuid, money as fmtMoney } from "./format";
+import { isUuid, localDateTime, money as fmtMoney, timeZoneOf } from "./format";
 import { getI18n } from "./i18n";
 import { UserError } from "./ledger";
 import { letterPdf, voucherPdf, type LetterPdfData } from "./pdf";
@@ -44,7 +44,7 @@ export async function buildVoucherPdf(ctx: Ctx, id: string) {
     projectCode: project.code, project: project.name, lines,
     signatures: (["prepared", "reviewed", "approved", "authorized"] as const).map((s) => {
       const done = steps.find((x) => x.s.step === s);
-      return { label: t(`step_${s}`), name: done?.name ?? "", at: done ? `${done.s.at.toISOString().slice(0, 16).replace("T", " ")} UTC` : "", image: done?.s.signature ?? null };
+      return { label: t(`step_${s}`), name: done?.name ?? "", at: done ? localDateTime(done.s.at, timeZoneOf(ctx.company.country)) : "", image: done?.s.signature ?? null };
     }),
   });
   return { pdf, filename: `${v.number.replace(/[^A-Za-z0-9-]/g, "-")}.pdf` };
@@ -77,7 +77,7 @@ export async function buildTenderPdf(ctx: Ctx, id: string, stageParam: string | 
   const amount = (n: number) => fmtMoney(n, lang, 2).replace(/[  ]/g, " ");
 
   if (!stage) {
-    const when = (d: Date | null) => d ? `${d.toISOString().slice(0, 16).replace("T", " ")} UTC` : "-";
+    const when = (d: Date | null) => d ? localDateTime(d, timeZoneOf(printed.country)) : "-";
     const boq = await db.select().from(schema.tenderItems).where(eq(schema.tenderItems.tenderId, id)).orderBy(schema.tenderItems.sortOrder);
     const forms = await db.select({ description: schema.tenderForms.description }).from(schema.tenderForms)
       .where(eq(schema.tenderForms.tenderId, id)).orderBy(schema.tenderForms.sortOrder, schema.tenderForms.createdAt);

@@ -44,3 +44,28 @@ export const daysBetween = (a: string, b: string) =>
 export const isUsername = (u: string) => /^[a-z0-9._-]{3,40}$/.test(u);
 
 export const isUuid = (s: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
+
+/** The time zone of an organisation's country; Kigali when the country is not known. */
+export function timeZoneOf(country?: string | null): string {
+  const c = (country ?? "").trim().toLowerCase();
+  const zones: [RegExp, string][] = [
+    [/rwanda/, "Africa/Kigali"], [/burundi/, "Africa/Bujumbura"], [/uganda/, "Africa/Kampala"], [/kenya/, "Africa/Nairobi"],
+    [/tanzania/, "Africa/Dar_es_Salaam"], [/congo|drc|rdc/, "Africa/Lubumbashi"], [/ethiopia/, "Africa/Addis_Ababa"],
+    [/south africa/, "Africa/Johannesburg"], [/nigeria/, "Africa/Lagos"], [/ghana/, "Africa/Accra"], [/zambia/, "Africa/Lusaka"],
+    [/malawi/, "Africa/Blantyre"], [/mozambique/, "Africa/Maputo"], [/zimbabwe/, "Africa/Harare"], [/south sudan/, "Africa/Juba"],
+    [/senegal/, "Africa/Dakar"], [/cameroon/, "Africa/Douala"], [/france/, "Europe/Paris"], [/belgium/, "Europe/Brussels"],
+    [/united kingdom|england|uk$/, "Europe/London"], [/united states|usa/, "America/New_York"],
+  ];
+  return zones.find(([re]) => re.test(c))?.[1] ?? process.env.DEFAULT_TIMEZONE ?? "Africa/Kigali";
+}
+
+/** "2026-11-16 14:05 Kigali": an instant as the clock showed it where the organisation is. */
+export function localDateTime(d: Date | string | null | undefined, timeZone = "Africa/Kigali"): string {
+  if (!d) return "";
+  const date = typeof d === "string" ? new Date(d) : d;
+  if (Number.isNaN(date.getTime())) return "";
+  const parts = Object.fromEntries(new Intl.DateTimeFormat("en-GB", { timeZone, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" })
+    .formatToParts(date).map((p) => [p.type, p.value]));
+  const place = timeZone.split("/").pop()?.replace(/_/g, " ") ?? timeZone;
+  return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute} ${place}`;
+}

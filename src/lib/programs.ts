@@ -216,6 +216,11 @@ async function lockVoucher(tx: Tx, companyId: string, id: string) {
   return v;
 }
 
+/** A fund request may take a budget line up to 10% over its budget; beyond that it is refused. */
+export const OVER_BUDGET_TOLERANCE = 0.1;
+/** The most a budget line may reach with fund requests. */
+export const budgetCeiling = (budget: number) => round2(budget * (1 + OVER_BUDGET_TOLERANCE));
+
 const sign = (tx: Tx, companyId: string, voucherId: string, step: VoucherStep, userId: string, note = "", signature: string | null = null) =>
   tx.insert(schema.voucherSteps).values({ companyId, voucherId, step, userId, note, signature });
 
@@ -232,7 +237,7 @@ export async function submitVoucher(tx: Tx, companyId: string, userId: string, i
   for (const l of lines) {
     const line = await lockLine(tx, companyId, l.budgetItemId);
     const previous = round2(await executionOn(tx, l.budgetItemId, id) + (used.get(l.budgetItemId) ?? 0));
-    if (round2(previous + l.amount) > line.budget) throw new UserError("err_over_budget");
+    if (round2(previous + l.amount) > budgetCeiling(line.budget)) throw new UserError("err_over_budget");
     used.set(l.budgetItemId, round2((used.get(l.budgetItemId) ?? 0) + l.amount));
     await tx.update(schema.voucherLines).set({ activityBudget: line.budget, previousExecution: previous }).where(eq(schema.voucherLines.id, l.id));
   }

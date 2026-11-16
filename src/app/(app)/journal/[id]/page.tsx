@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { localDateTime, timeZoneOf } from "@/lib/format";
 import { notFound } from "next/navigation";
 import { and, eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
@@ -84,7 +85,7 @@ export default async function EntryPage({ params, searchParams }: { params: Prom
         </tbody>
       </table></div>
       <div className="small muted">
-        {creator ? `${t("created_by")} ${creator.name}` : ""}{poster ? ` · ${t("posted_by")} ${poster.name} · ${e.postedAt?.toISOString().slice(0, 16).replace("T", " ")}` : ""}
+        {creator ? `${t("created_by")} ${creator.name}` : ""}{poster ? ` · ${t("posted_by")} ${poster.name} · ${localDateTime(e.postedAt, timeZoneOf(ctx.company.country))}` : ""}
       </div>
       {e.isAdjusting ? <div className="small"><Pill kind="">{t("adjusting_entry")}</Pill></div> : null}
       {ctx.can("journal", "write") ? (

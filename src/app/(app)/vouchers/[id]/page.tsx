@@ -6,9 +6,9 @@ import { canSeeVoucher } from "@/lib/access";
 import { requireView } from "@/lib/auth";
 import { getI18n } from "@/lib/i18n";
 import { sp, type SearchParams } from "@/lib/actions";
-import { isUuid, today } from "@/lib/format";
+import { isUuid, today, localDateTime, timeZoneOf } from "@/lib/format";
 import { moneyAccounts } from "@/lib/ledger";
-import { DOC_TYPES, executionOn, NEXT_STEP } from "@/lib/programs";
+import { budgetCeiling, DOC_TYPES, executionOn, NEXT_STEP } from "@/lib/programs";
 import { savedSignature } from "@/lib/signature";
 import { ConfirmButton } from "@/components/editors";
 import { SignaturePad } from "@/components/SignaturePad";
@@ -70,7 +70,9 @@ export default async function VoucherPage({ params, searchParams }: { params: Pr
   const needsAccount = lines.some((x) => !x.item.accountId);
   const docOf = (type: string) => docs.find((x) => x.d.docType === type)?.d;
   const canDocs = ctx.can("vouchers", "write") && (ctx.role !== "staff" || mine);
-  const over = figures.some((f) => f.total > f.budget + 0.01);
+  // Over budget by up to 10% is allowed, with a warning; beyond that preparing is refused.
+  const over = figures.some((f) => f.total > budgetCeiling(f.budget) + 0.01);
+  const overAllowed = !over && figures.some((f) => f.total > f.budget + 0.01);
   const canPrepare = v.status === "draft" && mine && ctx.can("vouchers", "write");
   const canSendBack = v.status === "authorized" && ctx.can("voucher_authorize", "write");
   const pad = canPrepare || (next && canSign && !alreadySigned) ? <SignaturePad saved={await savedSignature(db, ctx.user.id)} labels={{
@@ -112,6 +114,7 @@ export default async function VoucherPage({ params, searchParams }: { params: Pr
           </tbody>
         </table></div>
         {v.status === "draft" && over ? <div className="note bad small">{t("err_over_budget")}</div> : null}
+        {overAllowed ? <div className="note warn small">{t("pv_over_budget_allowed")}</div> : null}
       </div>
 
       <div className="panel stack">
@@ -125,7 +128,7 @@ export default async function VoucherPage({ params, searchParams }: { params: Pr
                 <b>{t(`step_${s}`)}</b>
                 {done?.signature ? <img src={done.signature} alt={`${t(`step_${s}`)}: ${who}`} className="sig-image small" /> : null}
                 <span className="small">{done ? who : "—"}</span>
-                <span className="small muted">{done ? done.at.toISOString().slice(0, 16).replace("T", " ") : ""}</span>
+                <span className="small muted">{done ? localDateTime(done.at, timeZoneOf(ctx.company.country)) : ""}</span>
                 {done?.note ? <span className="small muted">{done.note}</span> : null}
               </li>
             );
