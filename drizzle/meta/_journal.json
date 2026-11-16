@@ -190,6 +190,13 @@
       "when": 1794574768387,
       "tag": "0026_manufacturing",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1794815773899,
+      "tag": "0027_payments_refunds",
+      "breakpoints": true
     }
   ]
 }

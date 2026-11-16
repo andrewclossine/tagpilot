@@ -23,6 +23,12 @@ export default async function PlatformPage({ searchParams }: { searchParams: Sea
       .where(eq(schema.subscriptionPayments.status, "successful")).groupBy(schema.subscriptionPayments.currency),
   ]);
   const [{ users }] = await db.select({ users: sql<number>`count(*)` }).from(schema.users);
+  const [toConfirm, toRefund] = await Promise.all([
+    db.select({ p: schema.subscriptionPayments, name: schema.companies.name }).from(schema.subscriptionPayments).innerJoin(schema.companies, eq(schema.companies.id, schema.subscriptionPayments.companyId))
+      .where(sql`${schema.subscriptionPayments.status} = 'pending' and ${schema.subscriptionPayments.method} = 'transfer'`).orderBy(desc(schema.subscriptionPayments.createdAt)),
+    db.select({ r: schema.subscriptionRefunds, name: schema.companies.name }).from(schema.subscriptionRefunds).innerJoin(schema.companies, eq(schema.companies.id, schema.subscriptionRefunds.companyId))
+      .where(sql`${schema.subscriptionRefunds.status} in ('awaiting_details', 'details_received')`).orderBy(desc(schema.subscriptionRefunds.createdAt)),
+  ]);
   const rows = companies.map((c) => ({ c, s: companyStatus(c), n: Number(members.find((m) => m.companyId === c.id)?.n ?? 0), admin: admins.find((a) => a.companyId === c.id) }));
   const filter = ["paid", "trial", "expired", "suspended"].includes(q("status")) ? q("status") : "";
   const shown = rows.filter((r) => !filter || r.s.status === filter)
@@ -40,6 +46,23 @@ export default async function PlatformPage({ searchParams }: { searchParams: Sea
         <div className="panel kpi"><div className="label">{t("plt_users")}</div><div className="v">{Number(users)}</div></div>
         <div className="panel kpi"><div className="label">{t("plt_received")}</div><div className="v">{payments.length ? payments.map((p) => `${money(Number(p.total))} ${p.currency}`).join(" · ") : "0"}</div></div>
       </div>
+      {toConfirm.length || toRefund.length ? (
+        <div className="panel stack">
+          <h2>{t("plt_waiting")}</h2>
+          {toConfirm.map(({ p, name }) => (
+            <div key={p.id} className="row small" style={{ justifyContent: "space-between", flexWrap: "wrap" }}>
+              <span><b>{name}</b> · {t("plt_wait_payment").replace("{amount}", `${money(p.amount, 2)} ${p.currency}`).replace("{ref}", p.providerTransactionId ?? "")}</span>
+              <Link className="btn sm" href={`/platform/companies/${p.companyId}`}>{t("open")}</Link>
+            </div>
+          ))}
+          {toRefund.map(({ r, name }) => (
+            <div key={r.id} className="row small" style={{ justifyContent: "space-between", flexWrap: "wrap" }}>
+              <span><b>{name}</b> · {t(r.status === "details_received" ? "plt_wait_refund_pay" : "plt_wait_refund_details").replace("{amount}", `${money(r.amount, 2)} ${r.currency}`)}</span>
+              <Link className="btn sm" href={`/platform/companies/${r.companyId}`}>{t("open")}</Link>
+            </div>
+          ))}
+        </div>
+      ) : null}
       <form method="get" className="panel row">
         <input id="pf-q" name="q" defaultValue={q("q")} placeholder={t("plt_search")} aria-label={t("plt_search")} style={{ flex: 1, minWidth: 200 }} />
         <select id="pf-status" name="status" defaultValue={filter} aria-label={t("status")} style={{ width: "auto" }}>

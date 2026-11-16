@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import type { ModuleKey } from "@/db/schema";
+import type { Tx } from "@/db";
 import { audit } from "./audit";
 import { round2 } from "./format";
 import { UserError } from "./ledger";
@@ -81,27 +82,42 @@ type FlwTransaction = { id: number; tx_ref: string; status: string; amount: numb
 export async function confirmPayment(transactionId: string): Promise<{ ok: boolean; companyId?: string }> {
   if (!/^\d+$/.test(transactionId)) return { ok: false };
   const res = await flw<{ status: string; data?: FlwTransaction }>(`/transactions/${transactionId}/verify`);
-  const tx = res.data;
+  return settle(res.data);
+}
+
+/** Asks Flutterwave about a checkout by our own reference, for payments whose redirect and webhook never arrived. */
+export async function confirmByReference(txRef: string): Promise<{ ok: boolean; companyId?: string }> {
+  const res = await flw<{ status: string; data?: FlwTransaction }>(`/transactions/verify_by_reference?tx_ref=${encodeURIComponent(txRef)}`);
+  return settle(res.data);
+}
+
+async function settle(tx: FlwTransaction | undefined): Promise<{ ok: boolean; companyId?: string }> {
   if (!tx) return { ok: false };
   const db = await getDb();
   return db.transaction(async (dbx) => {
     const [p] = await dbx.select().from(schema.subscriptionPayments).where(eq(schema.subscriptionPayments.txRef, tx.tx_ref));
     if (!p) return { ok: false };
     if (p.status === "successful") return { ok: true, companyId: p.companyId };
+    if (p.status !== "pending") return { ok: false, companyId: p.companyId }; // refunded or refused: never extended again
     const valid = tx.status === "successful" && tx.currency.toUpperCase() === p.currency && round2(Number(tx.amount)) >= round2(p.amount);
     if (!valid) {
       if (tx.status === "failed") await dbx.update(schema.subscriptionPayments).set({ status: "failed", providerTransactionId: String(tx.id) }).where(eq(schema.subscriptionPayments.id, p.id));
       return { ok: false, companyId: p.companyId };
     }
-    const [c] = await dbx.select().from(schema.companies).where(eq(schema.companies.id, p.companyId));
-    // A new period starts when the current one ends, or today if it has lapsed.
-    const start = c.paidUntil && c.paidUntil.getTime() > Date.now() ? c.paidUntil : new Date();
-    const end = new Date(start);
-    if (p.period === "yearly") end.setFullYear(end.getFullYear() + 1); else end.setMonth(end.getMonth() + 1);
-    await dbx.update(schema.subscriptionPayments).set({ status: "successful", providerTransactionId: String(tx.id), periodStart: start, periodEnd: end, paidAt: new Date() })
-      .where(eq(schema.subscriptionPayments.id, p.id));
-    await dbx.update(schema.companies).set({ paidUntil: end, plan: "active", ...(p.modules.length ? { paidModules: p.modules } : {}) }).where(eq(schema.companies.id, p.companyId));
-    await audit(dbx, p.companyId, p.createdBy, "subscription_paid", "subscription", p.txRef, { period: p.period, amount: p.amount, until: end.toISOString().slice(0, 10) });
+    await applyPayment(dbx, p, String(tx.id));
     return { ok: true, companyId: p.companyId };
   });
+}
+
+/** Marks a payment received and extends the subscription by its period, from when the current one ends (or today if it lapsed). */
+export async function applyPayment(dbx: Tx, p: typeof schema.subscriptionPayments.$inferSelect, providerTransactionId: string | null) {
+  const [c] = await dbx.select().from(schema.companies).where(eq(schema.companies.id, p.companyId));
+  const start = c.paidUntil && c.paidUntil.getTime() > Date.now() ? c.paidUntil : new Date();
+  const end = new Date(start);
+  if (p.period === "yearly") end.setFullYear(end.getFullYear() + 1); else end.setMonth(end.getMonth() + 1);
+  await dbx.update(schema.subscriptionPayments).set({ status: "successful", providerTransactionId: providerTransactionId ?? p.providerTransactionId, periodStart: start, periodEnd: end, paidAt: new Date() })
+    .where(eq(schema.subscriptionPayments.id, p.id));
+  await dbx.update(schema.companies).set({ paidUntil: end, plan: "active", ...(p.modules.length ? { paidModules: p.modules } : {}) }).where(eq(schema.companies.id, p.companyId));
+  await audit(dbx, p.companyId, p.createdBy, "subscription_paid", "subscription", p.txRef, { period: p.period, amount: p.amount, until: end.toISOString().slice(0, 10) });
+  return end;
 }

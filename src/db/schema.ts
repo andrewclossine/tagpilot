@@ -1264,7 +1264,10 @@ export const subscriptionPayments = pgTable("subscription_payments", {
   modules: jsonb("modules").$type<ModuleKey[]>().notNull().default([]), // what this payment covers
   amount: money("amount"),
   currency: text("currency").notNull(),
-  status: text("status").$type<"pending" | "successful" | "failed">().notNull().default("pending"),
+  status: text("status").$type<PaymentStatus>().notNull().default("pending"),
+  // card: Flutterwave checkout; manual: recorded by the platform owner; transfer: the subscriber says they paid by bank or mobile money.
+  method: text("method").$type<"card" | "manual" | "transfer">().notNull().default("card"),
+  note: text("note").notNull().default(""), // what the subscriber wrote, or why the platform owner refused it
   providerTransactionId: text("provider_transaction_id"),
   periodStart: timestamp("period_start", { withTimezone: true }),
   periodEnd: timestamp("period_end", { withTimezone: true }),
@@ -1272,6 +1275,36 @@ export const subscriptionPayments = pgTable("subscription_payments", {
   createdAt: created(),
   paidAt: timestamp("paid_at", { withTimezone: true }),
 }, (t) => [index("subscription_payments_company").on(t.companyId)]);
+
+export type PaymentStatus = "pending" | "successful" | "failed" | "refunded";
+export type RefundStatus = "awaiting_details" | "details_received" | "paid" | "cancelled";
+
+/**
+ * Money the platform owner gives back. The subscriber is emailed a private link where they say where to send it;
+ * the platform owner then pays it outside TAGPILOT and records the reference.
+ */
+export const subscriptionRefunds = pgTable("subscription_refunds", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  paymentId: uuid("payment_id").references(() => subscriptionPayments.id),
+  amount: money("amount"),
+  currency: text("currency").notNull(),
+  reason: text("reason").notNull().default(""),
+  status: text("status").$type<RefundStatus>().notNull().default("awaiting_details"),
+  token: text("token").notNull().unique(), // the private link the subscriber uses; it opens only this refund
+  payTo: text("pay_to").$type<"bank" | "momo">(),
+  accountName: text("account_name").notNull().default(""),
+  bankName: text("bank_name").notNull().default(""),
+  accountNumber: text("account_number").notNull().default(""),
+  bankCode: text("bank_code").notNull().default(""), // branch, SWIFT or IBAN details
+  phone: text("phone").notNull().default(""),
+  detailsAt: timestamp("details_at", { withTimezone: true }),
+  paidAt: timestamp("paid_at", { withTimezone: true }),
+  paidReference: text("paid_reference").notNull().default(""),
+  emailedAt: timestamp("emailed_at", { withTimezone: true }),
+  createdBy: text("created_by").notNull().default(""), // the platform owner's email
+  createdAt: created(),
+}, (t) => [index("subscription_refunds_company").on(t.companyId)]);
 
 /** Failed sign-ins, by login name and by network address, to slow down password guessing. */
 export const loginFailures = pgTable("login_failures", {
