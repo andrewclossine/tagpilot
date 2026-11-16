@@ -3,7 +3,7 @@ import { getDb, schema } from "@/db";
 import { getCtx } from "@/lib/auth";
 import { getI18n } from "@/lib/i18n";
 import { sp, type SearchParams } from "@/lib/actions";
-import { modulePrices, paymentsConfigured, planPrices } from "@/lib/billing";
+import { paymentsConfigured, pickCurrency, planPrices } from "@/lib/billing";
 import { ModulePicker } from "@/components/ModulePicker";
 import { money as fmt } from "@/lib/format";
 import { Empty, ErrorNote, PageHead, Pill } from "@/components/ui";
@@ -19,7 +19,9 @@ export default async function BillingPage({ searchParams }: { searchParams: Sear
   if (!ctx.isAdmin) redirect("/no-access");
   const { t, err, lang } = await getI18n();
   const q = await sp(searchParams);
-  const price = planPrices(ctx.company.modules);
+  // Pay in any currency the platform offers; the organisation's own currency comes first when it is offered.
+  const { currency, currencies } = await pickCurrency(q("cur"), ctx.company.currency);
+  const price = await planPrices(ctx.company.modules, currency);
   const unpaid = ctx.company.modules.filter((m) => !ctx.has(m));
   const db = await getDb();
   const history = await db.select().from(schema.subscriptionPayments).where(eq(schema.subscriptionPayments.companyId, ctx.company.id))
@@ -39,7 +41,7 @@ export default async function BillingPage({ searchParams }: { searchParams: Sear
       {q("reported") ? <div className="note ok">{t("tr_reported")}</div> : null}
       {refunds.map((r) => (
         <div key={r.id} className="note warn row" style={{ justifyContent: "space-between", flexWrap: "wrap" }}>
-          <span>{t(r.status === "awaiting_details" ? "rf_banner_waiting" : "rf_banner_received").replace("{amount}", amount(r.amount).replace(price.currency, r.currency))}</span>
+          <span>{t(r.status === "awaiting_details" ? "rf_banner_waiting" : "rf_banner_received").replace("{amount}", `${fmt(r.amount, lang, 2)} ${r.currency}`)}</span>
           <Link className="btn sm" href={`/refund/${r.token}`}>{t(r.status === "awaiting_details" ? "rf_give_details" : "rf_change_details")}</Link>
         </div>
       ))}
@@ -55,15 +57,22 @@ export default async function BillingPage({ searchParams }: { searchParams: Sear
       <form action={changeModules} className="panel stack">
         <h2>{t("modules_title")}</h2>
         <div className="small muted">{t("modules_change_help")}</div>
-        <ModulePicker t={t} lang={lang} prices={modulePrices()} currency={price.currency} selected={ctx.company.modules} />
+        <ModulePicker t={t} lang={lang} prices={price.prices} currency={price.currency} selected={ctx.company.modules} />
         {unpaid.length ? <div className="note warn small">{t("modules_unpaid")}: {unpaid.map((m) => t(`module_${m}`)).join(", ")}</div> : null}
         <div><button type="submit" className="btn">{t("save")}</button></div>
       </form>
       {!paymentsConfigured() ? <div className="note warn">{t("err_payments_off")}</div> : null}
+      {currencies.length > 1 ? (
+        <div className="row" style={{ gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <span className="small muted">{t("billing_pay_in")}</span>
+          {currencies.map((c) => <Link key={c} className={c === price.currency ? "btn sm primary" : "btn sm"} href={`/billing?cur=${c}`} aria-pressed={c === price.currency}>{c}</Link>)}
+        </div>
+      ) : null}
       <div className="grid2">
         {(["monthly", "yearly"] as const).map((period) => (
           <form key={period} action={subscribe} className="panel stack">
             <input type="hidden" name="period" value={period} />
+            <input type="hidden" name="currency" value={price.currency} />
             <h2>{t(period === "monthly" ? "billing_monthly" : "billing_yearly")}</h2>
             <div className="hero-num">{amount(price[period])}</div>
             <div className="small muted">{t(period === "monthly" ? "billing_monthly_help" : "billing_yearly_help")}</div>
@@ -77,8 +86,8 @@ export default async function BillingPage({ searchParams }: { searchParams: Sear
         {instructions ? <div className="note small" style={{ whiteSpace: "pre-line" }}>{instructions}</div> : null}
         <div className="fields">
           <label className="f">{t("billing_period")}<select id="tr-period" name="period" defaultValue="monthly"><option value="monthly">{t("billing_monthly")}</option><option value="yearly">{t("billing_yearly")}</option></select></label>
-          <label className="f">{t("amount")}<input id="tr-amount" name="amount" className="num" inputMode="decimal" required /></label>
-          <label className="f">{t("currency")}<input id="tr-currency" name="currency" defaultValue={price.currency} maxLength={3} required /></label>
+          <label className="f">{t("amount")}<input id="tr-amount" name="amount" className="num" inputMode="decimal" defaultValue={price.monthly || ""} required /></label>
+          <label className="f">{t("currency")}<select id="tr-currency" name="currency" defaultValue={price.currency}>{currencies.map((c) => <option key={c} value={c}>{c}</option>)}</select></label>
           <label className="f">{t("tr_reference")}<input id="tr-ref" name="reference" required /></label>
           <label className="f">{t("notes")}<input id="tr-note" name="note" /></label>
         </div>

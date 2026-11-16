@@ -15,6 +15,8 @@ export default async function PlatformLayout({ children }: { children: React.Rea
       <header className="launcher-top">
         <Link href="/platform" style={{ textDecoration: "none" }}><Logo size={30} /></Link>
         <b>{t("plt_title")}</b>
+        <Link className="btn sm ghost" href="/platform">{t("plt_companies")}</Link>
+        <Link className="btn sm ghost" href="/platform/prices">{t("prc_title")}</Link>
         <span className="spacer" />
         <span className="small muted">{owner.name} · {owner.email}</span>
         <form action={platformSignOut}><button type="submit" className="btn sm">{t("sign_out")}</button></form>

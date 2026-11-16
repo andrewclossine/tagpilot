@@ -53,6 +53,10 @@ export const users = pgTable("users", {
   email: text("email").unique(),
   name: text("name").notNull(),
   passwordHash: text("password_hash").notNull(),
+  // Set when the platform owner resets the password: the emailed one-time password works only until then,
+  // and the person must choose their own password right after signing in with it.
+  tempPasswordExpiresAt: timestamp("temp_password_expires_at", { withTimezone: true }),
+  mustChangePassword: boolean("must_change_password").notNull().default(false),
   createdBy: uuid("created_by"),
   createdAt: created(),
 });
@@ -1305,6 +1309,14 @@ export const subscriptionRefunds = pgTable("subscription_refunds", {
   createdBy: text("created_by").notNull().default(""), // the platform owner's email
   createdAt: created(),
 }, (t) => [index("subscription_refunds_company").on(t.companyId)]);
+
+/** Subscription prices per month, per module, in each currency the platform owner offers. */
+export const platformPrices = pgTable("platform_prices", {
+  currency: text("currency").notNull(),
+  module: text("module").$type<ModuleKey>().notNull(),
+  monthly: money("monthly"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [primaryKey({ columns: [t.currency, t.module] })]);
 
 /** Failed sign-ins, by login name and by network address, to slow down password guessing. */
 export const loginFailures = pgTable("login_failures", {

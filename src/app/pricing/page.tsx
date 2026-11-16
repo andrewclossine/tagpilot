@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { modulePrices, planPrices } from "@/lib/billing";
+import { pickCurrency } from "@/lib/billing";
 import { PRICED } from "@/lib/site-copy";
 import { SiteFooter, SiteHeader, siteText } from "@/components/Site";
 import type { SearchParams } from "@/lib/actions";
@@ -16,8 +16,8 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
   const { lang, c } = await siteText();
   const q = await sp(searchParams);
   const yearly = q("period") === "yearly";
-  const prices = modulePrices();
-  const currency = planPrices([]).currency;
+  const { currency, prices, currencies } = await pickCurrency(q("cur"));
+  const link = (extra: Record<string, string>) => `/pricing?${new URLSearchParams({ ...(yearly ? { period: "yearly" } : {}), ...(currency !== currencies[0] ? { cur: currency } : {}), ...extra })}`;
   const fmt = (n: number) => new Intl.NumberFormat(lang === "fr" ? "fr-FR" : "en-US", { style: "currency", currency, maximumFractionDigits: n % 1 ? 2 : 0 }).format(n);
   const show = (monthly: number) => (yearly ? monthly * 10 : monthly);
   const names = { accounting: c.app_accounting, projects: c.app_projects, procurement: c.app_procurement } as const;
@@ -33,9 +33,14 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
               <h1 className="site-h1" style={{ fontSize: "clamp(28px, 4vw, 42px)" }}>{c.pr_title}</h1>
               <p className="site-lead">{c.pr_sub}</p>
               <div className="site-toggle" role="group" aria-label={c.nav_pricing}>
-                <Link href="/pricing" aria-pressed={!yearly}>{c.pr_monthly}</Link>
-                <Link href="/pricing?period=yearly" aria-pressed={yearly}>{c.pr_yearly} <span className="site-badge">{c.pr_yearly_badge}</span></Link>
+                <Link href={link({ period: "monthly" }).replace(/period=monthly&?/, "")} aria-pressed={!yearly}>{c.pr_monthly}</Link>
+                <Link href={link({ period: "yearly" })} aria-pressed={yearly}>{c.pr_yearly} <span className="site-badge">{c.pr_yearly_badge}</span></Link>
               </div>
+              {currencies.length > 1 ? (
+                <div className="site-toggle" role="group" aria-label="Currency">
+                  {currencies.map((cur) => <Link key={cur} href={link({ cur })} aria-pressed={cur === currency}>{cur}</Link>)}
+                </div>
+              ) : null}
             </div>
 
             <div className="site-prices">

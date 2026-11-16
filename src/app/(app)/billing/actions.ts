@@ -20,7 +20,7 @@ export async function subscribe(fd: FormData) {
   try {
     // Paying must work even after the trial has locked the books, so this checks the role, not write access.
     if (!ctx.isAdmin) throw new UserError("err_admin_only");
-    link = await startCheckout(ctx.company, ctx.user, str(fd, "period") === "yearly" ? "yearly" : "monthly");
+    link = await startCheckout(ctx.company, ctx.user, str(fd, "period") === "yearly" ? "yearly" : "monthly", str(fd, "currency").toUpperCase());
   } catch (e) { fail(e, "/billing"); }
   redirect(link);
 }

@@ -13,8 +13,14 @@ const FLW = "https://api.flutterwave.com/v3";
 
 export type Period = "monthly" | "yearly";
 
-/** Monthly price of each module, set in the environment so they can change without a new release. */
-export function modulePrices(): Record<ModuleKey, number> {
+export type Prices = Record<ModuleKey, number>;
+const MODULE_KEYS: ModuleKey[] = ["accounting", "projects", "procurement", "bidding"];
+
+/** The currency prices are shown in when nobody chose another one. */
+export const defaultCurrency = () => (process.env.SUBSCRIPTION_CURRENCY || "USD").toUpperCase();
+
+/** Prices from the server settings: they apply to the default currency until the platform owner sets prices for it. */
+function envPrices(): Prices {
   return {
     accounting: Number(process.env.PRICE_ACCOUNTING_MONTHLY || 30),
     projects: Number(process.env.PRICE_PROJECTS_MONTHLY || 20),
@@ -23,11 +29,54 @@ export function modulePrices(): Record<ModuleKey, number> {
   };
 }
 
-/** What the chosen modules cost together. A year costs ten months. */
-export function planPrices(modules: ModuleKey[]) {
-  const prices = modulePrices();
-  const monthly = round2(modules.reduce((sum, m) => sum + prices[m], 0));
-  return { currency: (process.env.SUBSCRIPTION_CURRENCY || "USD").toUpperCase(), monthly, yearly: round2(monthly * 10) };
+/** Every currency subscribers can pay in, default first, with each module's monthly price in it. */
+export async function priceList(): Promise<{ currency: string; prices: Prices }[]> {
+  const db = await getDb();
+  const rows = await db.select().from(schema.platformPrices);
+  const byCurrency = new Map<string, Prices>();
+  for (const r of rows) {
+    const p = byCurrency.get(r.currency) ?? { accounting: 0, projects: 0, procurement: 0, bidding: 0 };
+    if (MODULE_KEYS.includes(r.module)) p[r.module] = r.monthly;
+    byCurrency.set(r.currency, p);
+  }
+  const def = defaultCurrency();
+  if (!byCurrency.has(def)) byCurrency.set(def, envPrices());
+  return [...byCurrency].map(([currency, prices]) => ({ currency, prices })).sort((a, b) => (a.currency === def ? -1 : b.currency === def ? 1 : a.currency.localeCompare(b.currency)));
+}
+
+/** The currency to use: the one asked for if it is offered, else the organisation's own if offered, else the default. */
+export async function pickCurrency(...wanted: (string | null | undefined)[]) {
+  const list = await priceList();
+  const offered = wanted.map((w) => (w ?? "").toUpperCase()).find((w) => list.some((l) => l.currency === w));
+  const chosen = list.find((l) => l.currency === offered) ?? list[0];
+  return { ...chosen, currencies: list.map((l) => l.currency) };
+}
+
+/** What the chosen modules cost together in one currency. A year costs ten months. */
+export async function planPrices(modules: ModuleKey[], currency?: string | null) {
+  const { currency: cur, prices } = await pickCurrency(currency);
+  const monthly = round2(modules.reduce((sum, m) => sum + (prices[m] ?? 0), 0));
+  return { currency: cur, monthly, yearly: round2(monthly * 10), prices };
+}
+
+/** The platform owner sets the monthly price of every module in one currency. */
+export async function savePrices(currency: string, prices: Prices) {
+  if (!/^[A-Z]{3}$/.test(currency)) throw new UserError("err_amount");
+  if (MODULE_KEYS.some((m) => !(prices[m] >= 0) || !Number.isFinite(prices[m]))) throw new UserError("err_amount");
+  if (MODULE_KEYS.every((m) => !prices[m])) throw new UserError("err_amount");
+  const db = await getDb();
+  await db.transaction(async (tx) => {
+    for (const m of MODULE_KEYS) {
+      await tx.insert(schema.platformPrices).values({ currency, module: m, monthly: round2(prices[m]) })
+        .onConflictDoUpdate({ target: [schema.platformPrices.currency, schema.platformPrices.module], set: { monthly: round2(prices[m]), updatedAt: new Date() } });
+    }
+  });
+}
+
+/** Stops offering a currency. The default currency stays, at the server's prices. */
+export async function removeCurrency(currency: string) {
+  const db = await getDb();
+  await db.delete(schema.platformPrices).where(eq(schema.platformPrices.currency, currency));
 }
 
 export const paymentsConfigured = () => Boolean(process.env.FLW_SECRET_KEY);
@@ -52,8 +101,8 @@ async function flw<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 /** Opens a Flutterwave hosted checkout for one subscription period and returns its address. */
-export async function startCheckout(company: { id: string; name: string; modules: ModuleKey[] }, user: { id: string; name: string; email: string | null }, period: Period) {
-  const price = planPrices(company.modules);
+export async function startCheckout(company: { id: string; name: string; modules: ModuleKey[] }, user: { id: string; name: string; email: string | null }, period: Period, currency: string) {
+  const price = await planPrices(company.modules, currency);
   const amount = price[period];
   if (!(amount > 0)) throw new UserError("err_payment_provider");
   const txRef = `TP-${company.id.slice(0, 8)}-${Date.now()}-${crypto.randomBytes(3).toString("hex")}`;

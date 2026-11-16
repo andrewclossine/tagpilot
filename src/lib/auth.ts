@@ -53,6 +53,8 @@ export const getCurrentUser = cache(async () => {
 export async function requireUser() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
+  // Signed in with a one-time password from the platform owner: nothing else opens until they choose their own.
+  if (user.mustChangePassword) redirect("/change-password");
   return user;
 }
 

@@ -2,14 +2,17 @@
 import crypto from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
+import { cookies } from "next/headers";
+import { ownerResetPassword } from "@/lib/passwords";
 import { getDb, schema } from "@/db";
 import type { ModuleKey } from "@/db/schema";
 import { audit } from "@/lib/audit";
 import { isIsoDate, isUuid, parseAmount, str } from "@/lib/format";
 import { requirePlatformOwner } from "@/lib/platform";
 import { UserError } from "@/lib/ledger";
-import { confirmByReference } from "@/lib/billing";
+import { confirmByReference, defaultCurrency, removeCurrency, savePrices } from "@/lib/billing";
+import { CURRENCIES } from "@/lib/template";
 import { cancelRefund, cancelSubscription, confirmReportedPayment, markRefundPaid, rejectReportedPayment, resendRefundLink, tellAccess } from "@/lib/subscriptions";
 
 const back = (id: string, error?: string) => `/platform/companies/${id}${error ? `?error=${error}` : "?saved=1"}`;
@@ -164,4 +167,47 @@ export async function refundResend(fd: FormData) {
   try { sent = (await resendRefundLink(id)).sent; } catch (e) { if (e instanceof UserError) redirect(back(companyId, e.message)); throw e; }
   revalidatePath(`/platform/companies/${companyId}`);
   redirect(`/platform/companies/${companyId}?${sent ? "saved=1" : "error=err_mail_not_sent"}`);
+}
+
+// ---------- prices ----------
+
+export async function savePricesAction(fd: FormData) {
+  const owner = await requirePlatformOwner();
+  const currency = str(fd, "currency").toUpperCase();
+  try {
+    if (!CURRENCIES.includes(currency)) throw new UserError("err_amount");
+    const num = (m: string) => { const v = str(fd, `price_${m}`); return v === "" ? NaN : parseAmount(v); };
+    await savePrices(currency, { accounting: num("accounting"), projects: num("projects"), procurement: num("procurement"), bidding: num("bidding") });
+  } catch (e) { if (e instanceof UserError) redirect(`/platform/prices?error=${e.message}`); throw e; }
+  console.log(`platform prices ${currency} saved by ${owner.email}`);
+  revalidatePath("/platform/prices");
+  revalidatePath("/pricing");
+  redirect("/platform/prices?saved=1");
+}
+
+export async function removeCurrencyAction(fd: FormData) {
+  await requirePlatformOwner();
+  const currency = str(fd, "currency").toUpperCase();
+  if (currency !== defaultCurrency()) await removeCurrency(currency);
+  revalidatePath("/platform/prices");
+  redirect("/platform/prices?saved=1");
+}
+
+// ---------- passwords ----------
+
+/** Resets a person's password and emails them a one-time password valid for two hours. */
+export async function resetUserPassword(fd: FormData) {
+  const owner = await requirePlatformOwner();
+  const id = str(fd, "id"), userId = str(fd, "userId");
+  await companyOf(id);
+  if (!isUuid(userId)) redirect(back(id, "err_not_found"));
+  const db = await getDb();
+  const [member] = await db.select().from(schema.memberships).where(and(eq(schema.memberships.companyId, id), eq(schema.memberships.userId, userId)));
+  if (!member) redirect(back(id, "err_not_found"));
+  const r = await ownerResetPassword(userId, id, owner.email);
+  const jar = await cookies();
+  if (r.code) jar.set("tp_pw_flash", JSON.stringify({ userId, code: r.code }), { httpOnly: true, sameSite: "strict", secure: process.env.NODE_ENV === "production", path: "/platform", maxAge: 300 });
+  else jar.delete({ name: "tp_pw_flash", path: "/platform" });
+  revalidatePath(`/platform/companies/${id}`);
+  redirect(`/platform/companies/${id}?${r.sent ? "pwsent=1" : "pwnomail=1"}`);
 }

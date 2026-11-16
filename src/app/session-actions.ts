@@ -7,7 +7,7 @@ import { appUrl } from "@/lib/billing";
 import { sendMail } from "@/lib/mail";
 import { getI18n } from "@/lib/i18n";
 import { getDb, schema } from "@/db";
-import { checkPassword, endSession, hashPassword, requireUser, startSession, switchCompany } from "@/lib/auth";
+import { checkPassword, endSession, getCurrentUser, hashPassword, requireUser, startSession, switchCompany } from "@/lib/auth";
 import { isUsername, parseAmount, str } from "@/lib/format";
 import { companyProfile, CURRENCIES, DEFAULT_POLICIES, DEFAULT_SETTINGS, PAYROLL_DEFAULTS } from "@/lib/template";
 import { ensureAssetCategories, ensureStarterAccounts } from "@/lib/setup";
@@ -52,9 +52,27 @@ export async function signIn(fd: FormData) {
     await db.delete(schema.loginFailures).where(lt(schema.loginFailures.at, new Date(Date.now() - 86400000)));
     redirect("/login?error=err_login");
   }
+  // A one-time password from the platform owner works for two hours only.
+  if (u.mustChangePassword && u.tempPasswordExpiresAt && u.tempPasswordExpiresAt.getTime() < Date.now()) redirect("/login?error=err_temp_expired");
   await db.delete(schema.loginFailures).where(eq(schema.loginFailures.key, keys.login));
   await startSession(u.id);
-  redirect("/apps");
+  redirect(u.mustChangePassword ? "/change-password" : "/apps");
+}
+
+/** After signing in with a one-time password: the person chooses their own, and the one-time password stops working. */
+export async function changeTempPassword(fd: FormData) {
+  const user = await getCurrentUser();
+  if (!user) redirect("/login");
+  const password = String(fd.get("password") ?? ""), confirm = String(fd.get("confirm") ?? "");
+  if (password.length < 8) redirect("/change-password?error=err_password_short");
+  if (password !== confirm) redirect("/change-password?error=err_password_match");
+  const db = await getDb();
+  const [u] = await db.select().from(schema.users).where(eq(schema.users.id, user.id));
+  if (!u.mustChangePassword) redirect("/apps");
+  if (u.tempPasswordExpiresAt && u.tempPasswordExpiresAt.getTime() < Date.now()) { await endSession(); redirect("/login?error=err_temp_expired"); }
+  if (await checkPassword(password, u.passwordHash)) redirect("/change-password?error=err_password_same");
+  await db.update(schema.users).set({ passwordHash: await hashPassword(password), mustChangePassword: false, tempPasswordExpiresAt: null }).where(eq(schema.users.id, u.id));
+  redirect("/apps?pw=1");
 }
 
 const resetHash = (token: string) => crypto.createHash("sha256").update(token).digest("hex");
@@ -96,7 +114,7 @@ export async function resetPassword(fd: FormData) {
   const [r] = await db.select().from(schema.passwordResets).where(eq(schema.passwordResets.id, resetHash(token)));
   if (!r || r.usedAt || r.expiresAt.getTime() < Date.now()) redirect("/forgot?error=err_reset_expired");
   await db.transaction(async (tx) => {
-    await tx.update(schema.users).set({ passwordHash: await hashPassword(password) }).where(eq(schema.users.id, r.userId));
+    await tx.update(schema.users).set({ passwordHash: await hashPassword(password), mustChangePassword: false, tempPasswordExpiresAt: null }).where(eq(schema.users.id, r.userId));
     await tx.update(schema.passwordResets).set({ usedAt: new Date() }).where(eq(schema.passwordResets.id, r.id));
     await tx.delete(schema.sessions).where(eq(schema.sessions.userId, r.userId));
   });

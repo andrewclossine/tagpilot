@@ -8,6 +8,8 @@ import { companyStatus, requirePlatformOwner } from "@/lib/platform";
 import { sp, type SearchParams } from "@/lib/actions";
 import { ConfirmButton } from "@/components/editors";
 import { Empty, ErrorNote, PageHead, Pill } from "@/components/ui";
+import { cookies } from "next/headers";
+import { resetUserPassword } from "../../../actions";
 import { cancelSubscriptionAction, checkCardPayment, confirmTransfer, extendTrial, reactivateCompany, recordPayment, refundCancel, refundPaid, refundResend, rejectTransfer, suspendCompany } from "../../../actions";
 
 const PAY_PILL = { successful: "paid", failed: "void", pending: "open", refunded: "cancelled" } as const;
@@ -32,6 +34,9 @@ export default async function PlatformCompanyPage({ params, searchParams }: { pa
   const paid = payments.filter((p) => p.status === "successful");
   const active = !!c.paidUntil && c.paidUntil.getTime() > Date.now();
   const s = companyStatus(c);
+  // Shown once, for a few minutes, when the email with a one-time password could not be sent.
+  let flash: { userId: string; code: string; until: string } | null = null;
+  try { flash = JSON.parse((await cookies()).get("tp_pw_flash")?.value ?? "null"); } catch { flash = null; }
   const fields: [string, string][] = [
     [t("country"), [c.city, c.country].filter(Boolean).join(", ")], [t("email"), c.email], [t("phone"), c.phone], [t("tin"), c.tin],
     [t("co_reg"), c.registrationNo], [t("org_type"), c.orgType], [t("currency"), c.currency], [t("plt_signed_up"), c.createdAt.toISOString().slice(0, 10)],
@@ -46,6 +51,8 @@ export default async function PlatformCompanyPage({ params, searchParams }: { pa
       </PageHead>
       <ErrorNote message={err(q("error"))} />
       {q("saved") ? <div className="note ok small">{t("saved")}</div> : null}
+      {q("pwsent") ? <div className="note ok small">{t("pw_sent")}</div> : null}
+      {q("pwnomail") ? <div className="note warn small">{t("pw_not_sent")}</div> : null}
       {q("nomail") ? <div className="note warn small">{t("plt_mail_not_sent")}</div> : null}
       {c.suspendedAt ? <div className="note bad small">{t("plt_suspended_since")} {c.suspendedAt.toISOString().slice(0, 10)}: {c.suspendedReason}</div> : null}
       <div className="panel">
@@ -54,8 +61,16 @@ export default async function PlatformCompanyPage({ params, searchParams }: { pa
       <div className="panel stack">
         <h2>{t("plt_users")} · {people.length}</h2>
         <div className="tbl-wrap"><table>
-          <thead><tr><th>{t("name")}</th><th>{t("username")}</th><th>{t("email")}</th><th>{t("role")}</th><th>{t("plt_signed_up")}</th></tr></thead>
-          <tbody>{people.map(({ u, role }) => <tr key={u.id}><td>{u.name}</td><td>{u.username}</td><td>{u.email}</td><td>{t(`role_${role}`)}</td><td>{u.createdAt.toISOString().slice(0, 10)}</td></tr>)}</tbody>
+          <thead><tr><th>{t("name")}</th><th>{t("username")}</th><th>{t("email")}</th><th>{t("role")}</th><th>{t("plt_signed_up")}</th><th /></tr></thead>
+          <tbody>{people.map(({ u, role }) => (
+            <tr key={u.id}><td>{u.name}</td><td>{u.username}</td><td>{u.email}</td><td>{t(`role_${role}`)}</td><td>{u.createdAt.toISOString().slice(0, 10)}</td>
+              <td style={{ whiteSpace: "nowrap" }}>
+                {u.mustChangePassword && u.tempPasswordExpiresAt ? <div className="small muted">{t(u.tempPasswordExpiresAt.getTime() > Date.now() ? "pw_pending_until" : "pw_expired").replace("{time}", u.tempPasswordExpiresAt.toISOString().slice(0, 16).replace("T", " "))}</div> : null}
+                {flash?.userId === u.id ? <div className="note warn small">{t("pw_code_not_sent")} <code className="k" style={{ fontSize: 16 }}>{flash.code}</code></div> : null}
+                <form action={resetUserPassword}><input type="hidden" name="userId" value={u.id} /><input type="hidden" name="id" value={c.id} />
+                  <ConfirmButton className="btn sm" confirmLabel={t("confirm")}>{t("pw_reset_btn")}</ConfirmButton></form>
+              </td></tr>
+          ))}</tbody>
         </table></div>
       </div>
       <div className="panel stack">
