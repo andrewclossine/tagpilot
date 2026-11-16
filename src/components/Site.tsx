@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { getI18n } from "@/lib/i18n";
 import { siteCopy } from "@/lib/site-copy";
-import { setLang } from "@/app/session-actions";
+import { LanguagePicker } from "@/components/LanguagePicker";
 import { Logo } from "./Logo";
 import { LegalFooter } from "./LegalFooter";
 
@@ -30,11 +30,7 @@ export async function SiteHeader({ back }: { back: string }) {
           <Link href="/download">{c.nav_app}</Link>
         </nav>
         <div className="site-actions">
-          <form action={setLang} className="row" style={{ gap: 4 }}>
-            <input type="hidden" name="back" value={back} />
-            <button type="submit" name="lang" value="en" className="btn sm ghost" aria-pressed={lang === "en"}>EN</button>
-            <button type="submit" name="lang" value="fr" className="btn sm ghost" aria-pressed={lang === "fr"}>FR</button>
-          </form>
+          <LanguagePicker lang={lang} compact />
           <Link className="btn sm" href="/login">{c.nav_signin}</Link>
           <Link className="btn sm primary" href="/signup">{c.nav_trial}</Link>
         </div>

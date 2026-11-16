@@ -130,7 +130,9 @@ export async function signOut() {
 
 export async function setLang(fd: FormData) {
   (await cookies()).set("konti_lang", str(fd, "lang") === "fr" ? "fr" : "en", { path: "/", maxAge: 365 * 86400, sameSite: "lax" });
-  redirect(str(fd, "back") || "/dashboard");
+  // Only a page of this site: an address from elsewhere (or "//host") would send people off the site.
+  const back = str(fd, "back");
+  redirect(back.startsWith("/") && !back.startsWith("//") && !back.startsWith("/\\") ? back : "/apps");
 }
 
 export async function changeCompany(fd: FormData) {

@@ -3,7 +3,8 @@ import { redirect } from "next/navigation";
 import { getCtx } from "@/lib/auth";
 import { APPS, appHome, appWorkspaces } from "@/lib/apps";
 import { getI18n } from "@/lib/i18n";
-import { setLang, signOut } from "@/app/session-actions";
+import { signOut } from "@/app/session-actions";
+import { LanguagePicker } from "@/components/LanguagePicker";
 import { AppIcon } from "@/components/AppIcon";
 import { Logo } from "@/components/Logo";
 
@@ -21,11 +22,7 @@ export default async function AppsPage() {
         <Logo size={30} />
         <span className="spacer" />
         <span className="small muted">{ctx.user.name} · {ctx.company.name}</span>
-        <form action={setLang} className="row" style={{ gap: 6 }}>
-          <input type="hidden" name="back" value="/apps" />
-          <button type="submit" name="lang" value="en" className="btn sm" aria-pressed={lang === "en"}>EN</button>
-          <button type="submit" name="lang" value="fr" className="btn sm" aria-pressed={lang === "fr"}>FR</button>
-        </form>
+        <LanguagePicker lang={lang} />
         <form action={signOut}><button type="submit" className="btn sm">{t("sign_out")}</button></form>
       </header>
       <main className="launcher-main">

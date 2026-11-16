@@ -4,7 +4,8 @@ import { appWorkspaces } from "@/lib/apps";
 import { getCtx } from "@/lib/auth";
 import { getI18n } from "@/lib/i18n";
 import type { Area } from "@/lib/roles";
-import { setLang, signOut } from "@/app/session-actions";
+import { signOut } from "@/app/session-actions";
+import { LanguagePicker } from "@/components/LanguagePicker";
 import { AppShell } from "@/components/AppShell";
 import type { NavItem } from "@/components/NavLinks";
 import { Logo } from "@/components/Logo";
@@ -38,11 +39,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const account = (
     <div className="foot">
       <div>{ctx.user.name}<div className="small" style={{ opacity: .7 }}>@{ctx.user.username} · {t(`role_${ctx.role}`)}</div></div>
-      <form action={setLang} className="row" style={{ gap: 6 }}>
-        <input type="hidden" name="back" value="/apps" />
-        <button type="submit" name="lang" value="en" className="btn sm" aria-pressed={lang === "en"}>EN</button>
-        <button type="submit" name="lang" value="fr" className="btn sm" aria-pressed={lang === "fr"}>FR</button>
-      </form>
+      <LanguagePicker lang={lang} dark />
       <InstallApp label={t("app_install")} />
       <form action={signOut}><button type="submit" className="btn sm">{t("sign_out")}</button></form>
     </div>
