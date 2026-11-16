@@ -84,6 +84,7 @@ export function appWorkspaces(ctx: Ctx, t: T): (Workspace & { key: AppKey })[] {
         ]),
         ...group(t("nav_accountant"), [
           ...link("journal", "/journal", t("nav_journal")),
+          ...link("journal", "/batch", t("batch_title")),
           ...link("accounts", "/accounts", t("nav_coa")),
           ...link("budgets", "/budgets", t("nav_budgets")),
           ...link("journal", "/recurring", t("rec_title")),
