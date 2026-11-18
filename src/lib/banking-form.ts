@@ -10,10 +10,12 @@ export function addLine(fd: FormData): BankLine[] {
   accounts.forEach((accountId, i) => {
     const amount = parseAmount(amounts[i]);
     if (!accountId && !amount) return;
+    // An amount with no account is the usual slip: say so plainly.
+    if (!accountId) throw new UserError("err_bank_line_account");
     if (!isUuid(accountId)) throw new UserError("err_account");
     if (!(amount > 0)) throw new UserError("err_amount");
     lines.push({ accountId, amount, description: (notes[i] ?? "").trim(), projectId: isUuid(projects[i] ?? "") ? projects[i] : null });
   });
-  if (!lines.length) throw new UserError("err_required");
+  if (!lines.length) throw new UserError("err_bank_lines");
   return lines;
 }

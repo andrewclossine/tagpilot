@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BankFormGuard } from "./BankFormGuard";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import type { Ctx } from "@/lib/auth";
@@ -43,8 +44,9 @@ export async function BankDocFields({ ctx, kind }: { ctx: Ctx; kind: "check" | "
             <option value="">{t("none")}</option>
             {partners.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select></label>
-        <label className="f">{t(kind === "check" ? "pv_payee" : "bk_received_from")}<input id="b-payee" name="payee" /></label>
+        <label className="f">{t(kind === "check" ? "pv_payee" : "bk_received_from")}<input id="b-payee" name="payee" placeholder={kind === "check" ? t("bk_payee_hint") : undefined} /></label>
       </div>
+      <BankFormGuard needPayee={kind === "check"} labels={{ payee: t("err_check_payee"), lines: t("err_bank_lines"), lineAccount: t("err_bank_line_account") }} />
       <label className="f">{t("memo")}<input id="b-memo" name="memo" /></label>
       <div className="tbl-wrap"><table className="lines">
         <thead><tr><th>{t("account")}</th><th>{t("project")}</th><th>{t("description")}</th><th className="num">{t("amount")} ({ctx.company.currency})</th></tr></thead>

@@ -158,7 +158,7 @@ export async function saveCheck(fd: FormData) {
   const back = "/banking/check";
   try {
     const date = dateOf(fd), who = await whoOf(ctx.company.id, fd);
-    if (!who.payee) throw new UserError("err_required");
+    if (!who.payee) throw new UserError("err_check_payee");
     const lines = addLine(fd);
     const db = await getDb();
     await db.transaction((tx) => writeCheck(tx, ctx.company.id, ctx.user.id, str(fd, "accountId"), { date, reference: str(fd, "reference"), memo: str(fd, "memo"), ...who }, lines));

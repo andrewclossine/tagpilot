@@ -3,7 +3,7 @@ import { and, asc, desc, eq, inArray, isNull, lte, sql } from "drizzle-orm";
 import type { Db, Tx } from "@/db";
 import { schema } from "@/db";
 import { audit } from "./audit";
-import { round2 } from "./format";
+import { isUuid, round2 } from "./format";
 import { accountIdByCode, balances, saveEntry, UserError, type LineInput } from "./ledger";
 import { nextNumber } from "./numbering";
 
@@ -16,6 +16,8 @@ export const FX_GAIN_CODE = "4850";
 export const FX_LOSS_CODE = "6850";
 
 async function accountsOf(tx: Tx, companyId: string, ids: string[]) {
+  // An id that is not an id is simply not found, so the caller says "choose an account" instead of failing.
+  ids = ids.filter(isUuid);
   const rows = ids.length ? await tx.select().from(schema.accounts).where(and(eq(schema.accounts.companyId, companyId), inArray(schema.accounts.id, ids))) : [];
   return new Map(rows.map((a) => [a.id, a]));
 }
