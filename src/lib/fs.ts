@@ -208,11 +208,22 @@ export function numberNotes(notes: { id: string; kind: string; key: string; incl
 }
 
 /** What the words in braces in reports and notes stand for. */
-export function fsTokens(d: { lang: Lang; periodFrom: string; periodTo: string; framework: string; approvedBy: string; approvedOn: string | null }, c: { name: string; country: string; currency: string }) {
+export function fsTokens(
+  d: { lang: Lang; periodFrom: string; periodTo: string; framework: string; approvedBy: string; approvedOn: string | null },
+  c: { name: string; country: string; currency: string; address?: string; city?: string },
+  f?: { beforeTax: Pair; profit: Pair },
+) {
   const t = tOf(d.lang);
+  const amount = (n: number | undefined) => {
+    if (n === undefined) return "-";
+    const s = Math.abs(Math.round(n)).toLocaleString(d.lang === "fr" ? "fr-FR" : "en-US");
+    return n < 0 ? `(${s})` : s;
+  };
   return {
     company: c.name, country: c.country || "-", currency: c.currency, period_start: d.periodFrom, period_end: d.periodTo,
+    address: [c.address, c.city, c.country].filter(Boolean).join(", ") || "[address]",
     framework: t(d.framework === "ifrs" ? "fs_fw_ifrs_long" : "fs_fw_sme_long"),
     approved_by: d.approvedBy.trim() || t("fs_approved_by_blank"), approved_on: d.approvedOn ?? t("fs_approved_on_blank"),
+    profit_before_tax: amount(f?.beforeTax[0]), profit_after_tax: amount(f?.profit[0]),
   } as Record<string, string>;
 }

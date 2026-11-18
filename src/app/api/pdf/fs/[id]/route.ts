@@ -13,7 +13,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const { d, notes } = draft;
   const f = await fsFigures(ctx.company.id, d.periodFrom, d.periodTo, d.comparative, d.lang);
   const company = await printedCompany(ctx);
-  const pdf = await fsPdf(d, notes, f, { name: company.name, currency: company.currency, registrationNo: company.registrationNo, tin: company.tin, logo: company.logo }, fsTokens(d, company));
+  const pdf = await fsPdf(d, notes, f, { name: company.name, currency: company.currency, registrationNo: company.registrationNo, tin: company.tin, logo: company.logo }, fsTokens(d, company, f));
   const filename = `${d.title.replace(/[^A-Za-z0-9-]+/g, "-")}.pdf`;
   return new Response(new Uint8Array(pdf), {
     headers: { "Content-Type": "application/pdf", "Content-Disposition": `attachment; filename="${filename}"`, "Cache-Control": "private, no-store" },

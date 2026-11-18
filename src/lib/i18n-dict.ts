@@ -1454,7 +1454,7 @@ const en = {
   fs_not_printed: "not printed",
   fs_note_title: "Heading",
   fs_note_text: "Text",
-  fs_tokens_help: "Words in braces are filled in when printed: {company}, {country}, {currency}, {period_start}, {period_end}, {framework}, {approved_by}, {approved_on}. Text in [square brackets] is for you to replace.",
+  fs_tokens_help: "Words in braces are filled in when printed: {company}, {country}, {address}, {currency}, {period_start}, {period_end}, {framework}, {profit_before_tax}, {profit_after_tax}, {approved_by}, {approved_on}. Text in [square brackets] is for you to replace.",
   fs_print_it: "Print this",
   fs_move_up: "Move up",
   fs_move_down: "Move down",
@@ -1516,6 +1516,10 @@ const en = {
   fs_line_other_expenses: "Other operating expenses",
   fs_line_finance_costs: "Finance costs",
   fs_line_income_tax: "Income tax expense",
+  err_check_payee: "Write who the cheque is paid to, or choose a partner.",
+  err_bank_lines: "Add at least one line: choose an account and enter its amount.",
+  err_bank_line_account: "A line has an amount but no account: choose the account for it.",
+  bk_payee_hint: "Or choose a partner",
 } as const;
 
 export type Key = keyof typeof en;
@@ -2976,7 +2980,7 @@ const fr: Record<Key, string> = {
   fs_not_printed: "non imprimé",
   fs_note_title: "Titre",
   fs_note_text: "Texte",
-  fs_tokens_help: "Les mots entre accolades sont remplis à l'impression : {company}, {country}, {currency}, {period_start}, {period_end}, {framework}, {approved_by}, {approved_on}. Le texte entre [crochets] est à remplacer.",
+  fs_tokens_help: "Les mots entre accolades sont remplis à l'impression : {company}, {country}, {address}, {currency}, {period_start}, {period_end}, {framework}, {profit_before_tax}, {profit_after_tax}, {approved_by}, {approved_on}. Le texte entre [crochets] est à remplacer.",
   fs_print_it: "L'imprimer",
   fs_move_up: "Monter",
   fs_move_down: "Descendre",
@@ -3038,6 +3042,10 @@ const fr: Record<Key, string> = {
   fs_line_other_expenses: "Autres charges d'exploitation",
   fs_line_finance_costs: "Charges financières",
   fs_line_income_tax: "Charge d'impôt sur le résultat",
+  err_check_payee: "Indiquez le bénéficiaire du chèque, ou choisissez un partenaire.",
+  err_bank_lines: "Ajoutez au moins une ligne : choisissez un compte et saisissez son montant.",
+  err_bank_line_account: "Une ligne a un montant mais pas de compte : choisissez son compte.",
+  bk_payee_hint: "Ou choisissez un partenaire",
 };
 
 export const dict = { en, fr } as const;

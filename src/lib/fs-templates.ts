@@ -31,9 +31,6 @@ const orgKind = (x: Ctx): Text => ({
   cooperative: { en: "a cooperative", fr: "une coopérative" }, government: { en: "a public institution", fr: "une institution publique" },
   sole_trader: { en: "a sole proprietorship", fr: "une entreprise individuelle" },
 }[x.c.orgType] ?? { en: "an organisation", fr: "une organisation" });
-const frameworkName = (x: Ctx): Text => (x.framework === "ifrs"
-  ? { en: "International Financial Reporting Standards (IFRS)", fr: "les normes internationales d'information financière (IFRS)" }
-  : { en: "the International Financial Reporting Standard for Small and Medium-sized Entities (IFRS for SMEs)", fr: "la norme internationale d'information financière pour les PME (IFRS pour les PME)" });
 const years = (months: number) => (months % 12 ? `${months} months` : `${months / 12} years`);
 const ans = (months: number) => (months % 12 ? `${months} mois` : `${months / 12} ans`);
 
@@ -45,10 +42,22 @@ export const TEMPLATES: Template[] = [
   // ---------------- reports ----------------
   {
     key: "r_responsibility", kind: "report",
-    title: { en: "Statement of responsibility", fr: "Déclaration de responsabilité" },
-    body: (x) => ({
-      en: `The ${governing(x).en} are responsible for the preparation and fair presentation of the financial statements of {company} for the period ended {period_end}, in accordance with {framework}, and for such internal control as they determine is necessary to enable the preparation of financial statements that are free from material misstatement, whether due to fraud or error.\n\nThe ${governing(x).en} have assessed the ability of {company} to continue as a going concern and have no reason to believe that it will not be a going concern in the year ahead.`,
-      fr: `Les ${governing(x).fr} sont responsables de l'établissement et de la présentation fidèle des états financiers de {company} pour la période close le {period_end}, conformément à {framework}, ainsi que du contrôle interne qu'ils jugent nécessaire pour permettre l'établissement d'états financiers exempts d'anomalies significatives, que celles-ci résultent de fraudes ou d'erreurs.\n\nLes ${governing(x).fr} ont évalué la capacité de {company} à poursuivre son exploitation et n'ont aucune raison de penser qu'elle ne pourra pas la poursuivre au cours de l'année à venir.`,
+    title: { en: "Statement of responsibilities and approval", fr: "Déclaration de responsabilités et approbation" },
+    body: (x) => {
+      const g = governing(x);
+      const law = isCompany(x) ? { en: "the law on companies of {country}", fr: "la loi sur les sociétés au/en {country}" } : { en: "the laws of {country} and its constitution", fr: "les lois du/de {country} et ses statuts" };
+      return {
+        en: `The ${g.en} are required by ${law.en} to maintain adequate accounting records and are responsible for the content and integrity of the annual financial statements of {company} and the related financial information included in this report. It is their responsibility to ensure that the annual financial statements comply with {framework} as to form and content, and present fairly the financial position of {company} at {period_end} and the results of its operations and its cash flows for the period then ended. The annual financial statements are based on appropriate accounting policies, consistently applied and supported by reasonable and prudent judgements and estimates.\n\nThe ${g.en} acknowledge that they are ultimately responsible for the system of internal financial control established by {company} and place considerable importance on maintaining a strong control environment. To enable them to meet these responsibilities, they set standards for internal control aimed at reducing the risk of error or loss in a cost-effective manner. These standards include the proper delegation of responsibilities within a clearly defined framework, effective accounting procedures and adequate segregation of duties. These controls are monitored throughout {company}, and all employees are required to maintain the highest ethical standards.\n\nThe ${g.en} are of the opinion, based on the information and explanations given by management, that the system of internal control provides reasonable assurance that the financial records may be relied on for the preparation of the annual financial statements. The ${g.en} have reviewed the ability of {company} to continue as a going concern and have no reason to believe that it will not be a going concern in the year ahead.`,
+        fr: `Les ${g.fr} sont tenus par ${law.fr} de tenir une comptabilité adéquate et sont responsables du contenu et de l'intégrité des états financiers annuels de {company} et des informations financières qui s'y rapportent. Il leur appartient de veiller à ce que les états financiers annuels soient conformes à {framework} quant à la forme et au fond, et donnent une image fidèle de la situation financière de {company} au {period_end}, ainsi que de ses résultats et de ses flux de trésorerie pour la période close à cette date. Les états financiers annuels reposent sur des méthodes comptables appropriées, appliquées de façon constante et étayées par des jugements et estimations raisonnables et prudents.\n\nLes ${g.fr} reconnaissent être les responsables ultimes du système de contrôle interne financier mis en place par {company} et attachent une grande importance au maintien d'un environnement de contrôle solide. À cette fin, ils fixent des normes de contrôle interne visant à réduire le risque d'erreur ou de perte de manière économique, notamment une délégation claire des responsabilités, des procédures comptables efficaces et une séparation adéquate des tâches. Ces contrôles sont suivis dans toute l'organisation et tous les employés sont tenus au plus haut niveau d'éthique.\n\nLes ${g.fr} estiment, sur la base des informations et explications fournies par la direction, que le système de contrôle interne donne une assurance raisonnable que les documents comptables sont fiables pour l'établissement des états financiers annuels. Ils ont examiné la capacité de {company} à poursuivre son exploitation et n'ont aucune raison de penser qu'elle ne pourra pas la poursuivre au cours de l'année à venir.`,
+      };
+    },
+  },
+  {
+    key: "r_directors", kind: "report", when: (x) => isCompany(x) || x.c.orgType === "cooperative",
+    title: { en: "Report of the directors", fr: "Rapport des administrateurs" },
+    body: () => ({
+      en: "The directors submit their report together with the financial statements for the period ended {period_end}.\n\n1. Principal activity\nThe principal activity of {company} is [describe the principal activity].\n\n2. Results\nProfit (loss) before tax for the period: {currency} {profit_before_tax}.\nProfit (loss) after tax for the period: {currency} {profit_after_tax}.\n\n3. Dividends\n[No dividends were declared for the period.]\n\n4. Directorate\nThe directors who held office during the period and to the date of this report are: {approved_by}.\n\n5. Financial statements\nAt the date of this report, the directors were not aware of any circumstances which would render the values attributed to the assets in the financial statements misleading.",
+      fr: "Les administrateurs présentent leur rapport accompagné des états financiers de la période close le {period_end}.\n\n1. Activité principale\nL'activité principale de {company} est [décrivez l'activité principale].\n\n2. Résultats\nRésultat avant impôt de la période : {currency} {profit_before_tax}.\nRésultat après impôt de la période : {currency} {profit_after_tax}.\n\n3. Dividendes\n[Aucun dividende n'a été déclaré pour la période.]\n\n4. Administrateurs\nLes administrateurs en fonction au cours de la période et à la date du présent rapport sont : {approved_by}.\n\n5. États financiers\nÀ la date du présent rapport, les administrateurs n'avaient connaissance d'aucune circonstance qui rendrait trompeuses les valeurs attribuées aux actifs dans les états financiers.",
     }),
   },
   {
@@ -65,50 +74,43 @@ export const TEMPLATES: Template[] = [
     key: "p_general", kind: "policy",
     title: { en: "General information", fr: "Informations générales" },
     body: (x) => ({
-      en: `{company} is ${orgKind(x).en} registered in {country}${x.c.registrationNo ? " under number " + x.c.registrationNo : ""}. These financial statements cover the period from {period_start} to {period_end}.`,
-      fr: `{company} est ${orgKind(x).fr} enregistrée au/en {country}${x.c.registrationNo ? " sous le numéro " + x.c.registrationNo : ""}. Ces états financiers couvrent la période du {period_start} au {period_end}.`,
+      en: `{company} is ${orgKind(x).en} domiciled in {country}${x.c.registrationNo ? ", registered under number " + x.c.registrationNo : ""}. Its registered office and principal place of business is {address}. The principal activity of {company} is [describe the principal activity]. These financial statements cover the period from {period_start} to {period_end}.`,
+      fr: `{company} est ${orgKind(x).fr} domiciliée au/en {country}${x.c.registrationNo ? ", enregistrée sous le numéro " + x.c.registrationNo : ""}. Son siège et son principal lieu d'activité se trouvent à {address}. L'activité principale de {company} est [décrivez l'activité principale]. Ces états financiers couvrent la période du {period_start} au {period_end}.`,
     }),
   },
   {
     key: "p_basis", kind: "policy",
     title: { en: "Basis of preparation", fr: "Base de préparation" },
-    body: () => ({
-      en: "The financial statements have been prepared in accordance with {framework}, on the historical cost basis, except where stated otherwise in the policies below. They are presented in {currency}, rounded to the nearest unit. The policies set out below have been applied consistently to all periods presented.",
-      fr: "Les états financiers ont été établis conformément à {framework}, selon la convention du coût historique, sauf indication contraire dans les méthodes ci-dessous. Ils sont présentés en {currency}, arrondis à l'unité. Les méthodes ci-dessous ont été appliquées de façon constante à toutes les périodes présentées.",
-    }),
-  },
-  {
-    key: "p_going_concern", kind: "policy",
-    title: { en: "Going concern", fr: "Continuité d'exploitation" },
-    body: () => ({
-      en: "The financial statements have been prepared on the going concern basis, which assumes that {company} will be able to meet its obligations as they fall due in the foreseeable future.",
-      fr: "Les états financiers ont été établis selon le principe de continuité d'exploitation, qui suppose que {company} pourra faire face à ses obligations à leur échéance dans un avenir prévisible.",
+    body: (x) => ({
+      en: `The financial statements are prepared on a going concern basis and in compliance with {framework}${x.framework === "ifrs" ? "" : " issued by the International Accounting Standards Board"}. They are presented in {currency}, which is also the functional currency of {company}, rounded to the nearest unit. The measurement basis used is the historical cost basis except where otherwise stated in the accounting policies below. The policies have been applied consistently to all the periods presented.`,
+      fr: `Les états financiers sont établis selon le principe de continuité d'exploitation et conformément à {framework}${x.framework === "ifrs" ? "" : " publiée par l'International Accounting Standards Board"}. Ils sont présentés en {currency}, qui est aussi la monnaie fonctionnelle de {company}, arrondis à l'unité. La base d'évaluation est le coût historique, sauf indication contraire dans les méthodes ci-dessous, appliquées de façon constante à toutes les périodes présentées.`,
     }),
   },
   {
     key: "p_revenue", kind: "policy", when: (x) => has(x, "revenue"),
-    title: { en: "Revenue", fr: "Produits" },
-    body: (x) => ({
-      en: `Revenue is measured at the fair value of the consideration received or receivable${x.c.vatRegistered ? ", excluding value added tax," : ""} and net of discounts. Revenue from the sale of goods is recognised when the goods are delivered and the significant risks and rewards of ownership have passed to the buyer. Revenue from services is recognised as the service is rendered.`,
-      fr: `Les produits sont évalués à la juste valeur de la contrepartie reçue ou à recevoir${x.c.vatRegistered ? ", hors taxe sur la valeur ajoutée," : ""} et nets des remises. Les ventes de biens sont comptabilisées à la livraison, lorsque les risques et avantages importants ont été transférés à l'acheteur. Les prestations de services sont comptabilisées au fur et à mesure de leur réalisation.`,
+    title: { en: "Revenue recognition", fr: "Comptabilisation des produits" },
+    body: () => ({
+      en: "Revenue is measured at the fair value of the consideration received or receivable, net of discounts and of sales-related taxes collected on behalf of the government. Revenue from the sale of goods is recognised when the goods have been delivered and title has passed to the buyer. Revenue from services and contracts is recognised by reference to the stage of completion of the work at the reporting date, when the outcome can be estimated reliably.",
+      fr: "Les produits sont évalués à la juste valeur de la contrepartie reçue ou à recevoir, nets des remises et des taxes sur les ventes perçues pour le compte de l'État. Les ventes de biens sont comptabilisées lorsque les biens ont été livrés et que la propriété en a été transférée à l'acheteur. Les produits des services et des contrats sont comptabilisés en fonction du degré d'avancement des travaux à la date de clôture, lorsque leur issue peut être estimée de façon fiable.",
     }),
   },
   {
     key: "p_grants", kind: "policy", when: (x) => has(x, "grants", "deferred_income"),
     title: { en: "Grants and donations", fr: "Subventions et dons" },
     body: () => ({
-      en: "Grants and donations are recognised as income when there is reasonable assurance that the conditions attached to them will be met and the funds will be received. Grants received for specific activities that have not yet been carried out are held as deferred grant income and recognised as income as the related expenditure is incurred.",
-      fr: "Les subventions et dons sont comptabilisés en produits lorsqu'il existe une assurance raisonnable que les conditions qui s'y rattachent seront remplies et que les fonds seront reçus. Les subventions reçues pour des activités précises non encore réalisées sont présentées en subventions reçues d'avance et rapportées au résultat au rythme des dépenses correspondantes.",
+      en: "Grants and donations are recognised as income when there is reasonable assurance that the conditions attached to them will be met and the funds will be received. Grants received for specific activities that have not yet been carried out are held as deferred grant income and recognised as income as the related expenditure is incurred. Grants related to assets are recognised as income over the useful lives of the assets concerned.",
+      fr: "Les subventions et dons sont comptabilisés en produits lorsqu'il existe une assurance raisonnable que les conditions qui s'y rattachent seront remplies et que les fonds seront reçus. Les subventions reçues pour des activités précises non encore réalisées sont présentées en subventions reçues d'avance et rapportées au résultat au rythme des dépenses correspondantes. Les subventions liées à des actifs sont rapportées au résultat sur la durée d'utilité de ces actifs.",
     }),
   },
   {
     key: "p_ppe", kind: "policy", when: (x) => has(x, "ppe"),
     title: { en: "Property, plant and equipment", fr: "Immobilisations corporelles" },
     body: (x) => {
-      const lives = x.f.ppe.filter((p) => p.months).map((p) => p);
+      const lives = x.f.ppe.filter((p) => p.months || p.rate);
+      const rate = (p: (typeof lives)[number]) => (p.method === "reducing_balance" ? p.rate : Math.round((1200 / p.months) * 100) / 100);
       return {
-        en: `Property, plant and equipment are stated at cost less accumulated depreciation and any impairment losses. Cost includes the purchase price and the costs directly attributable to bringing the asset to working condition. Depreciation is charged so as to write off the cost of assets over their estimated useful lives, using the ${lives.some((l) => l.method === "reducing_balance") ? "straight-line or reducing balance" : "straight-line"} method, as follows:\n${lives.map((l) => `- ${l.name}: ${l.method === "reducing_balance" ? `${l.rate}% a year, reducing balance` : years(l.months)}`).join("\n")}\n\nUseful lives and residual values are reviewed at each reporting date. Gains and losses on disposal are recognised in profit or loss.`,
-        fr: `Les immobilisations corporelles sont comptabilisées au coût diminué du cumul des amortissements et des pertes de valeur. Le coût comprend le prix d'achat et les coûts directement attribuables à la mise en état de fonctionnement. L'amortissement est calculé de façon à répartir le coût sur la durée d'utilité estimée, selon la méthode ${lives.some((l) => l.method === "reducing_balance") ? "linéaire ou dégressive" : "linéaire"} :\n${lives.map((l) => `- ${l.name} : ${l.method === "reducing_balance" ? `${l.rate} % par an, dégressif` : ans(l.months)}`).join("\n")}\n\nLes durées d'utilité et valeurs résiduelles sont revues à chaque clôture. Les plus et moins-values de cession sont comptabilisées en résultat.`,
+        en: `Items of property, plant and equipment are measured at cost less accumulated depreciation and any impairment losses. Cost includes the purchase price and the costs directly attributable to bringing the asset to the location and condition necessary for it to operate. Depreciation is charged so as to allocate the cost of assets less their residual values over their estimated useful lives, using the ${lives.some((l) => l.method === "reducing_balance") ? "straight-line or reducing balance" : "straight-line"} method. The following annual rates are used:\n${lives.map((l) => `- ${l.name}: ${rate(l)}%${l.method === "reducing_balance" ? " (reducing balance)" : ` (${years(l.months)})`}`).join("\n")}\n\nIf there is an indication that there has been a significant change in the useful life or residual value of an asset, its depreciation is revised prospectively to reflect the new expectations. On disposal, the difference between the net disposal proceeds and the carrying amount of the item is recognised in profit or loss.`,
+        fr: `Les immobilisations corporelles sont évaluées au coût diminué du cumul des amortissements et des pertes de valeur. Le coût comprend le prix d'achat et les coûts directement attribuables à l'acheminement et à la mise en état de fonctionnement de l'actif. L'amortissement répartit le coût des actifs, diminué de leur valeur résiduelle, sur leur durée d'utilité estimée, selon la méthode ${lives.some((l) => l.method === "reducing_balance") ? "linéaire ou dégressive" : "linéaire"}. Les taux annuels suivants sont appliqués :\n${lives.map((l) => `- ${l.name} : ${rate(l)} %${l.method === "reducing_balance" ? " (dégressif)" : ` (${ans(l.months)})`}`).join("\n")}\n\nLorsqu'un indice montre un changement important de la durée d'utilité ou de la valeur résiduelle d'un actif, son amortissement est révisé de manière prospective. Lors d'une cession, la différence entre le produit net de cession et la valeur comptable de l'actif est comptabilisée en résultat.`,
       };
     },
   },
@@ -118,65 +120,101 @@ export const TEMPLATES: Template[] = [
     body: (x) => {
       const made = x.c.sector === "manufacturing";
       return {
-        en: `Inventories are measured at the lower of cost and estimated selling price less costs to complete and sell. Cost is determined using the weighted average cost formula.${made ? " The cost of work in progress and finished goods comprises raw materials, direct labour and a systematic allocation of production overheads." : ""}`,
-        fr: `Les stocks sont évalués au plus bas du coût et du prix de vente estimé diminué des coûts d'achèvement et de vente. Le coût est déterminé selon la méthode du coût moyen pondéré.${made ? " Le coût des en-cours et des produits finis comprend les matières premières, la main-d'œuvre directe et une affectation systématique des frais généraux de production." : ""}`,
+        en: `Inventories are measured at the lower of cost and estimated selling price less costs to complete and sell. Cost is determined using the weighted average cost formula and includes the purchase price and other costs incurred in bringing the inventories to their present location and condition.${made ? " The cost of work in progress and finished goods comprises raw materials, direct labour and a systematic allocation of production overheads." : ""} At each reporting date, inventories are assessed for impairment and any loss is recognised immediately in profit or loss.`,
+        fr: `Les stocks sont évalués au plus bas du coût et du prix de vente estimé diminué des coûts d'achèvement et de vente. Le coût est déterminé selon la méthode du coût moyen pondéré et comprend le prix d'achat et les autres coûts engagés pour amener les stocks à l'endroit et dans l'état où ils se trouvent.${made ? " Le coût des en-cours et des produits finis comprend les matières premières, la main-d'œuvre directe et une affectation systématique des frais généraux de production." : ""} À chaque clôture, les stocks font l'objet d'un test de dépréciation et toute perte est comptabilisée immédiatement en résultat.`,
       };
     },
   },
   {
     key: "p_financial_instruments", kind: "policy", when: (x) => has(x, "receivables", "payables", "loans"),
-    title: { en: "Financial instruments", fr: "Instruments financiers" },
+    title: { en: "Financial assets and liabilities", fr: "Actifs et passifs financiers" },
     body: () => ({
-      en: "Trade and other receivables are measured at the transaction price less any allowance for amounts not expected to be recovered. Trade and other payables are measured at the transaction price. Loans are measured at amortised cost; interest is recognised in profit or loss as it accrues.",
-      fr: "Les créances clients et autres débiteurs sont évalués au prix de transaction diminué de toute provision pour montants jugés irrécouvrables. Les dettes fournisseurs et autres créditeurs sont évaluées au prix de transaction. Les emprunts sont évalués au coût amorti ; les intérêts sont comptabilisés en résultat au fur et à mesure.",
+      en: "Trade and other receivables are initially recognised at the transaction price. Most sales are made on normal credit terms, and receivables do not bear interest. Where credit is extended beyond normal credit terms, receivables are measured at amortised cost using the effective interest method. At the end of each reporting period, the carrying amounts of trade and other receivables are reviewed to determine whether there is any objective evidence that the amounts are not recoverable; if so, an impairment loss is recognised immediately in profit or loss.\n\nTrade and other payables are obligations on the basis of normal credit terms and do not bear interest; they are measured at the transaction price. Borrowings are initially recognised at the transaction price and subsequently measured at amortised cost; interest expense is recognised in profit or loss as it accrues.",
+      fr: "Les créances clients et autres débiteurs sont initialement comptabilisés au prix de transaction. La plupart des ventes sont conclues aux conditions normales de crédit et les créances ne portent pas intérêt. Lorsque le crédit dépasse les conditions normales, les créances sont évaluées au coût amorti selon la méthode du taux d'intérêt effectif. À chaque clôture, la valeur comptable des créances est examinée afin de déterminer s'il existe une indication objective qu'elles ne sont pas recouvrables ; le cas échéant, une perte de valeur est comptabilisée immédiatement en résultat.\n\nLes dettes fournisseurs et autres créditeurs sont des obligations aux conditions normales de crédit, ne portant pas intérêt, évaluées au prix de transaction. Les emprunts sont initialement comptabilisés au prix de transaction puis évalués au coût amorti ; la charge d'intérêts est comptabilisée en résultat au fur et à mesure.",
     }),
   },
   {
     key: "p_cash", kind: "policy", when: (x) => has(x, "cash"),
     title: { en: "Cash and cash equivalents", fr: "Trésorerie et équivalents de trésorerie" },
     body: () => ({
-      en: "Cash and cash equivalents comprise cash on hand, balances with banks and mobile money accounts.",
-      fr: "La trésorerie et les équivalents de trésorerie comprennent les espèces en caisse, les soldes bancaires et les comptes de monnaie mobile.",
+      en: "Cash and cash equivalents include cash in hand, mobile money balances and demand and term deposits with maturities of three months or less from the date of acquisition, that are readily convertible to known amounts of cash and are subject to an insignificant risk of changes in value, net of bank overdrafts. In the statement of financial position, bank overdrafts are included in borrowings under current liabilities.",
+      fr: "La trésorerie et les équivalents de trésorerie comprennent les espèces en caisse, les soldes de monnaie mobile et les dépôts à vue et à terme d'une échéance de trois mois au plus à la date d'acquisition, facilement convertibles en un montant connu de trésorerie et soumis à un risque négligeable de changement de valeur, nets des découverts bancaires. Dans l'état de la situation financière, les découverts bancaires figurent parmi les emprunts dans les passifs courants.",
+    }),
+  },
+  {
+    key: "p_provisions", kind: "policy",
+    title: { en: "Provisions", fr: "Provisions" },
+    body: () => ({
+      en: "Provisions are recognised when {company} has a present legal or constructive obligation as a result of past events, it is probable that an outflow of resources embodying economic benefits will be required to settle the obligation, and a reliable estimate of the amount of the obligation can be made.",
+      fr: "Des provisions sont comptabilisées lorsque {company} a une obligation actuelle, juridique ou implicite, résultant d'événements passés, qu'il est probable qu'une sortie de ressources représentatives d'avantages économiques sera nécessaire pour l'éteindre, et que son montant peut être estimé de façon fiable.",
+    }),
+  },
+  {
+    key: "p_impairment", kind: "policy", when: (x) => has(x, "ppe", "investment_property", "inventories", "receivables"),
+    title: { en: "Impairment of assets", fr: "Dépréciation des actifs" },
+    body: () => ({
+      en: "At each reporting date, assets are reviewed to determine whether there is any indication that they have suffered an impairment loss. If there is such an indication, the recoverable amount of the asset is estimated and an impairment loss is recognised as an expense, unless the asset is carried at a revalued amount, in which case the impairment loss is treated as a decrease in the revaluation surplus.",
+      fr: "À chaque clôture, les actifs sont examinés afin de déterminer s'il existe un indice de perte de valeur. Le cas échéant, la valeur recouvrable de l'actif est estimée et une perte de valeur est comptabilisée en charges, sauf si l'actif est comptabilisé à sa valeur réévaluée, auquel cas la perte de valeur est imputée sur l'écart de réévaluation.",
+    }),
+  },
+  {
+    key: "p_leases", kind: "policy",
+    title: { en: "Leases", fr: "Contrats de location" },
+    body: (x) => ({
+      en: x.framework === "ifrs"
+        ? "At the commencement of a lease, a right-of-use asset and a lease liability are recognised, except for short-term leases and leases of low-value assets, whose payments are recognised as an expense on a straight-line basis over the lease term. The right-of-use asset is depreciated over the lease term and interest is charged on the lease liability."
+        : "Leases under which a significant portion of the risks and rewards of ownership is retained by the lessor are classified as operating leases. Payments under operating leases are charged to profit or loss on a straight-line basis over the period of the lease.",
+      fr: x.framework === "ifrs"
+        ? "Au début d'un contrat de location, un actif au titre du droit d'utilisation et une dette locative sont comptabilisés, sauf pour les contrats de courte durée et ceux portant sur des actifs de faible valeur, dont les paiements sont comptabilisés en charges de façon linéaire sur la durée du contrat. L'actif est amorti sur la durée du contrat et des intérêts sont comptabilisés sur la dette locative."
+        : "Les contrats de location par lesquels le bailleur conserve une part importante des risques et avantages inhérents à la propriété sont des contrats de location simple. Les paiements y afférents sont comptabilisés en charges de façon linéaire sur la durée du contrat.",
     }),
   },
   {
     key: "p_vat", kind: "policy", when: (x) => x.c.vatRegistered,
     title: { en: "Value added tax", fr: "Taxe sur la valeur ajoutée" },
     body: () => ({
-      en: "Revenue, expenses and assets are recognised net of value added tax. The net amount of VAT recoverable from, or payable to, the tax authority is included in receivables or payables.",
-      fr: "Les produits, charges et actifs sont comptabilisés hors taxe sur la valeur ajoutée. Le montant net de TVA à récupérer auprès de l'administration fiscale, ou à lui payer, figure parmi les créances ou les dettes.",
+      en: "Revenue, expenses and assets are recognised net of value added tax. The net amount of VAT recoverable from, or payable to, the tax authority is included in receivables or payables in the statement of financial position.",
+      fr: "Les produits, charges et actifs sont comptabilisés hors taxe sur la valeur ajoutée. Le montant net de TVA à récupérer auprès de l'administration fiscale, ou à lui payer, figure parmi les créances ou les dettes dans l'état de la situation financière.",
+    }),
+  },
+  {
+    key: "p_fx", kind: "policy", when: (x) => x.f.pl.other_income.accounts.some((a) => a.code === "4850") || x.f.pl.other_expenses.accounts.some((a) => a.code === "6850"),
+    title: { en: "Foreign currency transactions", fr: "Opérations en devises" },
+    body: () => ({
+      en: "Transactions in foreign currencies during the period are converted into {currency} using the rate prevailing at the date of the transaction. Assets and liabilities expressed in foreign currencies are converted into {currency} using the rate ruling at the reporting date. The resulting gains and losses are recognised in profit or loss.",
+      fr: "Les opérations en devises de la période sont converties en {currency} au cours du jour de l'opération. Les actifs et passifs libellés en devises sont convertis en {currency} au cours de clôture. Les gains et pertes qui en résultent sont comptabilisés en résultat.",
     }),
   },
   {
     key: "p_income_tax", kind: "policy", when: (x) => isCompany(x) || has(x, "income_tax", "tax_payable"),
     title: { en: "Income tax", fr: "Impôt sur le résultat" },
     body: () => ({
-      en: "The tax expense for the period is the tax payable on the taxable profit for the period, calculated using the tax rates enacted at the reporting date, adjusted for any changes in tax payable for previous periods.",
-      fr: "La charge d'impôt de la période correspond à l'impôt dû sur le bénéfice imposable de la période, calculé selon les taux en vigueur à la date de clôture, ajusté des variations de l'impôt dû au titre des périodes antérieures.",
+      en: "Tax expense is the aggregate amount included in profit or loss for the period in respect of current tax and deferred tax.\n\nCurrent tax is the amount of income tax payable or refundable in respect of the taxable profit or loss for the current and prior periods, determined in accordance with the tax laws of {country}.\n\nDeferred tax is recognised for tax recoverable or payable in future periods as a result of past transactions or events. It arises from differences (timing differences) between the carrying amounts of assets and liabilities and their corresponding tax bases, and from the carry-forward of unused tax losses. Deferred tax is measured at the tax rates that are expected to apply in the periods in which the asset is realised or the liability settled, on the basis of tax rates that have been enacted or substantively enacted by the end of the reporting period.",
+      fr: "La charge d'impôt correspond au montant total comptabilisé en résultat au titre de l'impôt exigible et de l'impôt différé.\n\nL'impôt exigible est le montant de l'impôt sur le résultat dû ou remboursable au titre du bénéfice ou de la perte fiscale de la période et des périodes antérieures, déterminé selon la législation fiscale du/de {country}.\n\nL'impôt différé est comptabilisé au titre de l'impôt recouvrable ou payable au cours des périodes futures du fait de transactions ou événements passés. Il résulte des différences temporaires entre la valeur comptable des actifs et passifs et leur base fiscale, ainsi que des pertes fiscales reportables. Il est évalué aux taux d'impôt dont l'application est attendue lors de la réalisation de l'actif ou du règlement du passif, sur la base des taux adoptés ou quasi adoptés à la clôture.",
     }),
   },
   {
-    key: "p_fx", kind: "policy", when: (x) => x.f.pl.other_income.accounts.some((a) => a.code === "4850") || x.f.pl.other_expenses.accounts.some((a) => a.code === "6850"),
-    title: { en: "Foreign currencies", fr: "Opérations en devises" },
+    key: "p_share_capital", kind: "policy", when: (x) => isCompany(x),
+    title: { en: "Share capital, share premium and dividends", fr: "Capital social, primes d'émission et dividendes" },
     body: () => ({
-      en: "Transactions in foreign currencies are recorded at the exchange rate on the date of the transaction. Monetary assets and liabilities in foreign currencies are translated at the closing rate at the reporting date. Exchange differences are recognised in profit or loss.",
-      fr: "Les opérations en devises sont enregistrées au cours du jour de l'opération. Les actifs et passifs monétaires en devises sont convertis au cours de clôture. Les écarts de change sont comptabilisés en résultat.",
+      en: "Ordinary shares are recognised at par value and classified as share capital in equity. Any amounts received from the issue of shares in excess of par value are classified as share premium. Dividends are recognised as a liability in the period in which they are declared.",
+      fr: "Les actions ordinaires sont comptabilisées à leur valeur nominale et classées en capital social dans les capitaux propres. Les montants reçus lors de l'émission d'actions au-delà de la valeur nominale sont classés en primes d'émission. Les dividendes sont comptabilisés en dettes dans la période au cours de laquelle ils sont déclarés.",
     }),
   },
   {
     key: "p_employee", kind: "policy", when: (x) => has(x, "employee_costs"),
     title: { en: "Employee benefits", fr: "Avantages du personnel" },
     body: () => ({
-      en: "Salaries, wages, leave pay and other short-term benefits are recognised as an expense in the period in which the employees render the related service. Contributions to the national social security scheme are recognised as an expense when they fall due.",
-      fr: "Les salaires, congés payés et autres avantages à court terme sont comptabilisés en charges de la période au cours de laquelle les services sont rendus. Les cotisations au régime national de sécurité sociale sont comptabilisées en charges à leur échéance.",
+      en: "Salaries, wages, leave pay and other short-term benefits are recognised as an expense in the period in which the employees render the related service. Contributions to the national social security scheme are defined contribution obligations and are recognised as an expense when they fall due.",
+      fr: "Les salaires, congés payés et autres avantages à court terme sont comptabilisés en charges de la période au cours de laquelle les services sont rendus. Les cotisations au régime national de sécurité sociale sont des obligations à cotisations définies, comptabilisées en charges à leur échéance.",
     }),
   },
   {
     key: "p_judgements", kind: "policy",
-    title: { en: "Significant judgements and estimates", fr: "Jugements et estimations significatifs" },
+    title: { en: "Judgements and key sources of estimation uncertainty", fr: "Jugements et principales sources d'incertitude" },
     body: () => ({
-      en: "Preparing financial statements requires estimates and judgements that affect the amounts reported. The main ones relate to the useful lives of property, plant and equipment and the recoverability of receivables. Estimates are reviewed regularly and any revision is recognised in the period in which it is made.",
-      fr: "L'établissement des états financiers requiert des estimations et des jugements qui affectent les montants présentés. Les principaux portent sur la durée d'utilité des immobilisations corporelles et le caractère recouvrable des créances. Les estimations sont revues régulièrement et toute révision est comptabilisée dans la période où elle intervient.",
+      en: "Preparing financial statements requires estimates and judgements that affect the amounts reported. The main ones relate to the useful lives and residual values of property, plant and equipment and to the recoverability of receivables. Estimates are reviewed regularly and any revision is recognised in the period in which it is made. [State here if no significant judgements had to be made.]",
+      fr: "L'établissement des états financiers requiert des estimations et des jugements qui affectent les montants présentés. Les principaux portent sur la durée d'utilité et la valeur résiduelle des immobilisations corporelles et sur le caractère recouvrable des créances. Les estimations sont revues régulièrement et toute révision est comptabilisée dans la période où elle intervient. [Indiquez ici si aucun jugement important n'a été nécessaire.]",
     }),
   },
 
@@ -210,6 +248,32 @@ export const TEMPLATES: Template[] = [
   { key: "n_finance_costs", kind: "note", figures: "finance_costs", when: (x) => has(x, "finance_costs"), title: { en: "Finance costs", fr: "Charges financières" }, body: () => ({ en: "", fr: "" }) },
   { key: "n_income_tax", kind: "note", figures: "income_tax", when: (x) => has(x, "income_tax", "tax_payable"), title: { en: "Income tax", fr: "Impôt sur le résultat" },
     body: () => ({ en: "Income tax is calculated on the taxable profit for the period at the rate enacted in {country}.", fr: "L'impôt est calculé sur le bénéfice imposable de la période au taux en vigueur au/en {country}." }) },
+
+  // ---------------- risk, fair value and capital (as audited statements in Rwanda set them out) ----------------
+  {
+    key: "n_financial_risk", kind: "note", when: (x) => has(x, "receivables", "payables", "loans", "cash"),
+    title: { en: "Financial risk management objectives and policies", fr: "Objectifs et politique de gestion des risques financiers" },
+    body: (x) => ({
+      en: `The activities of {company} expose it to a variety of financial risks, including credit, liquidity and market risks. Risk management is carried out by management under policies approved by the ${governing(x).en}. These policies aim to minimise the potential adverse effects of such risks on performance by setting acceptable levels of risk. {company} has not hedged against any risks in the current period.\n\nMarket risk\nMarket risk is the risk that the fair value or future cash flows of financial instruments will fluctuate because of changes in market variables such as interest rates, foreign exchange rates and prices.\n\n(i) Interest rate risk\nInterest rate risk is the risk that future profitability or cash flows will fluctuate because of changes in market interest rates. ${has(x, "loans") ? "{company} is exposed to interest rate risk on its borrowings. [Describe whether rates are fixed or variable.]" : "{company} did not have any interest-bearing instruments and was not exposed to interest rate risk."}\n\n(ii) Foreign exchange risk\nForeign exchange risk arises from future transactions and from recognised assets and liabilities in foreign currencies. [State whether {company} had transactions in foreign currencies during the period.]\n\n(iii) Price risk\nPrice risk arises from fluctuations in the prices of goods and services purchased, which are set by market forces outside the control of {company}. [Describe the effect of price changes on operations.]\n\n(iv) Credit risk\nCredit risk is the risk of financial loss if a counterparty fails to meet its contractual obligations. The largest concentrations of credit exposure arise from receivables and from cash and bank balances. [State whether management considers the exposure significant.]\n\n(v) Liquidity risk\nLiquidity risk is the risk that {company} will have difficulty meeting the obligations of its financial liabilities. The approach to managing liquidity is to ensure, as far as possible, that there will always be sufficient liquidity to meet liabilities when due, under both normal and stressed conditions, without incurring unacceptable losses or risking damage to its reputation.`,
+      fr: `Les activités de {company} l'exposent à divers risques financiers, notamment les risques de crédit, de liquidité et de marché. La gestion des risques est assurée par la direction selon des politiques approuvées par les ${governing(x).fr}, qui visent à limiter les effets défavorables de ces risques en fixant des niveaux de risque acceptables. {company} n'a pas eu recours à la couverture au cours de la période.\n\nRisque de marché\nLe risque de marché est le risque que la juste valeur ou les flux de trésorerie futurs des instruments financiers varient en raison de l'évolution des taux d'intérêt, des cours de change et des prix.\n\n(i) Risque de taux d'intérêt\nC'est le risque que la rentabilité ou les flux de trésorerie futurs varient avec les taux d'intérêt du marché. ${has(x, "loans") ? "{company} est exposée au risque de taux sur ses emprunts. [Précisez si les taux sont fixes ou variables.]" : "{company} ne détenait aucun instrument portant intérêt et n'était pas exposée au risque de taux."}\n\n(ii) Risque de change\nLe risque de change résulte des transactions futures et des actifs et passifs comptabilisés en devises. [Indiquez si {company} a réalisé des opérations en devises au cours de la période.]\n\n(iii) Risque de prix\nLe risque de prix résulte des variations des prix des biens et services achetés, fixés par le marché hors du contrôle de {company}. [Décrivez l'effet des variations de prix sur l'activité.]\n\n(iv) Risque de crédit\nC'est le risque de perte financière si une contrepartie ne respecte pas ses obligations contractuelles. Les principales concentrations proviennent des créances et des soldes de trésorerie. [Indiquez si la direction juge l'exposition significative.]\n\n(v) Risque de liquidité\nC'est le risque que {company} éprouve des difficultés à honorer ses passifs financiers. Sa gestion vise à disposer en permanence, autant que possible, de liquidités suffisantes pour faire face à ses échéances, en situation normale comme en situation de crise, sans pertes inacceptables ni atteinte à sa réputation.`,
+    }),
+  },
+  {
+    key: "n_fair_value", kind: "note", when: (x) => has(x, "receivables", "payables", "loans"),
+    title: { en: "Fair value", fr: "Juste valeur" },
+    body: (x) => ({
+      en: `In the opinion of the ${governing(x).en}, the carrying amounts of the financial assets and liabilities of {company} in the statement of financial position approximate their fair values.`,
+      fr: `De l'avis des ${governing(x).fr}, la valeur comptable des actifs et passifs financiers de {company} figurant dans l'état de la situation financière avoisine leur juste valeur.`,
+    }),
+  },
+  {
+    key: "n_capital_management", kind: "note", when: (x) => isCompany(x) || x.c.orgType === "cooperative",
+    title: { en: "Capital management", fr: "Gestion du capital" },
+    body: () => ({
+      en: "{company} manages its capital to ensure that it will be able to continue as a going concern while maximising the return to its shareholders through the optimisation of the balance between debt and equity.",
+      fr: "{company} gère son capital de manière à pouvoir poursuivre son exploitation tout en maximisant le rendement pour ses actionnaires par l'optimisation de l'équilibre entre dettes et capitaux propres.",
+    }),
+  },
 
   // ---------------- notes without figures ----------------
   {

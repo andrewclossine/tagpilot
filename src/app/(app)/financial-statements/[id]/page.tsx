@@ -42,7 +42,7 @@ export default async function FsDraftPage({ params, searchParams }: { params: Pr
   const canSettings = ctx.can("journal", "write");
   const { byId, byKey } = numberNotes(notes);
   const ref = (line: FsLine) => { const k = NOTE_FOR_LINE[line]; return k ? byKey.get(k) ?? "" : ""; };
-  const tokens = fsTokens(d, ctx.company);
+  const tokens = fsTokens(d, ctx.company, f);
   const money = (n: number | null) => fmt(n, lang);
   const heads = [d.periodTo.slice(0, 4) === f.pTo.slice(0, 4) ? d.periodTo : d.periodTo.slice(0, 4), f.pTo.slice(0, 4) === d.periodTo.slice(0, 4) ? f.pTo : f.pTo.slice(0, 4)];
   const cols = d.comparative ? 2 : 1;
