@@ -70,11 +70,11 @@ function netOf(lines: Line[]) {
   return m;
 }
 
-const resultOf = (accounts: Account[], m: Balances) =>
+export const resultOf = (accounts: Account[], m: Balances) =>
   round2(accounts.filter((a) => a.type === "income" || a.type === "expense").reduce((s, a) => s - (m.get(a.id)?.net ?? 0), 0));
 
 /** Where an account sits on the balance sheet and in the cash flow. Accounts are placed by their role, then by their code. */
-function placeOf(a: Account, fixedCodes: Set<string>) {
+export function placeOf(a: Account, fixedCodes: Set<string>) {
   if (a.type === "asset") {
     if (a.subtype === "cash" || a.subtype === "bank" || a.subtype === "momo") return "cash";
     if (fixedCodes.has(a.code) || /^1[6-9]/.test(a.code)) return "non_current_asset";
@@ -90,7 +90,7 @@ function placeOf(a: Account, fixedCodes: Set<string>) {
   return a.type;
 }
 
-async function fixedAssetCodes(db: Db, companyId: string) {
+export async function fixedAssetCodes(db: Db, companyId: string) {
   const cats = await db.select({ asset: schema.assetCategories.assetAccount, accum: schema.assetCategories.accumDepAccount, dep: schema.assetCategories.depExpenseAccount })
     .from(schema.assetCategories).where(eq(schema.assetCategories.companyId, companyId));
   return {

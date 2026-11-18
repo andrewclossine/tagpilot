@@ -435,3 +435,20 @@ tr.lf-output td { font-weight: 600; }
 .batch-grid td input:not([type="checkbox"]), .batch-grid td select { padding: 6px 8px; border-radius: 6px; min-width: 0; width: 100%; }
 .batch-grid tr.batch-bad td { background: var(--bad-soft); }
 .batch-grid tr.batch-err td { color: var(--bad); padding-top: 0; padding-bottom: 8px; background: var(--bad-soft); }
+
+/* Financial statements: printed-looking pages with tidy figure columns. */
+.fs-doc .fs-page h2 { margin-top: 0; }
+.fs-cover { text-align: center; padding: 48px 20px; }
+.fs-cover-name { font-size: 28px; font-weight: 700; }
+.fs-cover-title { font-size: 18px; margin: 10px 0 14px; }
+.fs-contents { margin: 0; padding-left: 22px; line-height: 1.9; }
+.fs-table th.num, .fs-table td.num { width: 140px; }
+.fs-table tr.sub td { font-weight: 700; padding-top: 12px; }
+.fs-note { border-top: 1px solid var(--line); padding-top: 12px; }
+.fs-note:first-child { border-top: 0; padding-top: 0; }
+.fs-note h3 { margin: 0 0 6px; font-size: 15px; }
+.fs-body { white-space: pre-line; line-height: 1.55; margin-bottom: 8px; }
+.fs-note-tools { margin-top: 6px; }
+.fs-edit > summary, .fs-add > summary { list-style: none; display: inline-block; cursor: pointer; }
+.fs-edit > summary::-webkit-details-marker, .fs-add > summary::-webkit-details-marker { display: none; }
+.fs-edit[open] { flex-basis: 100%; }

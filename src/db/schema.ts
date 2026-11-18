@@ -1344,3 +1344,41 @@ export const auditLog = pgTable("audit_log", {
   details: jsonb("details").$type<Record<string, unknown>>(),
   at: created(),
 }, (t) => [index("audit_company_at").on(t.companyId, t.at)]);
+
+// ---------- annual financial statements ----------
+export type FsFramework = "ifrs_sme" | "ifrs";
+export type FsNoteKind = "report" | "policy" | "note";
+
+/**
+ * A set of financial statements for one period. The figures always come from the ledger when it is shown, so a late
+ * journal entry is in it at once; what is kept here is the wording: the reports, accounting policies and notes.
+ */
+export const fsDrafts = pgTable("fs_drafts", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  periodFrom: date("period_from", { mode: "string" }).notNull(),
+  periodTo: date("period_to", { mode: "string" }).notNull(),
+  comparative: boolean("comparative").notNull().default(true),
+  framework: text("framework").$type<FsFramework>().notNull().default("ifrs_sme"),
+  lang: text("lang").$type<"en" | "fr">().notNull().default("en"),
+  status: text("status").$type<"draft" | "final">().notNull().default("draft"),
+  approvedBy: text("approved_by").notNull().default(""), // the names that sign the statements, one per line
+  approvedOn: date("approved_on", { mode: "string" }),
+  createdBy: uuid("created_by").references(() => users.id),
+  createdAt: created(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index("fs_drafts_company").on(t.companyId)]);
+
+/** One report, accounting policy or note: its wording, whether it is printed, and the figures it shows (by key). */
+export const fsNotes = pgTable("fs_notes", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  draftId: uuid("draft_id").notNull().references(() => fsDrafts.id, { onDelete: "cascade" }),
+  kind: text("kind").$type<FsNoteKind>().notNull(),
+  key: text("key").notNull(),             // the template it came from, or "custom"
+  title: text("title").notNull(),
+  body: text("body").notNull().default(""),
+  figures: text("figures"),               // which table of figures the note shows under its text, if any
+  included: boolean("included").notNull().default(true),
+  sortOrder: integer("sort_order").notNull().default(0),
+}, (t) => [index("fs_notes_draft").on(t.draftId, t.sortOrder)]);
