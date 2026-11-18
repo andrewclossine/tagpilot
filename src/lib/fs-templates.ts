@@ -64,8 +64,8 @@ export const TEMPLATES: Template[] = [
     key: "r_approval", kind: "report",
     title: { en: "Approval of the financial statements", fr: "Approbation des états financiers" },
     body: (x) => ({
-      en: `The financial statements set out on the following pages were approved by the ${governing(x).en} on {approved_on} and signed on their behalf by:\n\n{approved_by}`,
-      fr: `Les états financiers présentés dans les pages suivantes ont été approuvés par les ${governing(x).fr} le {approved_on} et signés en leur nom par :\n\n{approved_by}`,
+      en: `The financial statements set out on the following pages were approved by the ${governing(x).en} on {approved_on} and signed on their behalf by the signatories below.`,
+      fr: `Les états financiers présentés dans les pages suivantes ont été approuvés par les ${governing(x).fr} le {approved_on} et signés en leur nom par les signataires ci-dessous.`,
     }),
   },
 

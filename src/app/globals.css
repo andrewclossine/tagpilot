@@ -452,3 +452,9 @@ tr.lf-output td { font-weight: 600; }
 .fs-edit > summary, .fs-add > summary { list-style: none; display: inline-block; cursor: pointer; }
 .fs-edit > summary::-webkit-details-marker, .fs-add > summary::-webkit-details-marker { display: none; }
 .fs-edit[open] { flex-basis: 100%; }
+
+/* Where the financial statements are signed. */
+.fs-signatures { margin-top: 18px; display: grid; gap: 10px; }
+.fs-sig-row { display: flex; flex-wrap: wrap; gap: 28px 48px; }
+.fs-sig { min-width: 200px; display: grid; gap: 2px; }
+.fs-sig-line { border-bottom: 1px dotted var(--fg); height: 42px; margin-bottom: 4px; }

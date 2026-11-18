@@ -1520,6 +1520,18 @@ const en = {
   err_bank_lines: "Add at least one line: choose an account and enter its amount.",
   err_bank_line_account: "A line has an amount but no account: choose the account for it.",
   bk_payee_hint: "Or choose a partner",
+  fs_sig_owner: "Owner",
+  fs_sig_chair: "Chairperson",
+  fs_sig_treasurer: "Treasurer",
+  fs_sig_head: "Head of the institution",
+  fs_sig_finance: "Head of finance",
+  fs_sig_director: "Director",
+  fs_sig_on_behalf: "Signed on behalf of the governing body:",
+  fs_sig_by_order: "By order of the board:",
+  fs_sig_signature: "Signature",
+  fs_sig_date: "Date",
+  fs_sig_place: "Place",
+  fs_sofp_approved: "The financial statements were approved on {date} and signed on behalf of the governing body by:",
 } as const;
 
 export type Key = keyof typeof en;
@@ -3046,6 +3058,18 @@ const fr: Record<Key, string> = {
   err_bank_lines: "Ajoutez au moins une ligne : choisissez un compte et saisissez son montant.",
   err_bank_line_account: "Une ligne a un montant mais pas de compte : choisissez son compte.",
   bk_payee_hint: "Ou choisissez un partenaire",
+  fs_sig_owner: "Exploitant",
+  fs_sig_chair: "Président(e)",
+  fs_sig_treasurer: "Trésorier(ière)",
+  fs_sig_head: "Responsable de l'institution",
+  fs_sig_finance: "Responsable financier",
+  fs_sig_director: "Administrateur",
+  fs_sig_on_behalf: "Signé au nom de l'organe de direction :",
+  fs_sig_by_order: "Par ordre du conseil :",
+  fs_sig_signature: "Signature",
+  fs_sig_date: "Date",
+  fs_sig_place: "Lieu",
+  fs_sofp_approved: "Les états financiers ont été approuvés le {date} et signés au nom de l'organe de direction par :",
 };
 
 export const dict = { en, fr } as const;

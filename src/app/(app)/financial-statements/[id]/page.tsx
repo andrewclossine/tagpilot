@@ -5,7 +5,7 @@ import { requireView } from "@/lib/auth";
 import { getI18n } from "@/lib/i18n";
 import { sp, type SearchParams } from "@/lib/actions";
 import { isUuid } from "@/lib/format";
-import { fsFigures, fsTokens, loadDraft, NOTE_FOR_LINE, numberNotes, tOf, type FsLine, type LineFigures, type Pair } from "@/lib/fs";
+import { fsFigures, fsTokens, loadDraft, NOTE_FOR_LINE, numberNotes, SIGNED_REPORTS, signersOf, tOf, type FsLine, type LineFigures, type Pair } from "@/lib/fs";
 import { addableTemplates, fillTokens } from "@/lib/fs-templates";
 import { ConfirmButton } from "@/components/editors";
 import { ErrorNote, PageHead, Pill } from "@/components/ui";
@@ -46,6 +46,24 @@ export default async function FsDraftPage({ params, searchParams }: { params: Pr
   const money = (n: number | null) => fmt(n, lang);
   const heads = [d.periodTo.slice(0, 4) === f.pTo.slice(0, 4) ? d.periodTo : d.periodTo.slice(0, 4), f.pTo.slice(0, 4) === d.periodTo.slice(0, 4) ? f.pTo : f.pTo.slice(0, 4)];
   const cols = d.comparative ? 2 : 1;
+  // Where the statements are signed: a line to sign on, the name and position, the place and the date.
+  const signers = signersOf(d.approvedBy, ctx.company.orgType, lang);
+  const place = ctx.company.city || ctx.company.country || "";
+  const Signatures = ({ intro }: { intro?: string }) => (
+    <div className="fs-signatures">
+      {intro ? <div className="small">{intro}</div> : null}
+      <div className="fs-sig-row">
+        {signers.map((s, i) => (
+          <div key={i} className="fs-sig">
+            <div className="fs-sig-line" aria-label={t("fs_sig_signature")} />
+            <div><b>{s.name || " "}</b></div>
+            <div className="small muted">{s.position}</div>
+            <div className="small muted">{place ? `${place}, ` : ""}{t("fs_sig_date")}: {d.approvedOn ?? "………………"}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 
   // A statement line: label, note number, this period, last period.
   const Line = ({ label, note, v, strong, indent, neg }: { label: ReactNode; note?: string; v: Pair; strong?: boolean; indent?: boolean; neg?: boolean }) => {
@@ -106,6 +124,7 @@ export default async function FsDraftPage({ params, searchParams }: { params: Pr
       <h3>{byId.get(n.id) ? `${byId.get(n.id)} ` : ""}{n.title}{!n.included ? <span className="small muted"> · {tu("fs_not_printed")}</span> : null}</h3>
       {n.body ? <div className="fs-body">{fillTokens(n.body, tokens)}</div> : null}
       <NoteFigures figures={n.figures} />
+      {n.kind === "report" && SIGNED_REPORTS[n.key] ? <Signatures intro={t(SIGNED_REPORTS[n.key])} /> : null}
       {canEdit ? (
         <div className="row fs-note-tools" style={{ gap: 6, flexWrap: "wrap" }}>
           <details className="fs-edit">
@@ -230,6 +249,7 @@ export default async function FsDraftPage({ params, searchParams }: { params: Pr
           <Line label={t("r_total_liabilities")} v={f.totalLiabilities} strong />
           <Line label={t("total_le")} v={f.totalEquityLiabilities} strong />
         </StmtTable>
+        <Signatures intro={t("fs_sofp_approved").replace("{date}", d.approvedOn ?? "………………")} />
       </section>
 
       <section className="panel fs-page" id="pl">

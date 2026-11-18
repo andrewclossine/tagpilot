@@ -227,3 +227,21 @@ export function fsTokens(
     profit_before_tax: amount(f?.beforeTax[0]), profit_after_tax: amount(f?.profit[0]),
   } as Record<string, string>;
 }
+
+/** Who signs the statements: the names given ("Name, Position" per line), or blank lines for the usual signatories. */
+export function signersOf(approvedBy: string, orgType: string, lang: Lang): { name: string; position: string }[] {
+  const given = approvedBy.split(/\r?\n/).map((l) => l.trim()).filter(Boolean).map((l) => {
+    const i = l.indexOf(",");
+    return i < 0 ? { name: l, position: "" } : { name: l.slice(0, i).trim(), position: l.slice(i + 1).trim() };
+  });
+  if (given.length) return given;
+  const t = tOf(lang);
+  const roles: Key[] = orgType === "sole_trader" ? ["fs_sig_owner"]
+    : orgType === "ngo" || orgType === "cooperative" ? ["fs_sig_chair", "fs_sig_treasurer"]
+      : orgType === "government" ? ["fs_sig_head", "fs_sig_finance"]
+        : ["fs_sig_director", "fs_sig_director"];
+  return roles.map((r) => ({ name: "", position: t(r) }));
+}
+
+/** Where each report is signed: these reports carry signature lines under their text. */
+export const SIGNED_REPORTS: Record<string, Key> = { r_responsibility: "fs_sig_on_behalf", r_directors: "fs_sig_by_order", r_approval: "fs_sig_on_behalf" };

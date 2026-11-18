@@ -1,12 +1,12 @@
 import "server-only";
 import PDFDocument from "pdfkit";
-import { NOTE_FOR_LINE, numberNotes, tOf, type FsFigures, type FsLine, type LineFigures, type Pair } from "./fs";
+import { NOTE_FOR_LINE, numberNotes, SIGNED_REPORTS, signersOf, tOf, type FsFigures, type FsLine, type LineFigures, type Pair } from "./fs";
 import { fillTokens } from "./fs-templates";
 import type { schema } from "@/db";
 
 type Draft = typeof schema.fsDrafts.$inferSelect;
 type Note = typeof schema.fsNotes.$inferSelect;
-type Company = { name: string; currency: string; registrationNo: string; tin: string; logo: Buffer | null };
+type Company = { name: string; currency: string; registrationNo: string; tin: string; logo: Buffer | null; orgType: string; place: string };
 
 const INK = "#1b2430", MUTED = "#6b7684", LINE = "#c9d1db";
 const L = 50, R = 545, W = R - L;
@@ -69,6 +69,27 @@ export function fsPdf(d: Draft, notes: Note[], f: FsFigures, c: Company, tokens:
     const lines = (ls: FsLine[], neg = false) => ls.map((l) => f.lineOf(l)).filter((g): g is LineFigures => !!g && (!!g.v[0] || !!g.v[1]))
       .forEach((g) => row(t(`fs_line_${g.line}` as never), g.v, { note: ref(g.line), indent: true, neg }));
     const text = (s: string) => { doc.font("Helvetica").fontSize(9.5).fillColor(INK).text(s, L, doc.y, { width: W, lineGap: 2 }); doc.moveDown(0.6); };
+    // Signature lines: a dotted line to sign on, then the name, position, place and date, side by side.
+    const signers = signersOf(d.approvedBy, c.orgType, d.lang);
+    const signatures = (intro: string) => {
+      const perRow = Math.min(3, signers.length), w = W / perRow;
+      room(30 + Math.ceil(signers.length / perRow) * 85);
+      doc.moveDown(0.6);
+      doc.font("Helvetica").fontSize(9).fillColor(INK).text(intro, L, doc.y, { width: W });
+      doc.moveDown(0.4);
+      for (let i = 0; i < signers.length; i += perRow) {
+        room(85);
+        const y = doc.y + 34;
+        signers.slice(i, i + perRow).forEach((sg, k) => {
+          const x = L + k * w;
+          doc.moveTo(x, y).lineTo(x + w - 30, y).dash(1.5, { space: 2 }).lineWidth(0.7).strokeColor(INK).stroke().undash();
+          doc.font("Helvetica-Bold").fontSize(9).fillColor(INK).text(sg.name || " ", x, y + 5, { width: w - 30 });
+          doc.font("Helvetica").fontSize(8.5).fillColor(MUTED).text(sg.position, x, y + 17, { width: w - 30 });
+          doc.text(`${c.place ? `${c.place}, ` : ""}${t("fs_sig_date")}: ${d.approvedOn ?? "………………"}`, x, y + 28, { width: w - 30 });
+        });
+        doc.x = L; doc.y = y + 48;
+      }
+    };
 
     // ---- cover
     if (c.logo) { try { doc.image(c.logo, L + W / 2 - 75, 150, { fit: [150, 70], align: "center" }); } catch { /* the name stands */ } }
@@ -87,7 +108,11 @@ export function fsPdf(d: Draft, notes: Note[], f: FsFigures, c: Company, tokens:
     // ---- reports
     if (reports.length) {
       doc.addPage();
-      for (const n of reports) { room(60); title(n.title); text(fillTokens(n.body, tokens)); doc.moveDown(0.6); }
+      for (const n of reports) {
+        room(60); title(n.title); text(fillTokens(n.body, tokens));
+        if (SIGNED_REPORTS[n.key]) signatures(t(SIGNED_REPORTS[n.key]));
+        doc.moveDown(0.8);
+      }
     }
 
     // ---- statement of financial position
@@ -114,6 +139,7 @@ export function fsPdf(d: Draft, notes: Note[], f: FsFigures, c: Company, tokens:
     }
     row(t("r_total_liabilities"), f.totalLiabilities, { bold: true });
     row(t("total_le"), f.totalEquityLiabilities, { bold: true });
+    signatures(t("fs_sofp_approved").replace("{date}", d.approvedOn ?? "………………"));
 
     // ---- profit or loss
     doc.addPage(); title(t("fs_pl"), t("fs_for_period").replace("{from}", d.periodFrom).replace("{to}", d.periodTo)); tableHead();
