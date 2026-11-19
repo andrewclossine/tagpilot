@@ -9,7 +9,11 @@ type Note = typeof schema.fsNotes.$inferSelect;
 type Company = { name: string; currency: string; registrationNo: string; tin: string; logo: Buffer | null; orgType: string; place: string };
 
 const INK = "#1b2430", MUTED = "#6b7684", LINE = "#c9d1db";
-const L = 50, R = 545, W = R - L;
+// Normal margins, as in a word processor: one inch (72 points) on every side of an A4 page.
+const MARGIN = 72;
+const L = MARGIN, R = 595.28 - MARGIN, W = R - L;
+// The writing: size 12, justified, with 1.5 line spacing (Helvetica has the same letter widths as Arial).
+const BODY_SIZE = 12, BODY_GAP = BODY_SIZE * 0.6;
 
 /** The whole set of financial statements as one PDF, laid out like printed annual financial statements. */
 export function fsPdf(d: Draft, notes: Note[], f: FsFigures, c: Company, tokens: Record<string, string>): Promise<Buffer> {
@@ -27,7 +31,7 @@ export function fsPdf(d: Draft, notes: Note[], f: FsFigures, c: Company, tokens:
   };
 
   return new Promise((resolve, reject) => {
-    const doc = new PDFDocument({ size: "A4", margin: 50, bufferPages: true, info: { Title: d.title, Producer: "TAGPILOT", Creator: "TAGPILOT" } });
+    const doc = new PDFDocument({ size: "A4", margin: MARGIN, bufferPages: true, info: { Title: d.title, Producer: "TAGPILOT", Creator: "TAGPILOT" } });
     const chunks: Buffer[] = [];
     doc.on("data", (b: Buffer) => chunks.push(b));
     doc.on("end", () => resolve(Buffer.concat(chunks)));
@@ -44,7 +48,7 @@ export function fsPdf(d: Draft, notes: Note[], f: FsFigures, c: Company, tokens:
       doc.moveDown(0.8);
     };
     // Columns: label, note, this year, last year.
-    const xNote = 330, xCur = cols === 2 ? 375 : 455, xPrev = 465, wNum = 80;
+    const wNum = 80, xPrev = R - wNum, xCur = cols === 2 ? xPrev - wNum - 10 : xPrev, xNote = xCur - 45;
     const tableHead = (withNote = true) => {
       room(30);
       const y = doc.y;
@@ -72,7 +76,7 @@ export function fsPdf(d: Draft, notes: Note[], f: FsFigures, c: Company, tokens:
     };
     const lines = (ls: FsLine[], neg = false) => ls.map((l) => f.lineOf(l)).filter((g): g is LineFigures => !!g && (!!g.v[0] || !!g.v[1]))
       .forEach((g) => row(t(`fs_line_${g.line}` as never), g.v, { note: ref(g.line), indent: true, neg }));
-    const text = (s: string) => { doc.font("Helvetica").fontSize(9.5).fillColor(INK).text(s, L, doc.y, { width: W, lineGap: 2 }); doc.moveDown(0.6); };
+    const text = (s: string) => { doc.font("Helvetica").fontSize(BODY_SIZE).fillColor(INK).text(s, L, doc.y, { width: W, align: "justify", lineGap: BODY_GAP, paragraphGap: BODY_GAP }); doc.moveDown(0.4); };
     // Signature lines: a dotted line to sign on, then the name, position, place and date, side by side.
     const signers = signersOf(d.approvedBy, c.orgType, d.lang);
     const signatures = (intro: string) => {
@@ -189,7 +193,7 @@ export function fsPdf(d: Draft, notes: Note[], f: FsFigures, c: Company, tokens:
       if (!figures) return;
       if (figures === "ppe") {
         if (!f.ppe.length) return;
-        const cw = [80, 95, 80, 80], x0 = L + 150;
+        const cw = [72, 86, 76, 76], x0 = L + W - 310;
         room(30);
         { const y = doc.y; doc.font("Helvetica-Bold").fontSize(7.5).fillColor(MUTED);
           [t("fs_cost"), t("fs_accum_dep"), `${t("fs_carrying")} ${heads[0]}`, ...(cols === 2 ? [`${t("fs_carrying")} ${heads[1]}`] : [])]
@@ -197,7 +201,7 @@ export function fsPdf(d: Draft, notes: Note[], f: FsFigures, c: Company, tokens:
           doc.y = y + 22; }
         const pr = (label: string, v: (number | null)[], bold = false) => {
           room(14); const y = doc.y;
-          doc.font(bold ? "Helvetica-Bold" : "Helvetica").fontSize(8.5).fillColor(INK).text(label, L, y, { width: 145 });
+          doc.font(bold ? "Helvetica-Bold" : "Helvetica").fontSize(8.5).fillColor(INK).text(label, L, y, { width: x0 - L - 6 });
           v.forEach((x, i) => doc.text(fmt(x), x0 + cw.slice(0, i).reduce((s, w) => s + w, 0), y, { width: cw[i] - 4, align: "right" }));
           doc.y = Math.max(doc.y, y + 12) + 2;
         };
@@ -216,13 +220,13 @@ export function fsPdf(d: Draft, notes: Note[], f: FsFigures, c: Company, tokens:
     doc.addPage(); mark(t("fs_policies")); title(`1. ${t("fs_policies")}`);
     for (const n of notes.filter((x) => x.kind === "policy" && x.included)) {
       room(50);
-      doc.font("Helvetica-Bold").fontSize(10.5).fillColor(INK).text(`${byId.get(n.id) ?? ""} ${n.title}`, L, doc.y, { width: W }); doc.moveDown(0.3);
+      doc.font("Helvetica-Bold").fontSize(BODY_SIZE).fillColor(INK).text(`${byId.get(n.id) ?? ""} ${n.title}`, L, doc.y, { width: W }); doc.moveDown(0.4);
       if (n.body) text(fillTokens(n.body, tokens));
     }
     doc.addPage(); mark(t("fs_notes")); title(t("fs_notes"));
     for (const n of notes.filter((x) => x.kind === "note" && x.included)) {
       room(70);
-      doc.font("Helvetica-Bold").fontSize(10.5).fillColor(INK).text(`${byId.get(n.id) ?? ""}. ${n.title}`, L, doc.y, { width: W }); doc.moveDown(0.3);
+      doc.font("Helvetica-Bold").fontSize(BODY_SIZE).fillColor(INK).text(`${byId.get(n.id) ?? ""}. ${n.title}`, L, doc.y, { width: W }); doc.moveDown(0.4);
       if (n.body) text(fillTokens(n.body, tokens));
       noteFigures(n.figures);
       doc.moveDown(0.3);
