@@ -8,7 +8,7 @@ import { UserError } from "./ledger";
 import { letterPdf } from "./pdf";
 import { printedCompany } from "./pdf-data";
 
-export type StatementRow = { date: string; type: "invoice" | "receipt" | "payment" | "credit_note"; number: string; details: string; charge: number; credit: number; balance: number; invoiceId: string };
+export type StatementRow = { date: string; type: "invoice" | "receipt" | "payment" | "credit_note"; number: string; details: string; charge: number; credit: number; balance: number; invoiceId: string; /** Where clicking the line leads: the document or the payment's entry. */ href: string };
 
 /**
  * A customer's statement for a period: what they owed at the start, every invoice, payment and credit note in the
@@ -30,9 +30,9 @@ export async function customerStatement(companyId: string, partnerId: string, fr
   const byId = new Map(invoices.map((i) => [i.id, i]));
   type Move = Omit<StatementRow, "balance">;
   const moves: Move[] = [
-    ...invoices.map((i): Move => ({ date: i.date, type: i.docType === "receipt" ? "receipt" : "invoice", number: i.number, details: i.notes, charge: i.total, credit: 0, invoiceId: i.id })),
-    ...pays.map((p): Move => ({ date: p.date, type: "payment", number: byId.get(p.invoiceId!)?.number ?? "", details: p.reference, charge: 0, credit: p.amount, invoiceId: p.invoiceId! })),
-    ...notes.map((n): Move => ({ date: n.date, type: "credit_note", number: n.number, details: `${byId.get(n.invoiceId!)?.number ?? ""} ${n.reason}`.trim(), charge: 0, credit: n.total, invoiceId: n.invoiceId! })),
+    ...invoices.map((i): Move => ({ date: i.date, type: i.docType === "receipt" ? "receipt" : "invoice", number: i.number, details: i.notes, charge: i.total, credit: 0, invoiceId: i.id, href: `${i.docType === "receipt" ? "/sales/receipts" : "/sales/invoices"}/${i.id}` })),
+    ...pays.map((p): Move => ({ date: p.date, type: "payment", number: byId.get(p.invoiceId!)?.number ?? "", details: p.reference, charge: 0, credit: p.amount, invoiceId: p.invoiceId!, href: `/journal/${p.entryId}` })),
+    ...notes.map((n): Move => ({ date: n.date, type: "credit_note", number: n.number, details: `${byId.get(n.invoiceId!)?.number ?? ""} ${n.reason}`.trim(), charge: 0, credit: n.total, invoiceId: n.invoiceId!, href: n.entryId ? `/journal/${n.entryId}` : `/sales/invoices/${n.invoiceId}` })),
   ];
   const order = { invoice: 0, receipt: 0, credit_note: 1, payment: 2 } as const;
   moves.sort((a, b) => a.date.localeCompare(b.date) || order[a.type] - order[b.type] || a.number.localeCompare(b.number));

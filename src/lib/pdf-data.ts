@@ -36,9 +36,10 @@ export async function buildProformaPdf(ctx: Ctx, id: string) {
       qty: t("qty"), price: t("unit_price"), vat: t("vat"), amount: t("amount"), subtotal: t("subtotal"), total: t("total"),
       paid: t("amount_paid"), balance: t("balance_due"), notes: t("notes"), footer: t("pf_pdf_note"), tin: t("tin"),
     },
-    invoice: { number: p.number, date: p.date, dueDate: p.validUntil, subtotal: p.subtotal, vat: p.vat, total: p.total, amountPaid: 0, notes: p.notes }, customer, lines,
+    // A revised proforma says which revision it is, so the customer knows which one is current.
+    invoice: { number: p.revision ? `${p.number} Rev. ${p.revision}` : p.number, date: p.date, dueDate: p.validUntil, subtotal: p.subtotal, vat: p.vat, total: p.total, amountPaid: 0, notes: p.notes }, customer, lines,
   });
-  return { pdf, filename: `${p.number}.pdf` };
+  return { pdf, filename: `${p.revision ? `${p.number}-Rev${p.revision}` : p.number}.pdf` };
 }
 
 /** The invoice as a PDF, with the data needed to email it. */

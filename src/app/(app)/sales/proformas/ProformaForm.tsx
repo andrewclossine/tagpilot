@@ -12,6 +12,8 @@ import { saveProforma } from "./actions";
 type Proforma = typeof schema.proformas.$inferSelect;
 
 export async function ProformaForm({ ctx, proforma, lines }: { ctx: Ctx; proforma?: Proforma; lines?: DLine[] }) {
+  // Changing a proforma the customer already has is a revision: it needs a reason (usually the price agreed).
+  const revising = proforma?.status === "sent";
   const { t, accName } = await getI18n();
   const o = await bookOptions(ctx.company.id, accName);
   const db = await getDb();
@@ -39,6 +41,12 @@ export async function ProformaForm({ ctx, proforma, lines }: { ctx: Ctx; proform
       <DocLinesEditor accounts={o.accountOpts} projects={o.projectOpts} initial={lines ?? []} vatRate={ctx.company.vatRegistered ? ctx.company.vatRate : 0}
         accountTypes={["income", "liability"]} defaultAccountId={accId("4200")} labels={docLabels(t)} items={items} />
       <label className="f">{t("notes")}<textarea id="notes" name="notes" rows={2} defaultValue={proforma?.notes} /></label>
+      {revising ? (
+        <div className="note warn stack" style={{ gap: 6 }}>
+          <div className="small">{t("pf_revise_help").replace("{rev}", String((proforma?.revision ?? 0) + 1))}</div>
+          <label className="f">{t("pf_reason")}<input id="reason" name="reason" required placeholder={t("pf_reason_placeholder")} /></label>
+        </div>
+      ) : null}
       <div className="small muted">{t("pf_help")}</div>
       <div className="row">
         <button type="submit" className="btn primary">{t("save")}</button>

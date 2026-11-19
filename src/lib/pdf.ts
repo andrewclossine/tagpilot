@@ -245,3 +245,96 @@ export function letterPdf(d: LetterPdfData): Promise<Buffer> {
     footer(doc, d.footer);
   });
 }
+
+export type ReportPdfData = {
+  company: string; title: string; period: string; currency: string; lang: Lang; printed: string; pageLabel: string;
+  report: import("./financial-reports").Report;
+};
+
+/**
+ * Any report as a PDF, laid out like a QuickBooks report: the company, title and period centred on top, the column
+ * headings repeated on every page, sections in bold, totals ruled, and the page number below. Wide reports turn
+ * the page to landscape.
+ */
+export function reportPdf(d: ReportPdfData): Promise<Buffer> {
+  const { report } = d;
+  const cols = report.columns;
+  const landscape = cols.length > 5;
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({ size: "A4", layout: landscape ? "landscape" : "portrait", margin: 40, bufferPages: true, info: { Producer: "TAGPILOT", Creator: "TAGPILOT", Title: d.title } });
+    const chunks: Buffer[] = [];
+    doc.on("data", (c: Buffer) => chunks.push(c));
+    doc.on("end", () => resolve(Buffer.concat(chunks)));
+    doc.on("error", reject);
+    const left = 40, W = doc.page.width - 80, bottom = doc.page.height - 60;
+    const weight = (i: number) => (cols[i].type !== "text" ? 1.15 : i === 0 ? (cols.length <= 3 ? 4 : 2.6) : 1.6);
+    const sum = cols.reduce((s, _, i) => s + weight(i), 0);
+    const widths = cols.map((_, i) => (W * weight(i)) / sum);
+    const xs = widths.map((_, i) => left + widths.slice(0, i).reduce((s, w) => s + w, 0));
+    const show = (v: import("./financial-reports").Cell, i: number) => {
+      if (v === null || v === "") return "";
+      if (typeof v === "string") return v;
+      if (cols[i]?.type === "pct") return `${(v * 100).toLocaleString("en-US", { maximumFractionDigits: 1 })}%`;
+      if (cols[i]?.type === "money") return amount(v, d.lang);
+      return String(v);
+    };
+    const fontSize = cols.length > 8 ? 7 : cols.length > 5 ? 8 : 9;
+
+    const top = () => {
+      doc.font("Helvetica-Bold").fontSize(13).fillColor(INK).text(d.company, left, 40, { width: W, align: "center" });
+      doc.font("Helvetica-Bold").fontSize(11).fillColor(BLUE).text(d.title, left, doc.y + 2, { width: W, align: "center" });
+      doc.font("Helvetica").fontSize(8.5).fillColor(MUTED).text(`${d.period} · ${d.currency}`, left, doc.y + 2, { width: W, align: "center" });
+      let y = doc.y + 10;
+      if (cols.length) {
+        doc.font("Helvetica-Bold").fontSize(fontSize - 0.5);
+        const h = Math.max(...cols.map((c, i) => doc.heightOfString(c.label || " ", { width: widths[i] - 8 }))) + 8;
+        doc.rect(left, y, W, h).fill(SOFT);
+        doc.fillColor(MUTED);
+        cols.forEach((c, i) => doc.text(c.label, xs[i] + 4, y + 4, { width: widths[i] - 8, align: c.type === "text" ? "left" : "right" }));
+        y += h;
+        doc.moveTo(left, y).lineTo(left + W, y).lineWidth(0.8).strokeColor(INK).stroke();
+      }
+      return y + 4;
+    };
+
+    let y = top();
+    if (!report.rows.length) doc.font("Helvetica").fontSize(10).fillColor(MUTED).text("—", left, y + 10, { width: W, align: "center" });
+    for (const r of report.rows) {
+      // A row's name runs across the empty text cells after it, as on screen.
+      let span = 1;
+      if (r.cells.length === 1) span = cols.length || 1;
+      else { while (span < r.cells.length && r.cells[span] === null) span++; while (span > 1 && cols[span - 1]?.type !== "text") span--; }
+      const bold = r.style !== "line";
+      doc.font(bold ? "Helvetica-Bold" : "Helvetica").fontSize(r.style === "total" ? fontSize + 0.5 : fontSize);
+      const indent = r.indent ? 10 : 0;
+      const labelW = (span >= cols.length ? W : xs[span] - left) - 8 - indent;
+      const parts = r.cells.slice(span).map((v, k) => ({ i: k + span, text: show(v, k + span) }));
+      const h = Math.max(doc.heightOfString(show(r.cells[0], 0) || " ", { width: Math.max(labelW, 20) }), ...parts.map((p) => doc.heightOfString(p.text || " ", { width: widths[p.i] - 8 }))) + (r.style === "head" ? 9 : 5);
+      if (y + h > bottom) { doc.addPage(); y = top(); }
+      if (r.style === "head" || r.style === "group") y += 3;
+      if (r.style === "sub" || r.style === "total") doc.moveTo(xs[Math.min(span, cols.length - 1)] ?? left, y).lineTo(left + W, y).lineWidth(0.5).strokeColor(INK).stroke();
+      doc.fillColor(r.style === "head" ? BLUE : INK).text(show(r.cells[0], 0), left + 4 + indent, y + 2.5, { width: Math.max(labelW, 20) });
+      for (const p of parts) doc.text(p.text, xs[p.i] + 4, y + 2.5, { width: widths[p.i] - 8, align: cols[p.i]?.type === "text" ? "left" : "right" });
+      y += h;
+      if (r.style === "total") {
+        const x0 = xs[Math.min(span, cols.length - 1)] ?? left;
+        doc.moveTo(x0, y).lineTo(left + W, y).lineWidth(0.5).strokeColor(INK).stroke();
+        doc.moveTo(x0, y + 2).lineTo(left + W, y + 2).stroke();
+        y += 4;
+      }
+    }
+    if (report.note) { doc.font("Helvetica").fontSize(8).fillColor(MUTED); if (y + doc.heightOfString(report.note, { width: W }) + 10 > bottom) { doc.addPage(); y = top(); } doc.text(report.note, left, y + 10, { width: W }); }
+
+    const range = doc.bufferedPageRange();
+    for (let i = 0; i < range.count; i++) {
+      doc.switchToPage(range.start + i);
+      doc.page.margins.bottom = 0;
+      const fy = doc.page.height - 40;
+      doc.moveTo(left, fy - 6).lineTo(left + W, fy - 6).lineWidth(0.5).strokeColor(LINE).stroke();
+      mark(doc, left, fy - 1, 10);
+      doc.font("Helvetica").fontSize(7.5).fillColor(MUTED).text(`${d.printed} · TAGPILOT`, left + 14, fy, { width: W / 2, lineBreak: false });
+      doc.text(d.pageLabel.replace("{n}", String(i + 1)).replace("{total}", String(range.count)), left + W / 2, fy, { width: W / 2, align: "right", lineBreak: false });
+    }
+    doc.end();
+  });
+}

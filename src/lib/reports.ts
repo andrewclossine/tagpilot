@@ -2,7 +2,7 @@ import "server-only";
 import { and, desc, eq, gte, inArray, isNotNull, lte } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { balances, listAccounts } from "./ledger";
-import { addDays, round2 } from "./format";
+import { addDays, daysBetween, round2 } from "./format";
 import type { Key, T } from "./i18n";
 import { buildFinancialReport, FINANCIAL_KINDS, FINANCIAL_TITLES, isFinancialKind, ledgerLines, natural, type Column, type Report, type Row } from "./financial-reports";
 import { buildCustomerReport, buildVendorReport, CUSTOMER_TITLES, isCustomerKind, isVendorKind, VENDOR_TITLES, type CustomerKind, type VendorKind } from "./vendor-reports";
@@ -11,7 +11,7 @@ import { EXPENSE_TAX_LINES, INCOME_TAX_LINES, taxLineKey, taxLineOf, type TaxLin
 const LEDGER_TITLES = {
   "tax-prep": "r_tax_prep", "tax-summary": "r_tax_summary", "tax-detail": "r_tax_detail",
   tb: "r_tb", gl: "r_gl", "txn-account": "r_txn_account", adjusting: "r_adjusting", journal: "r_journal", audit: "r_audit",
-  "ignored-summary": "r_ignored_summary", "ignored-detail": "r_ignored_detail",
+  "ignored-summary": "r_ignored_summary", "ignored-detail": "r_ignored_detail", vat: "r_vat", ar: "r_ar",
 } as const satisfies Record<string, Key>;
 
 export const REPORT_TITLES: Record<string, Key> = { ...FINANCIAL_TITLES, ...LEDGER_TITLES, ...VENDOR_TITLES, ...CUSTOMER_TITLES };
@@ -21,7 +21,7 @@ export const isReportKind = (k: string): k is ReportKind => k in REPORT_TITLES;
 /** The area a person needs to open a report. */
 export const reportArea = (k: ReportKind) => (k === "audit" ? ("audit" as const) : isVendorKind(k) ? ("purchases" as const) : isCustomerKind(k) ? ("sales" as const) : ("reports" as const));
 
-type Options = { companyId: string; apAccount: string; arAccount: string; from: string; to: string; account?: string; t: T; accName: (a: { nameEn: string; nameFr: string }) => string };
+type Options = { companyId: string; apAccount: string; arAccount: string; vatIn?: string; vatOut?: string; from: string; to: string; account?: string; t: T; accName: (a: { nameEn: string; nameFr: string }) => string };
 
 export async function buildReport(kind: ReportKind, o: Options): Promise<Report> {
   if (isFinancialKind(kind)) return buildFinancialReport(kind, o.companyId, o.from, o.to, o.t, o.accName);
@@ -34,7 +34,7 @@ export async function buildReport(kind: ReportKind, o: Options): Promise<Report>
   type Account = (typeof accounts)[number];
   const label = (a: Account) => `${a.code} ${accName(a)}`;
   const gl = (a: Account) => `/reports/gl?from=${from}&to=${to}&account=${a.id}`;
-  const journal = (id: string) => `/journal/${id}`;
+  const journal = (id: string) => `/txn/${id}`; // opens the document behind the entry
   const period = `${from} → ${to}`;
   const money = (l: string): Column => ({ label: l, type: "money" });
   const text = (l: string): Column => ({ label: l, type: "text" });
@@ -260,6 +260,44 @@ export async function buildReport(kind: ReportKind, o: Options): Promise<Report>
           ]),
           { style: "total", cells: [t("total"), null, null, null, totalOf(items)] },
         ] : [],
+      };
+    }
+    case "vat": {
+      const m = await balances(db, companyId, { from, to });
+      const vin = accounts.find((a) => a.code === o.vatIn), vout = accounts.find((a) => a.code === o.vatOut);
+      const inV = vin ? round2(m.get(vin.id)?.net ?? 0) : 0, outV = vout ? round2(-(m.get(vout.id)?.net ?? 0)) : 0, net = round2(outV - inV);
+      if (!inV && !outV) return { period, columns: [], rows: [] };
+      return {
+        period,
+        columns: [text(t("description")), money(t("amount"))],
+        rows: [
+          { style: "line", cells: [`${t("vat_out")} · ${o.vatOut ?? ""}`, outV], links: vout ? { 0: gl(vout) } : undefined },
+          { style: "line", cells: [`${t("vat_in")} · ${o.vatIn ?? ""}`, inV], links: vin ? { 0: gl(vin) } : undefined },
+          { style: "total", cells: [net >= 0 ? t("vat_net") : t("vat_credit"), Math.abs(net)] },
+        ],
+      };
+    }
+
+    case "ar": {
+      // Ageing of unpaid invoices as at the end date.
+      const rows = await db.select({ d: schema.invoices, partner: schema.partners.name }).from(schema.invoices).innerJoin(schema.partners, eq(schema.partners.id, schema.invoices.partnerId))
+        .where(and(eq(schema.invoices.companyId, companyId), inArray(schema.invoices.status, ["open", "partial"]), lte(schema.invoices.date, to)));
+      const bucketOf = (due: string) => { const d = daysBetween(due, to); return d <= 0 ? 0 : d <= 30 ? 1 : d <= 60 ? 2 : d <= 90 ? 3 : 4; };
+      const byPartner = new Map<string, number[]>();
+      for (const { d, partner } of rows) {
+        const arr = byPartner.get(partner) ?? [0, 0, 0, 0, 0];
+        arr[bucketOf(d.dueDate)] = round2(arr[bucketOf(d.dueDate)] + d.total - d.amountPaid);
+        byPartner.set(partner, arr);
+      }
+      const totals = [0, 0, 0, 0, 0];
+      const lines = [...byPartner].sort((a, b) => a[0].localeCompare(b[0])).map(([name, arr]): Row => {
+        arr.forEach((v, i) => { totals[i] = round2(totals[i] + v); });
+        return { style: "line", cells: [name, ...arr.map((v) => v || null), round2(arr.reduce((x, v) => x + v, 0))] };
+      });
+      return {
+        period: `${t("as_at")} ${to}`,
+        columns: [text(t("customer")), ...(["aging_current", "aging_30", "aging_60", "aging_90", "aging_over"] as const).map((b) => money(t(b))), money(t("total"))],
+        rows: lines.length ? [...lines, { style: "total", cells: [t("total"), ...totals, round2(totals.reduce((x, v) => x + v, 0))] }] : [],
       };
     }
   }

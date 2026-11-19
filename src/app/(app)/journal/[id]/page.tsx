@@ -10,7 +10,8 @@ import { isUuid, today } from "@/lib/format";
 import { ConfirmButton } from "@/components/editors";
 import { ErrorNote, PageHead, Pill } from "@/components/ui";
 import { EntryForm } from "../EntryForm";
-import { addPartnerFromAi, reverseJournal, setAdjusting } from "../actions";
+import { addPartnerFromAi, correctJournal, reverseJournal, setAdjusting } from "../actions";
+import { txnHref } from "@/lib/txn-links";
 import { MakeRecurring } from "@/components/MakeRecurring";
 
 export const metadata = { title: "Journal entry" };
@@ -97,6 +98,14 @@ export default async function EntryPage({ params, searchParams }: { params: Prom
       ) : null}
       {e.reversedById ? <div className="small"><Link href={`/journal/${e.reversedById}`}>{t("reversed_by")} →</Link></div> : null}
       {e.reversesId ? <div className="small"><Link href={`/journal/${e.reversesId}`}>{t("reverse_of")} →</Link></div> : null}
+      {txnHref(e) !== `/journal/${e.id}` ? <div><Link className="btn" href={txnHref(e)}>{t("txn_open_document")} →</Link> <span className="small muted">{t("txn_adjust_on_document")}</span></div> : null}
+      {e.status === "posted" && ctx.can("journal", "write") && !e.reversedById && txnHref(e) === `/journal/${e.id}` && e.source !== "reversal" ? (
+        <form action={correctJournal} className="row">
+          <input type="hidden" name="id" value={e.id} />
+          <ConfirmButton className="btn primary" confirmLabel={t("confirm")}>{t("txn_correct")}</ConfirmButton>
+          <span className="small muted">{t("txn_correct_help")}</span>
+        </form>
+      ) : null}
       {e.status === "posted" && ctx.can("journal", "write") && !e.reversedById ? (
         <form action={reverseJournal} className="row">
           <input type="hidden" name="id" value={e.id} />
@@ -116,6 +125,7 @@ export default async function EntryPage({ params, searchParams }: { params: Prom
       </PageHead>
       <ErrorNote message={err(q("error"))} />
       {q("saved") ? <div className="note ok small">{t("saved")}</div> : null}
+      {q("correcting") && editable ? <div className="note info small">{t("txn_correcting")}</div> : null}
       {att || e.ai ? (
         <div className="grid-doc">
           <div className="stack">{preview}{aiBox}</div>

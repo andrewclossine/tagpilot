@@ -57,6 +57,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Sea
               <label className="f">{t("acc_vat_in")}{accSelect("vatIn", s.vatIn)}</label>
               <label className="f">{t("acc_vat_out")}{accSelect("vatOut", s.vatOut)}</label>
               <label className="f">{t("acc_wht")}{accSelect("whtAccount", s.whtAccount)}</label>
+              <label className="f">{t("set_fiscal_start")}<select id="fiscalYearStart" name="fiscalYearStart" defaultValue={String(s.fiscalYearStart ?? 1)}>{Array.from({ length: 12 }, (_, i) => <option key={i} value={i + 1}>{t(`mf_m_${String(i + 1).padStart(2, "0")}` as "mf_m_01")}</option>)}</select><span className="small muted">{t("set_fiscal_help")}</span></label>
             </div>
             <h2>{t("set_policy")}</h2>
             <div className="small muted">{t("pol_help")}</div>

@@ -59,8 +59,10 @@ export default async function StatementsPage({ searchParams }: { searchParams: S
               <tbody>
                 <tr><td colSpan={6}><b>{t("stm_opening")}</b></td><td className="num"><b>{money(s.opening, 2)}</b></td></tr>
                 {s.rows.map((r, i) => (
-                  <tr key={i}><td style={{ whiteSpace: "nowrap" }}>{r.date}</td><td>{typeLabel[r.type]}</td><td><Link href={`/sales/invoices/${r.invoiceId}`}>{r.number}</Link></td><td className="small">{r.details}</td>
-                    <td className="num">{r.charge ? money(r.charge, 2) : ""}</td><td className="num">{r.credit ? money(r.credit, 2) : ""}</td><td className="num">{money(r.balance, 2)}</td></tr>
+                  <tr key={i} className="rowclick">{[
+                    <span key="d" style={{ whiteSpace: "nowrap" }}>{r.date}</span>, typeLabel[r.type], <b key="n">{r.number}</b>, <span key="x" className="small">{r.details}</span>,
+                    r.charge ? money(r.charge, 2) : "", r.credit ? money(r.credit, 2) : "", money(r.balance, 2),
+                  ].map((v, k) => <td key={k} className={k >= 4 ? "num" : undefined}><Link className="rowfill" href={r.href} tabIndex={k === 2 ? 0 : -1}>{v || " "}</Link></td>)}</tr>
                 ))}
                 <tr className="total"><td colSpan={4}>{t("stm_closing")}</td><td className="num">{money(s.charges, 2)}</td><td className="num">{money(s.credits, 2)}</td><td className="num">{money(s.closing, 2)}</td></tr>
               </tbody>

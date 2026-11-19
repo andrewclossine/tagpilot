@@ -116,3 +116,34 @@ export async function deleteJournal(fd: FormData) {
   revalidatePath("/journal");
   redirect("/journal");
 }
+
+/**
+ * Corrects a posted entry the way an auditor accepts: the entry is reversed on its own date and an editable copy is
+ * opened as a draft, to change and post. Documents with stock or a customer behind them (invoices, bills, goods
+ * received) are corrected on the document instead, by a credit note or by voiding it.
+ */
+export async function correctJournal(fd: FormData) {
+  const ctx = await requireWrite("journal");
+  const id = str(fd, "id");
+  const { t } = await getI18n();
+  let copyId = "";
+  try {
+    if (!isUuid(id)) throw new UserError("err_not_found");
+    const db = await getDb();
+    copyId = await db.transaction(async (tx) => {
+      const [e] = await tx.select().from(schema.journalEntries).where(and(eq(schema.journalEntries.id, id), eq(schema.journalEntries.companyId, ctx.company.id)));
+      if (!e || e.status !== "posted") throw new UserError("err_not_found");
+      if (["invoice", "bill", "receipt", "invoice_payment", "bill_payment", "voucher", "production", "payroll", "reversal"].includes(e.source)) throw new UserError("err_use_void");
+      const lines = await tx.select().from(schema.journalLines).where(eq(schema.journalLines.entryId, id)).orderBy(schema.journalLines.lineNo);
+      await reverseEntry(tx, ctx.company.id, ctx.user.id, id, e.date, t("reverse_of"));
+      const copy = await saveEntry(tx, ctx.company.id, ctx.user.id, {
+        date: e.date, reference: e.reference, memo: e.memo, partnerId: e.partnerId, projectId: e.projectId, attachmentId: e.attachmentId, isAdjusting: e.isAdjusting,
+        lines: lines.map((l) => ({ accountId: l.accountId, debit: l.debit, credit: l.credit, description: l.description, projectId: l.projectId, partnerId: l.partnerId })),
+      }, false);
+      await audit(tx, ctx.company.id, ctx.user.id, "correct", "journal", String(e.number ?? e.id), { copy });
+      return copy;
+    });
+  } catch (e) { fail(e, `/journal/${id}`); }
+  revalidatePath("/journal");
+  redirect(`/journal/${copyId}?correcting=1`);
+}

@@ -21,6 +21,8 @@ export type CompanySettings = {
   reminderDays?: number;
   /** The books are closed through this date: nothing dated on or before it can be posted. */
   closedThrough?: string;
+  /** The month the fiscal year starts, 1 (January) to 12; January when missing. Report ranges such as "This fiscal quarter" count from it. */
+  fiscalYearStart?: number;
 };
 
 /** One payroll tax or contribution. The company's list of these is its payroll law. */
@@ -436,15 +438,31 @@ export const proformas = pgTable("proformas", {
   partnerId: uuid("partner_id").notNull().references(() => partners.id),
   date: date("date", { mode: "string" }).notNull(),
   validUntil: date("valid_until", { mode: "string" }).notNull(),
-  status: text("status").$type<"open" | "converted" | "cancelled">().notNull().default("open"),
+  // draft: being prepared; sent: submitted to the customer; converted: invoiced after delivery. "open" is the old draft.
+  status: text("status").$type<ProformaStatus>().notNull().default("draft"),
   notes: text("notes").notNull().default(""),
   projectId: uuid("project_id").references(() => projects.id),
   subtotal: money("subtotal"),
   vat: money("vat"),
   total: money("total"),
   invoiceId: uuid("invoice_id").references(() => invoices.id),
+  revision: integer("revision").notNull().default(0), // 0 as first sent; each change after negotiation adds one
+  sentAt: timestamp("sent_at", { withTimezone: true }),
+  sentTo: text("sent_to").notNull().default(""), // an email address, or how it was handed over
   createdAt: created(),
 }, (t) => [uniqueIndex("proformas_company_number").on(t.companyId, t.number)]);
+export type ProformaStatus = "draft" | "open" | "sent" | "converted" | "cancelled";
+
+/** What a proforma said before each change agreed with the customer, and why it changed. */
+export const proformaRevisions = pgTable("proforma_revisions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  proformaId: uuid("proforma_id").notNull().references(() => proformas.id, { onDelete: "cascade" }),
+  revision: integer("revision").notNull(), // the revision this snapshot was
+  reason: text("reason").notNull().default(""),
+  snapshot: jsonb("snapshot").$type<{ date: string; validUntil: string; subtotal: number; vat: number; total: number; sentAt: string | null; sentTo: string; lines: { description: string; quantity: number; unitPrice: number; vatApplies: boolean; amount: number }[] }>().notNull(),
+  createdBy: uuid("created_by").references(() => users.id),
+  createdAt: created(),
+}, (t) => [index("proforma_revisions_proforma").on(t.proformaId)]);
 export const proformaLines = pgTable("proforma_lines", {
   ...docLineColumns(),
   proformaId: uuid("proforma_id").notNull().references(() => proformas.id, { onDelete: "cascade" }),

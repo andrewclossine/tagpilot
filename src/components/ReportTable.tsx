@@ -3,7 +3,7 @@ import type { Cell, Report, Row } from "@/lib/financial-reports";
 
 const CLASS: Record<Row["style"], string> = { head: "sub", group: "rgroup", line: "", sub: "rsub", total: "total" };
 
-/** One report table. A row's label runs across the empty cells that follow it. */
+/** One report table. A row's label runs across the empty cells that follow it; a line with a link opens wherever it is clicked. */
 export function ReportTable({ report, money }: { report: Report; money: (n: number) => string }) {
   const width = report.columns.length;
   const show = (v: Cell, i: number) => {
@@ -25,9 +25,16 @@ export function ReportTable({ report, money }: { report: Report; money: (n: numb
           // Only text-column blanks merge: an empty amount keeps its own cell.
           while (span > 1 && report.columns[span - 1]?.type !== "text" && r.cells.length > 1) span--;
           const cells = r.cells.slice(span);
-          const content = (v: Cell, i: number) => { const href = r.links?.[i]; return href ? <Link className="rowlink" href={href}>{show(v, i)}</Link> : show(v, i); };
+          // The whole line opens its transaction: a cell without its own link leads where the line's first link does.
+          const rowHref = r.links ? Object.entries(r.links).sort((x, y) => Number(x[0]) - Number(y[0]))[0]?.[1] : undefined;
+          const content = (v: Cell, i: number) => {
+            const own = r.links?.[i];
+            if (own) return <Link className="rowlink" href={own}>{show(v, i)}</Link>;
+            const text = show(v, i);
+            return rowHref ? <Link className="rowfill" href={rowHref} tabIndex={-1}>{text === "" ? " " : text}</Link> : text;
+          };
           return (
-            <tr key={n} className={CLASS[r.style] || undefined}>
+            <tr key={n} className={[CLASS[r.style], rowHref ? "rowclick" : ""].filter(Boolean).join(" ") || undefined}>
               <td colSpan={span} className={r.indent ? "rindent" : undefined}>{content(r.cells[0], 0)}</td>
               {cells.map((v, i) => { const col = i + span; return <td key={col} className={report.columns[col]?.type === "text" ? undefined : "num"}>{content(v, col)}</td>; })}
             </tr>

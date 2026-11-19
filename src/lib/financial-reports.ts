@@ -27,7 +27,7 @@ export type FinancialKind = (typeof FINANCIAL_KINDS)[number];
 export const isFinancialKind = (k: string): k is FinancialKind => (FINANCIAL_KINDS as readonly string[]).includes(k);
 
 /** Reports that show one date rather than a period. */
-export const AS_AT_KINDS: readonly string[] = ["bs", "bs-summary", "bs-compare", "ap", "ap-aging-detail", "ap-balance-summary", "ap-unpaid", "vendors", "po-open"];
+export const AS_AT_KINDS: readonly string[] = ["bs", "ar", "bs-summary", "bs-compare", "ap", "ap-aging-detail", "ap-balance-summary", "ap-unpaid", "vendors", "po-open"];
 
 export const FINANCIAL_TITLES: Record<FinancialKind, Key> = {
   pl: "r_pl", "pl-detail": "r_pl_detail", "pl-compare": "r_pl_compare", proj: "r_proj", "pl-unclassified": "r_pl_unclassified",
@@ -109,7 +109,7 @@ export async function buildFinancialReport(
   const byId = new Map(accounts.map((a) => [a.id, a]));
   const label = (a: Account) => `${a.code} ${accName(a)}`;
   const gl = (a: Account) => `/reports/gl?from=${from}&to=${to}&account=${a.id}`;
-  const journal = (id: string) => `/journal/${id}`;
+  const journal = (id: string) => `/txn/${id}`; // opens the document behind the entry
   const period = `${from} → ${to}`;
   const asAt = `${t("as_at")} ${to}`;
   const money = (l: string): Column => ({ label: l, type: "money" });

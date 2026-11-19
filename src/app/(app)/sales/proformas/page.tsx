@@ -7,6 +7,10 @@ import { Empty, PageHead, Pill } from "@/components/ui";
 
 export const metadata = { title: "Proforma invoices" };
 
+const PF_PILL: Record<string, string> = { draft: "draft", sent: "sent", converted: "paid", cancelled: "void" };
+/** Proformas saved before the steps existed were "open": they are drafts. */
+const st = (s: string) => (s === "open" ? "draft" : s);
+
 export default async function ProformasPage() {
   const ctx = await requireView("sales");
   const { t, money } = await getI18n();
@@ -27,7 +31,7 @@ export default async function ProformasPage() {
               <tr key={p.id}>
                 <td><Link className="rowlink" href={`/sales/proformas/${p.id}`}><code className="k">{p.number}</code></Link></td>
                 <td>{p.date}</td><td>{customer}</td><td>{p.validUntil}</td><td className="num">{money(p.total, 2)}</td>
-                <td><Pill kind={p.status === "open" ? "open" : p.status === "converted" ? "paid" : "void"}>{t(`pf_${p.status}`)}</Pill></td>
+                <td><Pill kind={PF_PILL[st(p.status)] ?? "draft"}>{t(`pf_${st(p.status)}` as never)}</Pill>{p.revision ? <span className="small muted"> Rev. {p.revision}</span> : null}</td>
               </tr>
             ))}</tbody>
           </table></div>

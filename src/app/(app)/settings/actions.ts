@@ -27,7 +27,8 @@ export async function saveCompanySettings(fd: FormData) {
     // The accounts and policy are only on the form with the accounting module.
     ...(ctx.has("accounting") ? {
       policies: String(fd.get("policies") ?? ""),
-      settings: { ...ctx.company.settings, arAccount: str(fd, "arAccount"), apAccount: str(fd, "apAccount"), vatIn: str(fd, "vatIn"), vatOut: str(fd, "vatOut"), whtAccount: str(fd, "whtAccount") },
+      settings: { ...ctx.company.settings, arAccount: str(fd, "arAccount"), apAccount: str(fd, "apAccount"), vatIn: str(fd, "vatIn"), vatOut: str(fd, "vatOut"), whtAccount: str(fd, "whtAccount"),
+        fiscalYearStart: Math.min(12, Math.max(1, Math.trunc(Number(str(fd, "fiscalYearStart")) || 1))) },
     } : {}),
   }).where(eq(schema.companies.id, ctx.company.id));
   // Registering for VAT needs the input and output VAT accounts.

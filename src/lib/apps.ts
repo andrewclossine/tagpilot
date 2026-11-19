@@ -49,7 +49,6 @@ export function appWorkspaces(ctx: Ctx, t: T): (Workspace & { key: AppKey })[] {
         ] : []),
         ...group(t("nav_purchases"), ctx.can("purchases") ? [
           ...(ctx.can("purchases", "write") ? link("purchases", "/purchases/bills/new", t("nav_enter_bill")) : []),
-          ...link("purchases", "/purchases/expenses", t("exp_title")),
           ...link("purchases", "/purchases/pay", t("nav_pay_bill")),
           ...link("purchases", "/purchases/receive-items", t("nav_receive_items")),
           ...link("purchases", "/purchases/bill-received", t("nav_bill_received")),

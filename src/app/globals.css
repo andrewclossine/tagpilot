@@ -116,6 +116,7 @@ code.k { font-family: var(--f-code); font-size: 12.5px; }
 .pill { display: inline-block; font: 600 11px var(--f-body); letter-spacing: .05em; text-transform: uppercase; padding: 2px 8px; border-radius: 10px; white-space: nowrap; background: var(--surface-2); color: var(--muted); }
 .pill.draft, .pill.open, .pill.partial { background: var(--warn-soft); color: var(--warn); }
 .pill.posted, .pill.paid, .pill.matched, .pill.booked { background: var(--ok-soft); color: var(--ok); }
+.pill.sent { background: var(--accent-soft); color: var(--fg); }
 .pill.void, .pill.overdue { background: var(--bad-soft); color: var(--bad); }
 .note { border-radius: var(--r); padding: 10px 12px; font-size: 14px; }
 .note.warn { background: var(--warn-soft); color: var(--warn); }
@@ -470,3 +471,24 @@ tr.lf-output td { font-weight: 600; }
 
 /* The written parts of the financial statements read like the printed report: justified, 1.5 line spacing, size 12. */
 .fs-body { text-align: justify; line-height: 1.5; font-family: Arial, Helvetica, sans-serif; font-size: 12pt; }
+
+/* Proforma steps: prepare, submit, invoice. */
+.pf-steps { display: flex; gap: 8px; list-style: none; margin: 0; padding: 0; flex-wrap: wrap; }
+.pf-steps li { flex: 1; min-width: 150px; padding: 8px 12px; border-radius: var(--r); background: var(--surface-2); color: var(--muted); font-size: 13px; }
+.pf-steps li.done { background: var(--ok-soft); color: var(--ok); }
+.pf-steps li.now { background: var(--accent-soft); color: var(--fg); font-weight: 600; }
+
+/* Reports: the QuickBooks-style bar, the centred heading, and lines that open wherever they are clicked. */
+.report-controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; position: relative; }
+.report-controls .f { flex-direction: column; gap: 4px; }
+.report-controls select, .report-controls input[type=date] { width: auto; }
+.report-customize > summary { list-style: none; cursor: pointer; }
+.report-customize > summary::-webkit-details-marker { display: none; }
+.report-customize-panel { position: absolute; z-index: 20; margin-top: 6px; min-width: 260px; max-height: 420px; overflow: auto; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 14px; box-shadow: 0 8px 24px rgba(0,0,0,.12); }
+.report-customize-panel .check { display: flex; gap: 8px; align-items: center; font-size: 14px; }
+.report-head { text-align: center; }
+.report-head h2 { margin: 2px 0; }
+.report-company { font-weight: 700; }
+tr.rowclick { cursor: pointer; }
+tr.rowclick:hover td { background: var(--accent-soft); }
+a.rowfill { display: block; color: inherit; text-decoration: none; }

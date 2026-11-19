@@ -132,7 +132,7 @@ export default async function BankAccountPage({ params, searchParams }: { params
           <h2>{t("bank_unreconciled_book")}</h2>
           {bookLines.length ? <table><tbody>
             {bookLines.slice(0, 30).map((b) => (
-              <tr key={b.l.id}><td className="num" style={{ textAlign: "left" }}>{b.date}</td><td><Link className="rowlink" href={`/journal/${b.entryId}`}>{b.memo}</Link></td>
+              <tr key={b.l.id}><td className="num" style={{ textAlign: "left" }}>{b.date}</td><td><Link className="rowlink" href={`/txn/${b.entryId}`}>{b.memo}</Link></td>
                 <td className="num">{b.l.debit ? money(b.l.debit) : `-${money(b.l.credit)}`}</td></tr>
             ))}
           </tbody></table> : <Empty>{t("nothing_yet")}</Empty>}
@@ -143,7 +143,7 @@ export default async function BankAccountPage({ params, searchParams }: { params
             {done.map((l) => (
               <tr key={l.id}><td className="num" style={{ textAlign: "left" }}>{l.date}</td><td>{l.description}</td><td className="num">{money(l.amount)}</td>
                 <td><Pill kind={l.status}>{t(l.status === "matched" ? "bank_matched" : l.status === "booked" ? "bank_booked" : "bank_ignored")}</Pill></td>
-                <td>{l.journalLineId && entryOf.get(l.journalLineId) ? <Link className="small" href={`/journal/${entryOf.get(l.journalLineId)}`}>→</Link> : null}</td></tr>
+                <td>{l.journalLineId && entryOf.get(l.journalLineId) ? <Link className="small" href={`/txn/${entryOf.get(l.journalLineId)}`}>→</Link> : null}</td></tr>
             ))}
           </tbody></table> : <Empty>{t("nothing_yet")}</Empty>}
         </div>
