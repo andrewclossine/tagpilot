@@ -14,6 +14,8 @@ import { startingNotes, TEMPLATES } from "@/lib/fs-templates";
 import type { FsFramework } from "@/db/schema";
 
 const BASE = "/financial-statements";
+/** How many sets of financial statements an organisation keeps; generating one more removes the oldest. */
+const MAX_DRAFTS = 10;
 
 /** Only accountants change statements. */
 async function editable(id: string) {
@@ -47,6 +49,18 @@ export async function generateFs(fd: FormData) {
       }).returning({ id: schema.fsDrafts.id });
       if (notes.length) await tx.insert(schema.fsNotes).values(notes.map((n) => ({ ...n, draftId: d.id })));
       await audit(tx, ctx.company.id, ctx.user.id, "generate", "financial_statements", `${from}..${to}`, { notes: notes.length });
+      // Only the most recent sets are kept: beyond the limit the oldest go, drafts before final ones.
+      const all = await tx.select({ id: schema.fsDrafts.id, title: schema.fsDrafts.title, status: schema.fsDrafts.status, createdAt: schema.fsDrafts.createdAt })
+        .from(schema.fsDrafts).where(eq(schema.fsDrafts.companyId, ctx.company.id));
+      const extra = all.length - MAX_DRAFTS;
+      if (extra > 0) {
+        const oldest = all.filter((x) => x.id !== d.id)
+          .sort((a, b) => (a.status === b.status ? a.createdAt.getTime() - b.createdAt.getTime() : a.status === "draft" ? -1 : 1)).slice(0, extra);
+        for (const o of oldest) {
+          await tx.delete(schema.fsDrafts).where(eq(schema.fsDrafts.id, o.id));
+          await audit(tx, ctx.company.id, ctx.user.id, "delete_oldest", "financial_statements", o.title);
+        }
+      }
       return d.id as string;
     });
   } catch (e) { fail(e, BASE); }
@@ -166,8 +180,8 @@ export async function addFsNote(fd: FormData) {
 export async function deleteFsDraft(fd: FormData) {
   const id = str(fd, "id");
   try {
+    // Deleting asks for a second click; a final set can be deleted too, since only ten are kept.
     const { ctx, draft } = await editable(id);
-    ensureOpen(draft.d);
     const db = await getDb();
     await db.delete(schema.fsDrafts).where(eq(schema.fsDrafts.id, id));
     await audit(db, ctx.company.id, ctx.user.id, "delete", "financial_statements", draft.d.title);

@@ -1532,6 +1532,8 @@ const en = {
   fs_sig_date: "Date",
   fs_sig_place: "Place",
   fs_sofp_approved: "The financial statements were approved on {date} and signed on behalf of the governing body by:",
+  fs_page: "Page",
+  fs_keep_ten: "The 10 most recent sets are kept. Generating an eleventh removes the oldest, drafts before final ones.",
 } as const;
 
 export type Key = keyof typeof en;
@@ -3070,6 +3072,8 @@ const fr: Record<Key, string> = {
   fs_sig_date: "Date",
   fs_sig_place: "Lieu",
   fs_sofp_approved: "Les états financiers ont été approuvés le {date} et signés au nom de l'organe de direction par :",
+  fs_page: "Page",
+  fs_keep_ten: "Les 10 jeux les plus récents sont conservés. En générer un onzième supprime le plus ancien, les brouillons avant les définitifs.",
 };
 
 export const dict = { en, fr } as const;

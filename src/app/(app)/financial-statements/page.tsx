@@ -5,7 +5,8 @@ import { requireView } from "@/lib/auth";
 import { getI18n } from "@/lib/i18n";
 import { sp, type SearchParams } from "@/lib/actions";
 import { Empty, ErrorNote, PageHead, Pill } from "@/components/ui";
-import { generateFs } from "./actions";
+import { ConfirmButton } from "@/components/editors";
+import { deleteFsDraft, generateFs } from "./actions";
 
 export const metadata = { title: "Financial statements" };
 
@@ -35,13 +36,14 @@ export default async function FsListPage({ searchParams }: { searchParams: Searc
           </div>
           <label className="row small" style={{ gap: 8 }}><input id="fs-cmp" type="checkbox" name="comparative" value="1" defaultChecked style={{ width: "auto" }} /> {t("fs_comparative")}</label>
           <div className="small muted">{t("fs_generate_help")}</div>
+          <div className="small muted">{t("fs_keep_ten")}</div>
           <div><button type="submit" className="btn primary">{t("fs_generate_btn")}</button></div>
         </form>
       ) : null}
       <div className="panel">
         {drafts.length ? (
           <div className="tbl-wrap"><table>
-            <thead><tr><th>{t("fs_doc_title")}</th><th>{t("from")}</th><th>{t("to")}</th><th>{t("fs_framework")}</th><th>{t("status")}</th><th>{t("fs_updated")}</th></tr></thead>
+            <thead><tr><th>{t("fs_doc_title")}</th><th>{t("from")}</th><th>{t("to")}</th><th>{t("fs_framework")}</th><th>{t("status")}</th><th>{t("fs_updated")}</th><th /></tr></thead>
             <tbody>
               {drafts.map((d) => (
                 <tr key={d.id} className="click">
@@ -50,6 +52,15 @@ export default async function FsListPage({ searchParams }: { searchParams: Searc
                   <td className="small">{t(d.framework === "ifrs" ? "fs_fw_ifrs" : "fs_fw_sme")}</td>
                   <td><Pill kind={d.status === "final" ? "final" : "draft"}>{t(d.status === "final" ? "fs_final" : "fs_draft")}</Pill></td>
                   <td className="small">{d.updatedAt.toISOString().slice(0, 10)}</td>
+                  <td style={{ whiteSpace: "nowrap" }}>
+                    <a className="btn sm" href={`/api/pdf/fs/${d.id}`} download>{t("pdf_download")}</a>
+                    {canEdit ? (
+                      <form action={deleteFsDraft} style={{ display: "inline", marginLeft: 6 }}>
+                        <input type="hidden" name="id" value={d.id} />
+                        <ConfirmButton className="btn sm ghost danger" confirmLabel={t("confirm")}>{t("delete")}</ConfirmButton>
+                      </form>
+                    ) : null}
+                  </td>
                 </tr>
               ))}
             </tbody>

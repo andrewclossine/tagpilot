@@ -34,6 +34,10 @@ export function fsPdf(d: Draft, notes: Note[], f: FsFigures, c: Company, tokens:
     doc.on("error", reject);
 
     const room = (h: number) => { if (doc.y + h > doc.page.height - 70) doc.addPage(); };
+    // The printed page number of where the writing is now (the cover is page 1).
+    const pageNow = () => { const r = doc.bufferedPageRange(); return r.start + r.count; };
+    const contents: { label: string; page: number }[] = [];
+    const mark = (label: string) => contents.push({ label, page: pageNow() });
     const title = (text: string, sub?: string) => {
       doc.font("Helvetica-Bold").fontSize(15).fillColor(INK).text(text, L, doc.y, { width: W });
       if (sub) doc.font("Helvetica").fontSize(9).fillColor(MUTED).text(sub, { width: W });
@@ -100,23 +104,25 @@ export function fsPdf(d: Draft, notes: Note[], f: FsFigures, c: Company, tokens:
     if (c.tin) doc.text(`TIN: ${c.tin}`, { width: W, align: "center" });
 
     // ---- contents
-    doc.addPage(); title(t("fs_contents"));
+    doc.addPage();
+    const contentsPage = pageNow() - 1; // 0-based, for switchToPage
     const reports = notes.filter((n) => n.kind === "report" && n.included);
-    [...reports.map((r) => r.title), t("fs_sofp"), t("fs_pl"), t("fs_soce"), t("fs_cf"), t("fs_policies"), t("fs_notes"), t("fs_detailed")]
-      .forEach((s, i) => { doc.font("Helvetica").fontSize(10).fillColor(INK).text(`${i + 1}.  ${s}`, L, doc.y, { width: W }); doc.moveDown(0.4); });
 
     // ---- reports
     if (reports.length) {
       doc.addPage();
-      for (const n of reports) {
-        room(60); title(n.title); text(fillTokens(n.body, tokens));
-        if (SIGNED_REPORTS[n.key]) signatures(t(SIGNED_REPORTS[n.key]));
-        doc.moveDown(0.8);
-      }
+      reports.forEach((n, i) => {
+        room(60); mark(n.title); title(n.title); text(fillTokens(n.body, tokens));
+        if (SIGNED_REPORTS[n.key]) {
+          signatures(t(SIGNED_REPORTS[n.key]));
+          // The signatures are the last thing on their page.
+          if (i < reports.length - 1) doc.addPage();
+        } else doc.moveDown(0.8);
+      });
     }
 
     // ---- statement of financial position
-    doc.addPage(); title(t("fs_sofp"), t("fs_as_at").replace("{date}", d.periodTo)); tableHead();
+    doc.addPage(); mark(t("fs_sofp")); title(t("fs_sofp"), t("fs_as_at").replace("{date}", d.periodTo)); tableHead();
     row(t("assets"), null, { head: true });
     row(t("r_non_current_assets"), null, { head: true }); lines(["ppe", "investment_property", "biological", "other_non_current_assets"]);
     row(t("r_total_non_current_assets"), f.nonCurrentAssets, { bold: true });
@@ -142,7 +148,7 @@ export function fsPdf(d: Draft, notes: Note[], f: FsFigures, c: Company, tokens:
     signatures(t("fs_sofp_approved").replace("{date}", d.approvedOn ?? "………………"));
 
     // ---- profit or loss
-    doc.addPage(); title(t("fs_pl"), t("fs_for_period").replace("{from}", d.periodFrom).replace("{to}", d.periodTo)); tableHead();
+    doc.addPage(); mark(t("fs_pl")); title(t("fs_pl"), t("fs_for_period").replace("{from}", d.periodFrom).replace("{to}", d.periodTo)); tableHead();
     lines(["revenue", "grants"]); lines(["cost_of_sales"], true);
     if (f.pl.cost_of_sales.v[0] || f.pl.cost_of_sales.v[1]) row(t("r_gross_profit"), f.gross, { bold: true });
     lines(["other_income"]); lines(["employee_costs", "depreciation", "other_expenses"], true);
@@ -153,7 +159,7 @@ export function fsPdf(d: Draft, notes: Note[], f: FsFigures, c: Company, tokens:
     row(t("fs_profit"), f.profit, { bold: true });
 
     // ---- changes in equity: as many columns as there are capital accounts, plus the total
-    doc.addPage(); title(t("fs_soce"));
+    doc.addPage(); mark(t("fs_soce")); title(t("fs_soce"));
     const names = [...f.soce.columns, t("total")];
     const labelW = 150, colW = Math.min(90, (W - labelW) / names.length);
     const soceRow = (label: string, v: number[] | null, bold = false) => {
@@ -172,7 +178,7 @@ export function fsPdf(d: Draft, notes: Note[], f: FsFigures, c: Company, tokens:
     }
 
     // ---- cash flows
-    doc.addPage(); title(t("fs_cf"), t("fs_for_period").replace("{from}", d.periodFrom).replace("{to}", d.periodTo)); tableHead(false);
+    doc.addPage(); mark(t("fs_cf")); title(t("fs_cf"), t("fs_for_period").replace("{from}", d.periodFrom).replace("{to}", d.periodTo)); tableHead(false);
     for (const r of f.cf) {
       if (r.style === "head") row(r.label, null, { head: true });
       else row(r.label, r.v, { bold: r.style === "sub" || r.style === "total", indent: r.style === "line" });
@@ -207,13 +213,13 @@ export function fsPdf(d: Draft, notes: Note[], f: FsFigures, c: Company, tokens:
       row(t("total"), figures === "equity" ? f.equityTotal : f.lineOf(figures as FsLine)!.v, { bold: true });
       doc.moveDown(0.6);
     };
-    doc.addPage(); title(`1. ${t("fs_policies")}`);
+    doc.addPage(); mark(t("fs_policies")); title(`1. ${t("fs_policies")}`);
     for (const n of notes.filter((x) => x.kind === "policy" && x.included)) {
       room(50);
       doc.font("Helvetica-Bold").fontSize(10.5).fillColor(INK).text(`${byId.get(n.id) ?? ""} ${n.title}`, L, doc.y, { width: W }); doc.moveDown(0.3);
       if (n.body) text(fillTokens(n.body, tokens));
     }
-    doc.addPage(); title(t("fs_notes"));
+    doc.addPage(); mark(t("fs_notes")); title(t("fs_notes"));
     for (const n of notes.filter((x) => x.kind === "note" && x.included)) {
       room(70);
       doc.font("Helvetica-Bold").fontSize(10.5).fillColor(INK).text(`${byId.get(n.id) ?? ""}. ${n.title}`, L, doc.y, { width: W }); doc.moveDown(0.3);
@@ -223,13 +229,27 @@ export function fsPdf(d: Draft, notes: Note[], f: FsFigures, c: Company, tokens:
     }
 
     // ---- detailed income statement
-    doc.addPage(); title(t("fs_detailed"), t("fs_detailed_help")); tableHead(false);
+    doc.addPage(); mark(t("fs_detailed")); title(t("fs_detailed"), t("fs_detailed_help")); tableHead(false);
     for (const g of f.detailed) {
       row(t(`fs_line_${g.line}` as never), null, { head: true });
       g.accounts.forEach((a) => row(`${a.code} ${a.name}`, a.v, { indent: true }));
       row(t("total"), g.v, { bold: true });
     }
     row(t("fs_profit"), f.profit, { bold: true });
+
+    // ---- contents, now that every section's page is known: title, dotted leader, page number
+    doc.switchToPage(contentsPage);
+    doc.x = L; doc.y = doc.page.margins.top;
+    title(t("fs_contents"));
+    { const y0 = doc.y; doc.font("Helvetica-Bold").fontSize(8).fillColor(MUTED).text(t("fs_page"), L, y0, { width: W, align: "right" }); doc.y = y0 + 16; }
+    contents.forEach((e, i) => {
+      const y = doc.y, label = `${i + 1}.  ${e.label}`;
+      doc.font("Helvetica").fontSize(10.5).fillColor(INK).text(label, L, y, { width: W - 40, lineBreak: false });
+      const used = doc.widthOfString(label) + 6, dots = ".".repeat(Math.max(3, Math.floor((W - 40 - used) / doc.widthOfString("."))));
+      doc.fillColor(LINE).text(dots, L + used, y, { width: W - 40 - used, lineBreak: false });
+      doc.fillColor(INK).text(String(e.page), L + W - 36, y, { width: 36, align: "right", lineBreak: false });
+      doc.y = y + 20;
+    });
 
     // ---- running footer: the organisation and the page number, on every page but the cover
     const range = doc.bufferedPageRange();
