@@ -1382,3 +1382,17 @@ export const fsNotes = pgTable("fs_notes", {
   included: boolean("included").notNull().default(true),
   sortOrder: integer("sort_order").notNull().default(0),
 }, (t) => [index("fs_notes_draft").on(t.draftId, t.sortOrder)]);
+
+// ---------- my files ----------
+export type FileFolder = "purchases" | "sales" | "banking" | "inventory" | "assets" | "employees" | "reports";
+
+/** A file someone put into a My Files folder by hand. The documents the system makes or holds are listed beside them. */
+export const fileUploads = pgTable("file_uploads", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  folder: text("folder").$type<FileFolder>().notNull(),
+  month: text("month").notNull(), // YYYY-MM
+  attachmentId: uuid("attachment_id").notNull().references(() => attachments.id, { onDelete: "cascade" }),
+  uploadedBy: uuid("uploaded_by").references(() => users.id),
+  createdAt: created(),
+}, (t) => [index("file_uploads_folder").on(t.companyId, t.folder, t.month)]);

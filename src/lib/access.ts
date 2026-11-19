@@ -1,4 +1,5 @@
 import "server-only";
+import { folderArea } from "./myfiles";
 import { and, eq, or } from "drizzle-orm";
 import type { Db } from "@/db";
 import { schema } from "@/db";
@@ -12,6 +13,9 @@ import { isSealed, supplierCanSee, supplierSeesStage } from "./procurement";
  */
 export async function canReadAttachment(db: Db, ctx: Ctx, attachmentId: string): Promise<boolean> {
   if (ctx.company.logoAttachmentId === attachmentId) return true;
+  // A file put into My Files by hand: whoever may see that folder's part of the books.
+  const [upload] = await db.select({ folder: schema.fileUploads.folder, companyId: schema.fileUploads.companyId }).from(schema.fileUploads).where(eq(schema.fileUploads.attachmentId, attachmentId));
+  if (upload) return upload.companyId === ctx.company.id && ctx.role !== "supplier" && ctx.can(folderArea(upload.folder));
   const supplier = ctx.role === "supplier" ? ctx.partnerId : null;
   if (ctx.role === "supplier" && !supplier) return false;
 

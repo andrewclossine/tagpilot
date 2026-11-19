@@ -23,7 +23,7 @@
   --f-num: "Plus Jakarta Sans", "Segoe UI", system-ui, sans-serif; /* numbers line up through tabular-nums */
   --f-code: "JetBrains Mono", ui-monospace, Consolas, monospace;
   --r: 6px;
-  --app-accounting: #1d4ed8; --app-projects: #0f766e; --app-procurement: #534ab7;
+  --app-accounting: #1d4ed8; --app-projects: #0f766e; --app-procurement: #534ab7; --app-files: #c2410c;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
@@ -259,6 +259,7 @@ table.compare th, table.compare td { white-space: nowrap; }
 .app-icon.accounting > rect:not(.shine) { fill: var(--app-accounting); }
 .app-icon.projects > rect:not(.shine) { fill: var(--app-projects); }
 .app-icon.procurement > rect:not(.shine) { fill: var(--app-procurement); }
+.app-icon.files > rect:not(.shine) { fill: var(--app-files); }
 .app-icon { flex: none; }
 .launcher { min-height: 100vh; display: flex; flex-direction: column; background: var(--bg); }
 .launcher-top { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding: 14px max(16px, 3vw); background: var(--surface); border-bottom: 1px solid var(--line); }
@@ -458,3 +459,14 @@ tr.lf-output td { font-weight: 600; }
 .fs-sig-row { display: flex; flex-wrap: wrap; gap: 28px 48px; }
 .fs-sig { min-width: 200px; display: grid; gap: 2px; }
 .fs-sig-line { border-bottom: 1px dotted var(--fg); height: 42px; margin-bottom: 4px; }
+
+/* My Files: folders in a grid. */
+.mf-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+.mf-folder { display: grid; justify-items: center; gap: 6px; padding: 16px 10px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--fg); text-decoration: none; text-align: center; }
+.mf-folder:hover { border-color: var(--app-files); box-shadow: 0 4px 14px rgba(0, 0, 0, .06); }
+.mf-folder.empty { opacity: .65; }
+.mf-icon .mf-tab { fill: #f59e0b; }
+.mf-icon .mf-body { fill: #fbbf24; }
+
+/* The written parts of the financial statements read like the printed report: justified, 1.5 line spacing, size 12. */
+.fs-body { text-align: justify; line-height: 1.5; font-family: Arial, Helvetica, sans-serif; font-size: 12pt; }

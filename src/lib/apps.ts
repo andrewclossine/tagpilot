@@ -4,8 +4,11 @@ import type { Ctx } from "./auth";
 import type { T } from "./i18n";
 import type { Area } from "./roles";
 
-/** There are three apps. A supplier's adverts and bids live inside Procurement. */
-export const APPS: AppKey[] = ["accounting", "projects", "procurement"];
+/** The apps. A supplier's adverts and bids live inside Procurement; My Files gathers the documents of the other three. */
+export const APPS: AppKey[] = ["accounting", "projects", "procurement", "files"];
+
+/** My Files' folders and the part of the books each belongs to (the same list as lib/myfiles, without its server code). */
+const FILE_FOLDERS: [string, Area][] = [["purchases", "purchases"], ["sales", "sales"], ["banking", "banking"], ["inventory", "inventory"], ["assets", "assets"], ["employees", "payroll"], ["reports", "reports"]];
 
 /** The apps with the links this person may open in each. An app with no links is not theirs. */
 export function appWorkspaces(ctx: Ctx, t: T): (Workspace & { key: AppKey })[] {
@@ -104,6 +107,13 @@ export function appWorkspaces(ctx: Ctx, t: T): (Workspace & { key: AppKey })[] {
     {
       key: "procurement", label: t("module_procurement"),
       items: [...buying, ...(buying.length ? group(t("nav_as_supplier"), bidding) : bidding)],
+    },
+    {
+      key: "files", label: t("mf_title"),
+      items: FILE_FOLDERS.some(([, a]) => ctx.can(a)) ? [
+        { href: "/files", label: t("mf_all_folders"), top: true },
+        ...FILE_FOLDERS.flatMap(([k, a]) => link(a, `/files/${k}`, t(`mf_f_${k}` as Parameters<T>[0]))),
+      ] : [],
     },
   ];
   return all.filter((w) => w.items.length);

@@ -1,4 +1,4 @@
-export type AppKey = "accounting" | "projects" | "procurement";
+export type AppKey = "accounting" | "projects" | "procurement" | "files";
 
 const LINE = { fill: "none", stroke: "#fff", strokeWidth: 3, strokeLinecap: "round", strokeLinejoin: "round" } as const;
 
@@ -33,6 +33,13 @@ export function AppIcon({ app, size = 64 }: { app: AppKey; size?: number }) {
           <circle cx="30" cy="34" r="8.5" />
           <circle cx="30" cy="34" r="1.6" fill="#fff" stroke="none" />
           <path d="M31 33l14-14M40 15v5h5" />
+        </g>
+      ) : app === "files" ? (
+        // A folder holding papers: the organisation's documents, filed.
+        <g {...LINE}>
+          <path d="M13 22v-5a3 3 0 0 1 3-3h10l4 4h18a3 3 0 0 1 3 3v3" />
+          <path d="M11 25h42l-3 21a3 3 0 0 1-3 2.5H17a3 3 0 0 1-3-2.5z" />
+          <path d="M24 34h16M24 40h10" />
         </g>
       ) : (
         // A tender document with a seal: a purchase done by the rules.

@@ -41,7 +41,8 @@ export default async function AppsPage() {
               );
             }
             // Not subscribed: the admin can add it. Anyone else only sees what they may use.
-            if (!ctx.isAdmin) return null;
+            // My Files comes with the other apps: it has nothing to subscribe to.
+            if (!ctx.isAdmin || key === "files") return null;
             return (
               <Link key={key} href="/billing" className="app-tile off">
                 <AppIcon app={key} size={72} />
