@@ -225,6 +225,13 @@
       "when": 1795095702704,
       "tag": "0031_proforma_steps",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1795510763717,
+      "tag": "0032_asset_from_purchase",
+      "breakpoints": true
     }
   ]
 }

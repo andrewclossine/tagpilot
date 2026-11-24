@@ -1,0 +1,3 @@
+ALTER TABLE "asset_movements" ADD COLUMN "source_line_id" uuid;--> statement-breakpoint
+ALTER TABLE "asset_movements" ADD CONSTRAINT "asset_movements_source_line_id_journal_lines_id_fk" FOREIGN KEY ("source_line_id") REFERENCES "public"."journal_lines"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+CREATE INDEX "asset_movements_source" ON "asset_movements" USING btree ("source_line_id");

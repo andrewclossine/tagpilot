@@ -152,3 +152,48 @@ export async function recordMovement(tx: Tx, companyId: string, userId: string, 
   await audit(tx, companyId, userId, kind, "fixed_asset", a.code, { amount });
 }
 
+
+/** A purchase booked to an asset class's cost account and not yet fully in the register. */
+export type AssetPurchase = {
+  lineId: string; entryId: string; date: string; source: string; reference: string; href: string;
+  supplier: string; description: string; amount: number; registered: number; left: number;
+};
+
+/**
+ * What was bought for an asset class and is already in the books: every posted debit to the class's cost account
+ * (a bill line, a bill from a purchase order or tender, a cheque, a voucher), without its VAT, which sits in input
+ * VAT. Purchases made by registering an asset by hand are left out, and so is what has already been registered.
+ */
+export async function assetPurchases(db: Db | Tx, companyId: string, cat: Category): Promise<AssetPurchase[]> {
+  const [acc] = await db.select({ id: schema.accounts.id }).from(schema.accounts).where(and(eq(schema.accounts.companyId, companyId), eq(schema.accounts.code, cat.assetAccount)));
+  if (!acc) return [];
+  const jl = schema.journalLines, je = schema.journalEntries;
+  const lines = await db.select({
+    lineId: jl.id, entryId: je.id, date: je.date, source: je.source, sourceId: je.sourceId, number: je.number, reference: je.reference, memo: je.memo,
+    description: jl.description, debit: jl.debit, partner: schema.partners.name,
+  }).from(jl).innerJoin(je, eq(je.id, jl.entryId))
+    .leftJoin(schema.partners, sql`${schema.partners.id} = coalesce(${jl.partnerId}, ${je.partnerId})`)
+    .where(and(eq(jl.companyId, companyId), eq(jl.accountId, acc.id), eq(je.status, "posted"), sql`${jl.debit} > 0`, sql`${je.reversedById} is null`, sql`${je.source} <> 'reversal'`))
+    .orderBy(je.date, je.number);
+  if (!lines.length) return [];
+  // Entries the register made itself (an asset registered by hand books its own cost), and what is already registered.
+  const moves = await db.select({ entryId: schema.assetMovements.entryId, sourceLineId: schema.assetMovements.sourceLineId, cost: schema.assetMovements.cost })
+    .from(schema.assetMovements).where(eq(schema.assetMovements.companyId, companyId));
+  const own = new Set(moves.filter((m) => !m.sourceLineId && m.entryId).map((m) => m.entryId));
+  const used = new Map<string, number>();
+  for (const m of moves) if (m.sourceLineId) used.set(m.sourceLineId, round2((used.get(m.sourceLineId) ?? 0) + Number(m.cost)));
+  // The bill and its purchase order, to name the document.
+  const billIds = lines.filter((l) => (l.source === "bill" || l.source === "bill_payment") && l.sourceId).map((l) => l.sourceId!);
+  const bills = billIds.length ? await db.select({ id: schema.bills.id, number: schema.bills.number, supplierRef: schema.bills.supplierRef, po: schema.purchaseOrders.number })
+    .from(schema.bills).leftJoin(schema.purchaseOrders, eq(schema.purchaseOrders.id, schema.bills.purchaseOrderId)).where(inArray(schema.bills.id, billIds)) : [];
+  const billOf = new Map(bills.map((b) => [b.id, b]));
+  return lines.filter((l) => !own.has(l.entryId)).map((l) => {
+    const b = l.sourceId ? billOf.get(l.sourceId) : undefined;
+    const reference = b ? [b.number, b.supplierRef, b.po].filter(Boolean).join(" · ") : l.reference || (l.number ? `#${l.number}` : "");
+    const registered = used.get(l.lineId) ?? 0;
+    return {
+      lineId: l.lineId, entryId: l.entryId, date: l.date, source: l.source, reference, href: b ? `/purchases/bills/${b.id}` : `/txn/${l.entryId}`,
+      supplier: l.partner ?? "", description: l.description || l.memo, amount: Number(l.debit), registered, left: round2(Number(l.debit) - registered),
+    };
+  }).filter((p) => p.left > 0.004);
+}

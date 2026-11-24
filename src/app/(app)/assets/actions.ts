@@ -7,26 +7,33 @@ import { requireWrite } from "@/lib/auth";
 import { fail, withParam } from "@/lib/actions";
 import { isIsoDate, parseAmount, round2, str } from "@/lib/format";
 import { accountIdByCode, saveEntry, UserError } from "@/lib/ledger";
-import { recordMovement, runDepreciation } from "@/lib/assets";
+import { assetPurchases, recordMovement, runDepreciation } from "@/lib/assets";
 import { getI18n } from "@/lib/i18n";
 import { audit } from "@/lib/audit";
 import type { DepMethod } from "@/db/schema";
 
 const methodOf = (fd: FormData): DepMethod => (str(fd, "method") === "reducing_balance" ? "reducing_balance" : "straight_line");
 
-/** Registers an asset and books its cost against the account it was paid or owed from. */
+/**
+ * Registers an asset. Bought through a bill, a tender order or a cheque, it comes from that purchase: its date and its
+ * cost without VAT, and nothing new is booked, since the cost is already in the books. Otherwise its cost is booked
+ * against the account it was paid or owed from.
+ */
 export async function createAsset(fd: FormData) {
   const ctx = await requireWrite("assets");
   let id: string;
   try {
     const name = str(fd, "name"), categoryId = str(fd, "categoryId"), acquisitionDate = str(fd, "acquisitionDate");
-    const cost = parseAmount(fd.get("cost")), creditAccountId = str(fd, "creditAccountId");
-    if (!name || !categoryId || !isIsoDate(acquisitionDate) || !creditAccountId) throw new UserError("err_required");
+    const cost = parseAmount(fd.get("cost")), creditAccountId = str(fd, "creditAccountId"), sourceLineId = str(fd, "sourceLineId");
+    if (!name || !categoryId || !isIsoDate(acquisitionDate) || (!creditAccountId && !sourceLineId)) throw new UserError("err_required");
     if (cost <= 0) throw new UserError("err_amount");
     const db = await getDb();
     id = await db.transaction(async (tx) => {
       const [cat] = await tx.select().from(schema.assetCategories).where(and(eq(schema.assetCategories.id, categoryId), eq(schema.assetCategories.companyId, ctx.company.id)));
       if (!cat) throw new UserError("err_required");
+      const bought = sourceLineId ? (await assetPurchases(tx, ctx.company.id, cat)).find((p) => p.lineId === sourceLineId) : undefined;
+      if (sourceLineId && !bought) throw new UserError("err_asset_purchase");
+      if (bought && cost > bought.left + 0.004) throw new UserError("err_asset_purchase_left");
       const [{ n }] = await tx.select({ n: count() }).from(schema.fixedAssets).where(eq(schema.fixedAssets.companyId, ctx.company.id));
       const method = methodOf(fd);
       const [a] = await tx.insert(schema.fixedAssets).values({
@@ -36,6 +43,11 @@ export async function createAsset(fd: FormData) {
         residualValue: parseAmount(fd.get("residualValue")), usefulLifeMonths: Math.max(1, Math.round(parseAmount(fd.get("usefulLifeMonths")) || cat.usefulLifeMonths)),
         method, rate: method === "reducing_balance" ? parseAmount(fd.get("rate")) || Number(cat.rate) : 0,
       }).returning();
+      if (bought) {
+        await tx.insert(schema.assetMovements).values({ companyId: ctx.company.id, assetId: a.id, date: acquisitionDate, type: "acquisition", cost, entryId: bought.entryId, sourceLineId, notes: bought.reference });
+        await audit(tx, ctx.company.id, ctx.user.id, "create", "fixed_asset", a.code, { cost, from: bought.reference });
+        return a.id;
+      }
       const entryId = await saveEntry(tx, ctx.company.id, ctx.user.id, {
         date: acquisitionDate, reference: a.code, memo: `Acquisition - ${a.code} ${a.name}`, projectId: a.projectId,
         lines: [
@@ -47,7 +59,7 @@ export async function createAsset(fd: FormData) {
       await audit(tx, ctx.company.id, ctx.user.id, "create", "fixed_asset", a.code, { cost });
       return a.id;
     });
-  } catch (e) { fail(e, "/assets/new"); }
+  } catch (e) { fail(e, `/assets/new${str(fd, "categoryId") ? `?class=${str(fd, "categoryId")}` : ""}`); }
   revalidatePath("/assets");
   redirect(`/assets/${id}`);
 }

@@ -848,9 +848,11 @@ export const assetMovements = pgTable("asset_movements", {
   proceeds: money("proceeds"),         // disposals
   gainLoss: money("gain_loss"),        // disposals and revaluations: positive is a gain or surplus
   entryId: uuid("entry_id").references(() => journalEntries.id),
+  /** An asset registered from a purchase already in the books (a bill, a tender order, a cheque): the line that bought it. */
+  sourceLineId: uuid("source_line_id").references(() => journalLines.id, { onDelete: "set null" }),
   notes: text("notes").notNull().default(""),
   createdAt: created(),
-}, (t) => [index("asset_movements_asset").on(t.assetId, t.date)]);
+}, (t) => [index("asset_movements_asset").on(t.assetId, t.date), index("asset_movements_source").on(t.sourceLineId)]);
 
 // ---------- project management: logical framework and budget execution ----------
 export type LogframeLevel = "goal" | "outcome" | "output" | "activity" | "sub_activity";
