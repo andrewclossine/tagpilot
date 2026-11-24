@@ -1,17 +1,20 @@
 "use client";
 import { useState } from "react";
 import type { PayrollComponent } from "@/db/schema";
+import { AccountPicker, type PickerLabels } from "@/components/AccountPicker";
 
 type Labels = Record<"code" | "name" | "kind" | "employee" | "employer" | "method" | "percent" | "brackets" | "rate" | "base" | "gross" | "remaining" | "liability" | "expense" | "add" | "delete", string>;
 
 /** Edits the ordered list of payroll taxes and contributions; posts it as JSON. */
-export function RulesEditor({ initial, accounts, labels, disabled }: {
-  initial: PayrollComponent[]; accounts: { code: string; name: string; type: string }[]; labels: Labels; disabled?: boolean;
+export function RulesEditor({ initial, accounts, labels, disabled, picker, canAdd }: {
+  initial: PayrollComponent[]; accounts: { code: string; name: string; type: string }[]; labels: Labels; disabled?: boolean; picker: PickerLabels; canAdd: boolean;
 }) {
   const blank: PayrollComponent = { code: "", name: "", kind: "employee", method: "percent", rate: 0, brackets: "", base: "gross", liabilityAccount: "", expenseAccount: "" };
   const [rows, setRows] = useState<PayrollComponent[]>(initial);
   const set = <K extends keyof PayrollComponent>(i: number, k: K, v: PayrollComponent[K]) => setRows((rs) => rs.map((r, j) => (j === i ? { ...r, [k]: v } : r)));
-  const accOptions = (types: string[]) => accounts.filter((a) => types.includes(a.type)).map((a) => <option key={a.code} value={a.code}>{a.code} · {a.name}</option>);
+  const accPick = (id: string, value: string, types: string[], on: (v: string) => void, label: string) => (
+    <AccountPicker id={id} accounts={accounts.filter((a) => types.includes(a.type)).map((a) => ({ ...a, id: a.code }))} onlyTypes={types} by="code" value={value} onChange={on} disabled={disabled} canAdd={canAdd} labels={picker} placeholder={label ? "—" : undefined} />
+  );
   return (
     <div className="tbl-wrap">
       <input type="hidden" name="components" value={JSON.stringify(rows)} />
@@ -31,10 +34,9 @@ export function RulesEditor({ initial, accounts, labels, disabled }: {
                 : <input id={`rb-${i}`} value={r.brackets} onChange={(e) => set(i, "brackets", e.target.value)} style={{ minWidth: 230 }} placeholder="60000:0, 100000:10, *:30" disabled={disabled} aria-label={labels.brackets} />}</td>
               <td><select id={`rs-${i}`} value={r.base} onChange={(e) => set(i, "base", e.target.value as PayrollComponent["base"])} disabled={disabled} aria-label={labels.base}>
                 <option value="gross">{labels.gross}</option><option value="remaining">{labels.remaining}</option></select></td>
-              <td><select id={`rl-${i}`} value={r.liabilityAccount} onChange={(e) => set(i, "liabilityAccount", e.target.value)} disabled={disabled} aria-label={labels.liability}>
-                <option value="">—</option>{accOptions(["liability"])}</select></td>
+              <td>{accPick(`rl-${i}`, r.liabilityAccount, ["liability"], (v) => set(i, "liabilityAccount", v), labels.liability)}</td>
               <td>{r.kind === "employer"
-                ? <select id={`re-${i}`} value={r.expenseAccount} onChange={(e) => set(i, "expenseAccount", e.target.value)} disabled={disabled} aria-label={labels.expense}><option value="">—</option>{accOptions(["expense"])}</select>
+                ? accPick(`re-${i}`, r.expenseAccount, ["expense"], (v) => set(i, "expenseAccount", v), labels.expense)
                 : null}</td>
               <td>{disabled ? null : <button type="button" className="x" aria-label={labels.delete} onClick={() => setRows((rs) => rs.filter((_, j) => j !== i))}>×</button>}</td>
             </tr>

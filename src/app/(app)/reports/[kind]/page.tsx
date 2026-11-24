@@ -16,6 +16,7 @@ import { PrintButton } from "@/components/PrintButton";
 import { ReportControls } from "@/components/ReportControls";
 import { ReportTable } from "@/components/ReportTable";
 import { Empty, ErrorNote, PageHead } from "@/components/ui";
+import { AccountField } from "@/components/AccountField";
 
 export const metadata = { title: "Reports" };
 
@@ -45,10 +46,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
         <input type="hidden" name="from" value={from} /><input type="hidden" name="to" value={to} />
         {query.hide.length ? <input type="hidden" name="hide" value={query.hide.join(",")} /> : null}
         {query.title ? <input type="hidden" name="title" value={query.title} /> : null}
-        <select id="account" name="account" defaultValue={query.account} style={{ width: "auto", minWidth: 260 }} aria-label={t("account")}>
-          <option value="">{t("r_all_accounts")}</option>
-          {accounts.map((a) => <option key={a.id} value={a.id}>{a.code} · {accName(a)}</option>)}
-        </select>
+        <AccountField id="account" name="account" accounts={accounts} defaultValue={query.account} placeholder={t("r_all_accounts")} style={{ width: "auto", minWidth: 260 }} noAdd />
         <button type="submit" className="btn sm">{t("show")}</button>
       </form>
     );

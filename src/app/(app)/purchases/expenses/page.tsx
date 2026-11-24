@@ -7,6 +7,7 @@ import { today } from "@/lib/format";
 import { Empty, ErrorNote, PageHead } from "@/components/ui";
 import { BankRegister, homeBanks } from "../../banking/BankForms";
 import { saveExpense } from "./actions";
+import { AccountField } from "@/components/AccountField";
 
 export const metadata = { title: "Expenses" };
 
@@ -50,10 +51,7 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Sea
             <thead><tr><th>{t("account")}</th><th>{t("project")}</th><th>{t("description")}</th><th className="num">{t("amount")} ({ctx.company.currency})</th>{vat ? <th>{t("vat")}</th> : null}</tr></thead>
             <tbody>{Array.from({ length: ROWS }, (_, i) => (
               <tr key={i}>
-                <td><select id={`e-acc-${i}`} name="lineAccount" aria-label={t("account")} defaultValue="">
-                  <option value="">{t("none")}</option>
-                  {usable.map((a) => <option key={a.id} value={a.id}>{a.code} · {accName(a)}</option>)}
-                </select></td>
+                <td><AccountField id={`e-acc-${i}`} name="lineAccount" accounts={usable} placeholder={t("none")} /></td>
                 <td><select id={`e-prj-${i}`} name="lineProject" aria-label={t("project")} defaultValue="">
                   <option value="">{t("none")}</option>
                   {projects.map((p) => <option key={p.id} value={p.id}>{p.code}</option>)}

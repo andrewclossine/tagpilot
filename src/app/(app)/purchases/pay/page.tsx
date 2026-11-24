@@ -8,6 +8,7 @@ import { balances, moneyAccounts } from "@/lib/ledger";
 import { round2, today } from "@/lib/format";
 import { Empty, ErrorNote, PageHead } from "@/components/ui";
 import { payBills } from "./actions";
+import { AccountField } from "@/components/AccountField";
 
 export const metadata = { title: "Pay bill" };
 
@@ -53,10 +54,7 @@ export default async function PayBillsPage({ searchParams }: { searchParams: Sea
           <div className="fields">
             <label className="f">{t("date")}<input id="pay-date" name="date" type="date" required defaultValue={now} /></label>
             <label className="f">{t("paid_from")}
-              <select id="pay-account" name="moneyAccountId" required defaultValue="">
-                <option value="" disabled>{t("none")}</option>
-                {home.map((a) => <option key={a.id} value={a.id}>{a.code} · {accName(a)} ({money(bal.get(a.id)?.net ?? 0)})</option>)}
-              </select></label>
+              <AccountField id="pay-account" name="moneyAccountId" required accounts={home} note={(a) => money(bal.get(a.id!)?.net ?? 0)} kinds={["bank"]} /></label>
             <label className="f">{t("r_pay_reference")}<input id="pay-reference" name="reference" /></label>
           </div>
           {table}

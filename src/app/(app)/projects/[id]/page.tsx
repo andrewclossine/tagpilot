@@ -12,6 +12,7 @@ import type { LogframeLevel } from "@/db/schema";
 import { ErrorNote, PageHead, Tabs } from "@/components/ui";
 import { saveLogItem } from "../actions";
 import { AchievementsView, BudgetView, DetailsView, StatusView, WorkplanView } from "./views";
+import { AccountField } from "@/components/AccountField";
 
 export const metadata = { title: "Project" };
 
@@ -93,10 +94,7 @@ export default async function ProjectPage({ params, searchParams }: { params: Pr
                 <label className="f">{t("bs_own")}<input id="i-own" name="ownContribution" className="num" inputMode="decimal" defaultValue={editing?.ownContribution || ""} /></label>
                 {ctx.has("accounting") ? (
                   <label className="f">{t("prj_account")}
-                    <select id="i-account" name="accountId" defaultValue={editing?.accountId ?? ""}>
-                      <option value="">{t("none")}</option>
-                      {accounts.map((a) => <option key={a.id} value={a.id}>{a.code} · {accName(a)}</option>)}
-                    </select></label>
+                    <AccountField id="i-account" name="accountId" accounts={accounts} defaultValue={editing?.accountId ?? ""} /></label>
                 ) : null}
               </div>
               <div className="small muted">{t("bg_budget_help")}</div>

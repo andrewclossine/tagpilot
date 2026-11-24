@@ -9,6 +9,7 @@ import { addDays, isUuid, round2, today } from "@/lib/format";
 import { orderProgress, statusOf } from "@/lib/purchase-orders";
 import { ErrorNote, PageHead, Pill } from "@/components/ui";
 import { receiveOrderBill } from "../actions";
+import { AccountField } from "@/components/AccountField";
 
 export const metadata = { title: "Purchase order" };
 
@@ -71,10 +72,7 @@ export default async function PurchaseOrderPage({ params, searchParams }: { para
                 <td className="num">{l.quantity}</td><td className="num">{left(l)}</td>
                 <td><input id={`pb-q-${l.id}`} name="lineQuantity" className="num" inputMode="decimal" aria-label={t("po_qty_this_bill")} defaultValue={left(l) > 0 ? left(l) : ""} readOnly={left(l) <= 0} /></td>
                 <td><input id={`pb-p-${l.id}`} name="linePrice" className="num" inputMode="decimal" aria-label={t("unit_price")} defaultValue={l.unitPrice} /></td>
-                <td><select id={`pb-a-${l.id}`} name="lineAccount" aria-label={t("account")} defaultValue="">
-                  <option value="">{t("none")}</option>
-                  {usable.map((a) => <option key={a.id} value={a.id}>{a.code} · {accName(a)}</option>)}
-                </select></td>
+                <td><AccountField id={`pb-a-${l.id}`} name="lineAccount" accounts={usable} placeholder={t("none")} /></td>
               </tr>
             ))}</tbody>
           </table></div>

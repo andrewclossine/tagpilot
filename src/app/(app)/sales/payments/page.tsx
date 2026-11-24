@@ -8,6 +8,7 @@ import { round2, today } from "@/lib/format";
 import { moneyAccounts } from "@/lib/ledger";
 import { Empty, ErrorNote, PageHead } from "@/components/ui";
 import { payDocAction } from "../../doc-actions";
+import { AccountField } from "@/components/AccountField";
 
 export const metadata = { title: "Receive payments" };
 
@@ -50,9 +51,7 @@ export default async function ReceivePaymentsPage({ searchParams }: { searchPara
                         <input type="hidden" name="kind" value="invoice" /><input type="hidden" name="id" value={d.id} />
                         <input id={`pd-${d.id}`} type="date" name="date" defaultValue={today()} required aria-label={t("date")} style={{ width: "auto" }} />
                         <input id={`pa-${d.id}`} name="amount" className="num" inputMode="decimal" defaultValue={balance} required aria-label={t("amount")} style={{ width: 110 }} />
-                        <select id={`pm-${d.id}`} name="moneyAccountId" required aria-label={t("paid_into")} style={{ width: "auto" }}>
-                          {accounts.map((a) => <option key={a.id} value={a.id}>{a.code} · {a.nameEn}</option>)}
-                        </select>
+                        <AccountField id={`pm-${d.id}`} name="moneyAccountId" required accounts={accounts} defaultValue={accounts[0]?.id} kinds={["bank"]} style={{ width: "auto" }} />
                         <input id={`pr-${d.id}`} name="reference" placeholder={t("reference")} aria-label={t("reference")} style={{ width: 110 }} />
                         <button type="submit" className="btn primary sm">{t("record_payment")}</button>
                       </form>

@@ -15,6 +15,7 @@ import { createCreditNote, deleteDocDraft, payDocAction, saveDoc, voidCreditNote
 import { creditableLines } from "@/lib/credit-notes";
 import { MakeRecurring } from "./MakeRecurring";
 import { sendInvoiceEmail } from "@/app/(app)/send-actions";
+import { AccountField } from "@/components/AccountField";
 
 export const docBase = (kind: DocKind) => (kind === "invoice" ? "/sales/invoices" : "/purchases/bills");
 const statusKey = { draft: "st_draft", open: "st_open", partial: "st_partial", paid: "st_paid", void: "st_void" } as const;
@@ -130,7 +131,7 @@ export async function DocForm({ kind, ctx, doc, lines, error, receipt = false }:
           <label className="f">{t("date")}<input id="date" type="date" name="date" defaultValue={doc?.date ?? today()} required /></label>
           {receipt ? <>
             <label className="f">{t("paid_into")}
-              <select id="moneyAccountId" name="moneyAccountId" required>{moneyAccs.map((a) => <option key={a.id} value={a.id}>{a.code} · {accName(a)}</option>)}</select></label>
+              <AccountField id="moneyAccountId" name="moneyAccountId" required accounts={moneyAccs} defaultValue={moneyAccs[0]?.id} kinds={["bank"]} /></label>
             <label className="f">{t("reference")}<input id="payReference" name="payReference" /></label>
           </> : <label className="f">{t("due_date")}<input id="dueDate" type="date" name="dueDate" defaultValue={doc?.dueDate ?? addDays(today(), 30)} required /></label>}
           <label className="f">{t("project")}
@@ -144,7 +145,7 @@ export async function DocForm({ kind, ctx, doc, lines, error, receipt = false }:
             <label className="f">{t("wht_rate")}<input id="whtRate" name="whtRate" className="num" inputMode="decimal" defaultValue={doc?.whtRate ?? 0} /></label>
           </> : null}
         </div>
-        <DocLinesEditor accounts={o.accountOpts} projects={o.projectOpts} initial={lines ?? []} vatRate={vatRate}
+        <DocLinesEditor canAddAccount={ctx.can("accounts", "write")} accounts={o.accountOpts} projects={o.projectOpts} initial={lines ?? []} vatRate={vatRate}
           accountTypes={accountTypes} defaultAccountId={defaultAcc} labels={docLabels(t)} items={items} />
         <label className="f">{t("notes")}<textarea id="notes" name="notes" rows={2} defaultValue={doc?.notes ?? ""} /></label>
         <div className="small muted">{receipt ? t("sr_note") : <>{t(kind === "invoice" ? "issued_note" : "approved_note")}{kind === "bill" ? ` ${t("wht_note")}` : ""}</>}</div>
@@ -231,9 +232,7 @@ export async function DocView({ kind, ctx, doc, error }: { kind: DocKind; ctx: C
                 <label className="f">{t("date")}<input id="payDate" type="date" name="date" defaultValue={today()} required /></label>
                 <label className="f">{t("amount")}<input id="payAmount" name="amount" className="num" inputMode="decimal" defaultValue={balance} required /></label>
                 <label className="f">{t(kind === "invoice" ? "paid_into" : "paid_from")}
-                  <select id="moneyAccountId" name="moneyAccountId" required>
-                    {moneyAccs.map((a) => <option key={a.id} value={a.id}>{a.code} · {a.nameEn}</option>)}
-                  </select>
+                  <AccountField id="moneyAccountId" name="moneyAccountId" required accounts={moneyAccs} defaultValue={moneyAccs[0]?.id} kinds={["bank"]} />
                 </label>
                 <label className="f">{t("reference")}<input id="payRef" name="reference" /></label>
               </div>

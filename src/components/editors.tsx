@@ -1,32 +1,19 @@
 "use client";
 import { useMemo, useState } from "react";
+import { AccountPicker, type PickerLabels } from "./AccountPicker";
 
-export type AccountOpt = { id: string; code: string; name: string; type: string };
+export type AccountOpt = { id: string; code: string; name: string; type: string; subtype?: string | null };
 export type ProjectOpt = { id: string; code: string; name: string };
 
-const TYPES = ["asset", "liability", "equity", "income", "expense"] as const;
 const num = (v: string | number) => { const n = Number(String(v).replace(/[\s,]/g, "")); return Number.isFinite(n) ? n : 0; };
 const fmt = (n: number) => (Math.round(n * 100) / 100).toLocaleString("en-US", { maximumFractionDigits: 2 });
 
-export function AccountSelect({ accounts, value, onChange, typeLabels, id, disabled, only }: {
-  accounts: AccountOpt[]; value: string; onChange: (v: string) => void; typeLabels: Record<string, string>;
+/** An account on a line: the account type beside each one, and "+ Add new account" when the person may add accounts. */
+export function AccountSelect({ accounts, value, onChange, picker, canAdd, id, disabled, only }: {
+  accounts: AccountOpt[]; value: string; onChange: (v: string) => void; picker: PickerLabels; canAdd?: boolean;
   id: string; disabled?: boolean; only?: readonly string[];
 }) {
-  const known = accounts.some((a) => a.id === value);
-  return (
-    <select id={id} value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled}>
-      <option value="">—</option>
-      {value && !known ? <option value={value}>?</option> : null}
-      {TYPES.filter((ty) => !only || only.includes(ty)).map((ty) => {
-        const opts = accounts.filter((a) => a.type === ty);
-        return opts.length ? (
-          <optgroup key={ty} label={typeLabels[ty]}>
-            {opts.map((a) => <option key={a.id} value={a.id}>{a.code} · {a.name}</option>)}
-          </optgroup>
-        ) : null;
-      })}
-    </select>
-  );
+  return <AccountPicker id={id} accounts={only ? accounts.filter((a) => only.includes(a.type)) : accounts} onlyTypes={only} value={value} onChange={onChange} labels={picker} canAdd={!!canAdd} disabled={disabled} style={{ minWidth: 220 }} />;
 }
 
 function ProjectSelect({ projects, value, onChange, id, disabled, noneLabel }: {
@@ -43,9 +30,9 @@ function ProjectSelect({ projects, value, onChange, id, disabled, noneLabel }: {
 // ---------- journal lines ----------
 export type JLine = { accountId: string; debit: string; credit: string; description: string; projectId: string };
 
-export function JournalLinesEditor({ accounts, projects, initial, labels, readOnly }: {
-  accounts: AccountOpt[]; projects: ProjectOpt[]; initial: JLine[]; readOnly?: boolean;
-  labels: Record<"account" | "debit" | "credit" | "description" | "project" | "add_line" | "balanced" | "not_balanced" | "none" | "delete", string> & { types: Record<string, string> };
+export function JournalLinesEditor({ accounts, projects, initial, labels, readOnly, canAddAccount }: {
+  accounts: AccountOpt[]; projects: ProjectOpt[]; initial: JLine[]; readOnly?: boolean; canAddAccount?: boolean;
+  labels: Record<"account" | "debit" | "credit" | "description" | "project" | "add_line" | "balanced" | "not_balanced" | "none" | "delete", string> & { types: Record<string, string>; picker: PickerLabels };
 }) {
   const blank: JLine = { accountId: "", debit: "", credit: "", description: "", projectId: "" };
   const [lines, setLines] = useState<JLine[]>(initial.length ? initial : [blank, { ...blank }]);
@@ -69,7 +56,7 @@ export function JournalLinesEditor({ accounts, projects, initial, labels, readOn
         <tbody>
           {lines.map((l, i) => (
             <tr key={i}>
-              <td><AccountSelect id={`acc-${i}`} accounts={accounts} value={l.accountId} onChange={(v) => set(i, "accountId", v)} typeLabels={labels.types} disabled={readOnly} /></td>
+              <td><AccountSelect id={`acc-${i}`} accounts={accounts} value={l.accountId} onChange={(v) => set(i, "accountId", v)} picker={labels.picker} canAdd={canAddAccount} disabled={readOnly} /></td>
               <td><input id={`dr-${i}`} className="num" inputMode="decimal" value={l.debit} onChange={(e) => set(i, "debit", e.target.value)} disabled={readOnly} aria-label={labels.debit} /></td>
               <td><input id={`cr-${i}`} className="num" inputMode="decimal" value={l.credit} onChange={(e) => set(i, "credit", e.target.value)} disabled={readOnly} aria-label={labels.credit} /></td>
               <td><input id={`ds-${i}`} value={l.description} onChange={(e) => set(i, "description", e.target.value)} disabled={readOnly} aria-label={labels.description} /></td>
@@ -95,10 +82,10 @@ export type DLine = { description: string; quantity: string; unitPrice: string; 
 /** A product or service offered on the line: picking it fills in the description, price and account. */
 export type ItemOpt = { id: string; label: string; name: string; price: number; accountId: string; stock: number | null; unit: string };
 
-export function DocLinesEditor({ accounts, projects, initial, vatRate, labels, accountTypes, defaultAccountId, readOnly, items = [] }: {
-  accounts: AccountOpt[]; projects: ProjectOpt[]; initial: DLine[]; vatRate: number; readOnly?: boolean;
+export function DocLinesEditor({ accounts, projects, initial, vatRate, labels, accountTypes, defaultAccountId, readOnly, items = [], canAddAccount }: {
+  accounts: AccountOpt[]; projects: ProjectOpt[]; initial: DLine[]; vatRate: number; readOnly?: boolean; canAddAccount?: boolean;
   accountTypes: readonly string[]; defaultAccountId: string; items?: ItemOpt[];
-  labels: Record<"description" | "qty" | "unit_price" | "vat" | "account" | "project" | "add_line" | "subtotal" | "total" | "delete" | "item", string> & { types: Record<string, string> };
+  labels: Record<"description" | "qty" | "unit_price" | "vat" | "account" | "project" | "add_line" | "subtotal" | "total" | "delete" | "item", string> & { types: Record<string, string>; picker: PickerLabels };
 }) {
   const blank = (): DLine => ({ description: "", quantity: "1", unitPrice: "", vatApplies: vatRate > 0, accountId: defaultAccountId, projectId: "", itemId: "" });
   const [lines, setLines] = useState<DLine[]>(initial.length ? initial : [blank()]);
@@ -134,7 +121,7 @@ export function DocLinesEditor({ accounts, projects, initial, vatRate, labels, a
               <td><input id={`q-${i}`} className="num" style={{ minWidth: 70 }} inputMode="decimal" value={l.quantity} onChange={(e) => set(i, "quantity", e.target.value)} disabled={readOnly} aria-label={labels.qty} /></td>
               <td><input id={`p-${i}`} className="num" inputMode="decimal" value={l.unitPrice} onChange={(e) => set(i, "unitPrice", e.target.value)} disabled={readOnly} aria-label={labels.unit_price} /></td>
               <td style={{ textAlign: "center" }}><input id={`v-${i}`} type="checkbox" checked={l.vatApplies} onChange={(e) => set(i, "vatApplies", e.target.checked)} disabled={readOnly || vatRate === 0} aria-label={labels.vat} /></td>
-              <td><AccountSelect id={`a-${i}`} accounts={accounts} only={accountTypes} value={l.accountId} onChange={(v) => set(i, "accountId", v)} typeLabels={labels.types} disabled={readOnly} /></td>
+              <td><AccountSelect id={`a-${i}`} accounts={accounts} only={accountTypes} value={l.accountId} onChange={(v) => set(i, "accountId", v)} picker={labels.picker} canAdd={canAddAccount} disabled={readOnly} /></td>
               <td><ProjectSelect id={`j-${i}`} projects={projects} value={l.projectId} onChange={(v) => set(i, "projectId", v)} disabled={readOnly} noneLabel="—" /></td>
               <td className="num">{fmt(amounts[i])}</td>
               <td>{readOnly ? null : <button type="button" className="x" aria-label={labels.delete} onClick={() => setLines((ls) => ls.filter((_, j) => j !== i))}>×</button>}</td>

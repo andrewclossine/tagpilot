@@ -11,6 +11,8 @@ import { Empty, ErrorNote, PageHead, Pill, Tabs } from "@/components/ui";
 import { RulesEditor } from "./RulesEditor";
 import { sendPayslipsEmail } from "../send-actions";
 import { createRunFromEmployees, deletePayrollRun, loadRwandaPreset, saveEmployee, savePayrollRules, suggestRules, uploadPayroll } from "./actions";
+import { AccountField } from "@/components/AccountField";
+import { pickerLabels } from "@/lib/picker-labels";
 
 export const metadata = { title: "Payroll" };
 
@@ -163,7 +165,7 @@ export default async function PayrollPage({ searchParams }: { searchParams: Sear
   } else {
     const accList = accounts.map((a) => ({ code: a.code, name: accName(a), type: a.type }));
     const accSel = (name: string, value: string, types: string[]) => (
-      <select id={`pr-${name}`} name={name} defaultValue={value}>{accounts.filter((a) => types.includes(a.type)).map((a) => <option key={a.id} value={a.code}>{a.code} · {accName(a)}</option>)}</select>
+      <AccountField id={`pr-${name}`} name={name} accounts={accounts.filter((a) => types.includes(a.type))} onlyTypes={types} defaultValue={value} by="code" />
     );
     body = (
       <div className="stack">
@@ -182,7 +184,7 @@ export default async function PayrollPage({ searchParams }: { searchParams: Sear
           <h2>{t("payroll_rules")}{cfg.country ? ` · ${cfg.country}` : ""}</h2>
           <div className="small muted">{t("payroll_rules_help")}</div>
           <input type="hidden" name="country" value={cfg.country} />
-          <RulesEditor initial={cfg.components} accounts={accList} disabled={!canEdit} labels={{
+          <RulesEditor initial={cfg.components} accounts={accList} disabled={!canEdit} picker={pickerLabels(t)} canAdd={ctx.can("accounts", "write")} labels={{
             code: t("code"), name: t("name"), kind: t("kind"), employee: t("rule_employee"), employer: t("rule_employer"), method: t("rule_method"),
             percent: t("rule_percent"), brackets: t("rule_brackets"), rate: t("rule_rate"), base: t("rule_base"), gross: t("gross"), remaining: t("rule_remaining"),
             liability: t("rule_liability"), expense: t("rule_expense"), add: t("add"), delete: t("delete"),

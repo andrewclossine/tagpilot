@@ -38,7 +38,7 @@ export async function ProformaForm({ ctx, proforma, lines }: { ctx: Ctx; proform
             {o.projects.map((p) => <option key={p.id} value={p.id}>{p.code} · {p.name}</option>)}
           </select></label>
       </div>
-      <DocLinesEditor accounts={o.accountOpts} projects={o.projectOpts} initial={lines ?? []} vatRate={ctx.company.vatRegistered ? ctx.company.vatRate : 0}
+      <DocLinesEditor canAddAccount={ctx.can("accounts", "write")} accounts={o.accountOpts} projects={o.projectOpts} initial={lines ?? []} vatRate={ctx.company.vatRegistered ? ctx.company.vatRate : 0}
         accountTypes={["income", "liability"]} defaultAccountId={accId("4200")} labels={docLabels(t)} items={items} />
       <label className="f">{t("notes")}<textarea id="notes" name="notes" rows={2} defaultValue={proforma?.notes} /></label>
       {revising ? (

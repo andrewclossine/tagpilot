@@ -8,6 +8,7 @@ import { ensureAssetCategories } from "@/lib/setup";
 import { today } from "@/lib/format";
 import { ErrorNote, PageHead } from "@/components/ui";
 import { createAsset } from "../actions";
+import { AccountField } from "@/components/AccountField";
 
 export const metadata = { title: "New fixed asset" };
 
@@ -43,7 +44,7 @@ export default async function NewAssetPage({ searchParams }: { searchParams: Sea
           <label className="f">{t("asset_available")}<input id="availableDate" name="availableDate" type="date" /></label>
           <label className="f">{t("asset_cost")}<input id="cost" name="cost" className="num" inputMode="decimal" required /></label>
           <label className="f">{t("asset_paid_from")}
-            <select id="creditAccountId" name="creditAccountId" required>{credit.map((a) => <option key={a.id} value={a.id}>{a.code} · {accName(a)}</option>)}</select></label>
+            <AccountField id="creditAccountId" name="creditAccountId" required accounts={credit} defaultValue={credit[0]?.id} /></label>
         </div>
         <div className="fields">
           <label className="f">{t("asset_method")}

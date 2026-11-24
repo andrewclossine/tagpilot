@@ -10,6 +10,7 @@ import { moneyAccounts } from "@/lib/ledger";
 import { ConfirmButton } from "@/components/editors";
 import { Empty, ErrorNote, PageHead } from "@/components/ui";
 import { assetMovement } from "../actions";
+import { AccountField } from "@/components/AccountField";
 
 export const metadata = { title: "Dispose of an asset" };
 
@@ -72,10 +73,7 @@ export default async function DisposePage({ searchParams }: { searchParams: Sear
               <div className="fields">
                 {proceeds > 0 ? (
                   <label className="f">{t("paid_into")}
-                    <select id="d-money" name="moneyAccountId" required defaultValue="">
-                      <option value="">—</option>
-                      {accounts.map((a) => <option key={a.id} value={a.id}>{a.code} · {a.nameEn}</option>)}
-                    </select></label>
+                    <AccountField id="d-money" name="moneyAccountId" required accounts={accounts} kinds={["bank"]} /></label>
                 ) : null}
                 <label className="f">{t("notes")}<input id="d-notes" name="notes" /></label>
               </div>

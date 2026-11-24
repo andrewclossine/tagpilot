@@ -9,6 +9,7 @@ import { ensureInventoryAccounts } from "@/lib/inventory";
 import { ErrorNote, PageHead } from "@/components/ui";
 import { ItemFields } from "../ItemFields";
 import { createItem } from "../actions";
+import { AccountField } from "@/components/AccountField";
 
 export const metadata = { title: "New item" };
 
@@ -34,9 +35,7 @@ export default async function NewItemPage({ searchParams }: { searchParams: Sear
           <label className="f">{t("unit_cost")}<input id="o-cost" name="openingCost" className="num" inputMode="decimal" /></label>
           <label className="f">{t("date")}<input id="o-date" name="openingDate" type="date" defaultValue={today()} /></label>
           <label className="f">{t("inv_opening_credit")}
-            <select id="o-credit" name="openingCredit" defaultValue="3200">
-              {accounts.filter((a) => a.type === "equity" || a.type === "liability").map((a) => <option key={a.code} value={a.code}>{a.code} · {a.name}</option>)}
-            </select></label>
+            <AccountField id="o-credit" name="openingCredit" accounts={accounts.filter((a) => a.type === "equity" || a.type === "liability")} defaultValue="3200" by="code" /></label>
         </div>
         <div><button type="submit" className="btn primary">{t("save")}</button></div>
       </form>

@@ -11,6 +11,7 @@ import { isUuid, today } from "@/lib/format";
 import { ErrorNote, PageHead, Pill } from "@/components/ui";
 import { ConfirmButton } from "@/components/editors";
 import { assetMovement } from "../actions";
+import { AccountField } from "@/components/AccountField";
 
 export const metadata = { title: "Fixed asset" };
 
@@ -40,7 +41,7 @@ export default async function AssetPage({ params, searchParams }: { params: Prom
         <label className="f">{t("date")}<input type="date" name="date" id={`${kind}-date`} defaultValue={today()} required /></label>
         <label className="f">{amountLabel}<input name="amount" id={`${kind}-amount`} className="num" inputMode="decimal" required /></label>
         {needsMoney ? <label className="f">{kind === "disposal" ? t("paid_into") : t("paid_from")}
-          <select name="moneyAccountId" id={`${kind}-money`}><option value="">—</option>{moneyAccs.map((m) => <option key={m.id} value={m.id}>{m.code} · {m.nameEn}</option>)}</select></label> : null}
+          <AccountField name="moneyAccountId" id={`${kind}-money`} accounts={moneyAccs} kinds={["bank"]} /></label> : null}
         <label className="f">{t("notes")}<input name="notes" id={`${kind}-notes`} /></label>
       </div>
       <div><ConfirmButton className={kind === "disposal" ? "btn danger" : "btn"} confirmLabel={t("confirm")}>{title}</ConfirmButton></div>

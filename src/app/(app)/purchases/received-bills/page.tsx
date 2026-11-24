@@ -6,6 +6,7 @@ import { getI18n } from "@/lib/i18n";
 import { sp, type SearchParams } from "@/lib/actions";
 import { Empty, ErrorNote, PageHead, Pill } from "@/components/ui";
 import { acceptBill, rejectBill } from "./actions";
+import { AccountField } from "@/components/AccountField";
 
 export const metadata = { title: "Receive bills" };
 
@@ -52,10 +53,7 @@ export default async function ReceivedBillsPage({ searchParams }: { searchParams
               <form action={acceptBill} className="stack">
                 <input type="hidden" name="id" value={s.id} />
                 <label className="f">{t("expense_account")}
-                  <select id={`rb-acc-${s.id}`} name="accountId" required defaultValue="">
-                    <option value="">—</option>
-                    {accounts.map((a) => <option key={a.id} value={a.id}>{a.code} · {accName(a)}</option>)}
-                  </select></label>
+                  <AccountField id={`rb-acc-${s.id}`} name="accountId" required accounts={accounts} /></label>
                 {ctx.company.vatRegistered ? <label className="row small" style={{ gap: 8 }}><input id={`rb-vat-${s.id}`} name="vatApplies" type="checkbox" style={{ width: "auto" }} defaultChecked /> {t("rb_vat")}</label> : null}
                 <div><button type="submit" className="btn primary">{t("rb_accept")}</button></div>
               </form>

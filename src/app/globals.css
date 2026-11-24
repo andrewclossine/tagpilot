@@ -492,3 +492,8 @@ tr.lf-output td { font-weight: 600; }
 tr.rowclick { cursor: pointer; }
 tr.rowclick:hover td { background: var(--accent-soft); }
 a.rowfill { display: block; color: inherit; text-decoration: none; }
+
+/* The "+ Add new account" form, opened over the page from any account list. */
+.acc-dialog { border: 1px solid var(--line); border-radius: var(--r); padding: 20px; width: min(420px, calc(100vw - 32px)); background: var(--surface); color: var(--fg); box-shadow: 0 16px 48px rgba(0,0,0,.25); }
+.acc-dialog::backdrop { background: rgba(10, 18, 32, .45); }
+.acc-dialog h2 { margin: 0; }

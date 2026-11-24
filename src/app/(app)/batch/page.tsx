@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { requireView } from "@/lib/auth";
-import { getI18n } from "@/lib/i18n";
+import { getI18n, type Key } from "@/lib/i18n";
 import { sp, type SearchParams } from "@/lib/actions";
 import { batchLists, type BatchKind } from "@/lib/batch";
 import { PageHead, Tabs } from "@/components/ui";
+import { kindOf } from "@/lib/account-kinds";
 import { BatchGrid } from "./BatchGrid";
 
 export const metadata = { title: "Batch enter transactions" };
@@ -24,7 +25,7 @@ export default async function BatchPage({ searchParams }: { searchParams: Search
   const canWrite = ctx.can("journal", "write");
   const accounts = lists.accounts
     .filter((a) => !a.currency && !["ar", "ap"].includes(a.subtype ?? "") && (kind === "invoice" ? ["income", "liability"].includes(a.type) : kind === "bill" ? ["expense", "asset"].includes(a.type) && !["bank", "cash", "momo"].includes(a.subtype ?? "") : true))
-    .map((a) => `${a.code} · ${accName(a)}`);
+    .map((a) => `${a.code} · ${accName(a)} — ${t(`acck_${kindOf(a)}` as Key)}`); // the code leads: batch entry reads only that
   const partners = lists.partners.filter((p) => kind === "bank" || p.kind === "both" || p.kind === (kind === "invoice" ? "customer" : "supplier")).map((p) => p.name);
   return (
     <div className="stack">

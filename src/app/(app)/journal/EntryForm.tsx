@@ -32,7 +32,7 @@ export async function EntryForm({ ctx, entry, lines }: { ctx: Ctx; entry?: Entry
       </div>
       <label className="f">{t("memo")}<input id="memo" name="memo" defaultValue={entry?.memo} /></label>
       <label className="row small" style={{ gap: 6 }}><input type="checkbox" name="isAdjusting" defaultChecked={entry?.isAdjusting} style={{ width: "auto" }} />{t("adjusting_entry")}</label>
-      <JournalLinesEditor accounts={o.accountOpts} projects={o.projectOpts} initial={lines ?? []} labels={journalLabels(t)} />
+      <JournalLinesEditor canAddAccount={ctx.can("accounts", "write")} accounts={o.accountOpts} projects={o.projectOpts} initial={lines ?? []} labels={journalLabels(t)} />
       <div className="row">
         <button type="submit" name="intent" value="post" className="btn primary">{t("post")}</button>
         <button type="submit" name="intent" value="draft" className="btn">{t("save_draft")}</button>

@@ -1,4 +1,5 @@
 import type { T } from "@/lib/i18n";
+import { AccountField } from "@/components/AccountField";
 
 type Item = {
   sku: string; name: string; unit: string; kind: string; stockClass: string; salePrice: number; purchaseCost: number; reorderLevel: number;
@@ -9,9 +10,7 @@ type Acc = { code: string; name: string; type: string };
 /** The item form fields shared by the new-item and item pages. */
 export function ItemFields({ t, item, accounts, fixedKind }: { t: T; item?: Item; accounts: Acc[]; fixedKind?: boolean }) {
   const sel = (name: keyof Item, value: string, types: string[]) => (
-    <select id={`i-${name}`} name={name} defaultValue={value}>
-      {accounts.filter((a) => types.includes(a.type)).map((a) => <option key={a.code} value={a.code}>{a.code} · {a.name}</option>)}
-    </select>
+    <AccountField id={`i-${name}`} name={name} accounts={accounts.filter((a) => types.includes(a.type))} onlyTypes={types} defaultValue={value} by="code" />
   );
   return (
     <>

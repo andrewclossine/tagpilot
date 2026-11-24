@@ -10,6 +10,7 @@ import { CURRENCIES } from "@/lib/template";
 import { Empty, ErrorNote, PageHead } from "@/components/ui";
 import { addForeignAccount, saveForeignExchange, saveForeignMove, saveRevaluation } from "../actions";
 import { BankRegister } from "../BankForms";
+import { AccountField } from "@/components/AccountField";
 
 export const metadata = { title: "Foreign currency" };
 
@@ -69,17 +70,14 @@ export default async function ForeignPage({ searchParams }: { searchParams: Sear
           <form action={saveForeignMove} className="panel stack">
             <h2>{t("bk_fx_move")}</h2>
             <div className="fields">
-              <label className="f">{t("account")}<select id="f-account" name="accountId" required>{fx.map((a) => <option key={a.id} value={a.id}>{a.code} · {accName(a)} ({a.currency})</option>)}</select></label>
+              <label className="f">{t("account")}<AccountField id="f-account" name="accountId" required accounts={fx} note={(a) => fx.find((x) => x.id === a.id)?.currency ?? undefined} defaultValue={fx[0]?.id} noAdd /></label>
               <label className="f">{t("bk_fx_direction")}
                 <select id="f-direction" name="direction" required defaultValue="in"><option value="in">{t("money_in")}</option><option value="out">{t("money_out")}</option></select></label>
               <label className="f">{t("date")}<input id="f-date" name="date" type="date" required defaultValue={today()} /></label>
               <label className="f">{t("bk_fx_foreign_amount")}<input id="f-foreign" name="foreign" className="num" inputMode="decimal" required /></label>
               <label className="f">{t("bk_fx_rate")} ({home})<input id="f-rate" name="rate" className="num" inputMode="decimal" required /></label>
               <label className="f">{t("bank_counter")}
-                <select id="f-counter" name="counterId" required defaultValue="">
-                  <option value="" disabled>{t("none")}</option>
-                  {counters.map((a) => <option key={a.id} value={a.id}>{a.code} · {accName(a)}</option>)}
-                </select></label>
+                <AccountField id="f-counter" name="counterId" required accounts={counters} placeholder={t("none")} /></label>
               <label className="f">{t("project")}
                 <select id="f-project" name="projectId" defaultValue=""><option value="">{t("none")}</option>{projects.map((p) => <option key={p.id} value={p.id}>{p.code}</option>)}</select></label>
               <label className="f">{t("partner")}
@@ -94,9 +92,9 @@ export default async function ForeignPage({ searchParams }: { searchParams: Sear
             <h2>{t("bk_fx_exchange")}</h2>
             <div className="small muted">{t("bk_fx_exchange_help")}</div>
             <div className="fields">
-              <label className="f">{t("bk_from_bank")}<select id="x-from" name="fromId" required>{anyMoney}</select></label>
+              <label className="f">{t("bk_from_bank")}<AccountField id="x-from" name="fromId" required accounts={money_} note={(a) => money_.find((x) => x.id === a.id)?.currency ?? home} defaultValue={money_[0]?.id} kinds={["bank"]} /></label>
               <label className="f">{t("bk_fx_sent")}<input id="x-sent" name="sent" className="num" inputMode="decimal" required /></label>
-              <label className="f">{t("bk_to_bank")}<select id="x-to" name="toId" required>{anyMoney}</select></label>
+              <label className="f">{t("bk_to_bank")}<AccountField id="x-to" name="toId" required accounts={money_} note={(a) => money_.find((x) => x.id === a.id)?.currency ?? home} defaultValue={money_[0]?.id} kinds={["bank"]} /></label>
               <label className="f">{t("bk_fx_received")}<input id="x-received" name="received" className="num" inputMode="decimal" required /></label>
               <label className="f">{t("date")}<input id="x-date" name="date" type="date" required defaultValue={today()} /></label>
               <label className="f">{t("bk_fx_rate_both")} ({home})<input id="x-rate" name="rate" className="num" inputMode="decimal" /></label>

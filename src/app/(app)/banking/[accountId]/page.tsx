@@ -9,6 +9,7 @@ import { balances } from "@/lib/ledger";
 import { daysBetween, isUuid } from "@/lib/format";
 import { Empty, ErrorNote, PageHead, Pill } from "@/components/ui";
 import { bookLine, ignoreLine, importStatement, matchLine, runRules, suggestWithAi } from "../actions";
+import { AccountField } from "@/components/AccountField";
 
 export const metadata = { title: "Bank account" };
 
@@ -96,9 +97,7 @@ export default async function BankAccountPage({ params, searchParams }: { params
                         <div className="row" style={{ gap: 6 }}>
                           <form action={bookLine} className="row" style={{ gap: 6, flex: 1 }}>
                             <input type="hidden" name="accountId" value={acc.id} /><input type="hidden" name="id" value={l.id} />
-                            <select name="counterId" id={`ctr-${l.id}`} defaultValue={l.suggestedAccountId ?? ""} style={{ flex: 1, minWidth: 160 }} aria-label={t("bank_counter")}>
-                              <option value="">—</option>{accountOptions}
-                            </select>
+                            <AccountField name="counterId" id={`ctr-${l.id}`} accounts={allAccounts} defaultValue={l.suggestedAccountId ?? ""} style={{ flex: 1, minWidth: 160 }} />
                             <select name="projectId" id={`prj-${l.id}`} defaultValue={l.suggestedProjectId ?? ""} style={{ width: 90 }} aria-label={t("project")}>
                               <option value="">—</option>{projects.map((p) => <option key={p.id} value={p.id}>{p.code}</option>)}
                             </select>

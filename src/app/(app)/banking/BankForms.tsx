@@ -7,6 +7,7 @@ import { getI18n } from "@/lib/i18n";
 import { balances, moneyAccounts } from "@/lib/ledger";
 import { today } from "@/lib/format";
 import { Empty, Pill } from "@/components/ui";
+import { AccountField } from "@/components/AccountField";
 
 const ROWS = 5;
 
@@ -17,7 +18,7 @@ export async function homeBanks(ctx: Ctx) {
   const [accounts, bal] = await Promise.all([moneyAccounts(db, ctx.company.id), balances(db, ctx.company.id)]);
   // Banks come first: that is where cheques and deposits usually go.
   const rank = (s: string | null) => (s === "bank" ? 0 : 1);
-  return accounts.filter((a) => !a.currency).sort((x, y) => rank(x.subtype) - rank(y.subtype)).map((a) => ({ id: a.id, label: `${a.code} · ${accName(a)} (${money(bal.get(a.id)?.net ?? 0)})` }));
+  return accounts.filter((a) => !a.currency).sort((x, y) => rank(x.subtype) - rank(y.subtype)).map((a) => ({ id: a.id, label: `${a.code} · ${accName(a)} (${money(bal.get(a.id)?.net ?? 0)})`, row: a, balance: money(bal.get(a.id)?.net ?? 0) }));
 }
 
 /** The form of a cheque or a deposit: which bank, who, and the accounts the money goes to or comes from. */
@@ -36,7 +37,7 @@ export async function BankDocFields({ ctx, kind }: { ctx: Ctx; kind: "check" | "
     <>
       <div className="fields">
         <label className="f">{t(kind === "check" ? "bk_from_bank" : "bk_to_bank")}
-          <select id="b-account" name="accountId" required>{banks.map((b) => <option key={b.id} value={b.id}>{b.label}</option>)}</select></label>
+          <AccountField id="b-account" name="accountId" required accounts={banks.map((b) => b.row)} note={(a) => banks.find((b) => b.id === a.id)?.balance} defaultValue={banks[0]?.id} kinds={["bank"]} /></label>
         <label className="f">{t("date")}<input id="b-date" name="date" type="date" required defaultValue={today()} /></label>
         <label className="f">{t(kind === "check" ? "bk_check_no" : "reference")}<input id="b-reference" name="reference" placeholder={kind === "check" ? t("bk_check_no_auto") : undefined} /></label>
         <label className="f">{t("partner")}
@@ -52,10 +53,7 @@ export async function BankDocFields({ ctx, kind }: { ctx: Ctx; kind: "check" | "
         <thead><tr><th>{t("account")}</th><th>{t("project")}</th><th>{t("description")}</th><th className="num">{t("amount")} ({ctx.company.currency})</th></tr></thead>
         <tbody>{Array.from({ length: ROWS }, (_, i) => (
           <tr key={i}>
-            <td><select id={`b-acc-${i}`} name="lineAccount" aria-label={t("account")} defaultValue="">
-              <option value="">{t("none")}</option>
-              {usable.map((a) => <option key={a.id} value={a.id}>{a.code} · {accName(a)}</option>)}
-            </select></td>
+            <td><AccountField id={`b-acc-${i}`} name="lineAccount" accounts={usable} placeholder={t("none")} /></td>
             <td><select id={`b-prj-${i}`} name="lineProject" aria-label={t("project")} defaultValue="">
               <option value="">{t("none")}</option>
               {projects.map((p) => <option key={p.id} value={p.id}>{p.code}</option>)}

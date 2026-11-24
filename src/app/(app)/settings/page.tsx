@@ -7,6 +7,7 @@ import { ConfirmButton } from "@/components/editors";
 import { ErrorNote, PageHead, Tabs } from "@/components/ui";
 import { CompanyFields } from "@/components/CompanyFields";
 import { deleteProject, removeLogo, saveCompanySettings, saveProject, uploadLogo } from "./actions";
+import { AccountField } from "@/components/AccountField";
 
 export const metadata = { title: "Settings" };
 
@@ -23,9 +24,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Sea
   if (tab === "company") {
     const accounts = await db.select().from(schema.accounts).where(eq(schema.accounts.companyId, c.id)).orderBy(schema.accounts.code);
     const accSelect = (name: string, value: string) => (
-      <select id={`s-${name}`} name={name} defaultValue={value}>
-        {accounts.map((a) => <option key={a.id} value={a.code}>{a.code} · {accName(a)}</option>)}
-      </select>
+      <AccountField id={`s-${name}`} name={name} accounts={accounts} defaultValue={value} by="code" />
     );
     body = (
       <div className="stack">

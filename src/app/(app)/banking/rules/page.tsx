@@ -9,6 +9,7 @@ import { rulesOf } from "@/lib/bank-rules";
 import { ConfirmButton } from "@/components/editors";
 import { Empty, ErrorNote, PageHead, Pill } from "@/components/ui";
 import { runRules, saveRule, toggleRule } from "../actions";
+import { AccountField } from "@/components/AccountField";
 
 export const metadata = { title: "Bank rules" };
 
@@ -67,13 +68,13 @@ export default async function BankRulesPage({ searchParams }: { searchParams: Se
             <label className="f">{t("rule_direction")}
               <select id="r-direction" name="direction" defaultValue="any">{(["any", "in", "out"] as const).map((d) => <option key={d} value={d}>{t(`rule_dir_${d}`)}</option>)}</select></label>
             <label className="f">{t("rule_bank")}
-              <select id="r-bank" name="bankAccountId" defaultValue=""><option value="">{t("rule_all_banks")}</option>{banks.map((b) => <option key={b.id} value={b.id}>{b.code} · {accName(b)}</option>)}</select></label>
+              <AccountField id="r-bank" name="bankAccountId" accounts={banks} placeholder={t("rule_all_banks")} kinds={["bank"]} /></label>
           </div>
           <div className="fields">
             <label className="f">{t("rule_min")}<input id="r-min" name="minAmount" className="num" inputMode="decimal" /></label>
             <label className="f">{t("rule_max")}<input id="r-max" name="maxAmount" className="num" inputMode="decimal" /></label>
             <label className="f">{t("rule_account")}
-              <select id="r-account" name="accountId" required defaultValue=""><option value="" disabled>{t("choose")}</option>{targets.map((a) => <option key={a.id} value={a.id}>{a.code} · {accName(a)}</option>)}</select></label>
+              <AccountField id="r-account" name="accountId" required accounts={targets} placeholder={t("choose")} /></label>
             <label className="f">{t("project")}
               <select id="r-project" name="projectId" defaultValue=""><option value="">{t("none")}</option>{projects.map((p) => <option key={p.id} value={p.id}>{p.code} · {p.name}</option>)}</select></label>
           </div>

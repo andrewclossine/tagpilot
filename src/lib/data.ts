@@ -2,6 +2,7 @@ import "server-only";
 import { and, desc, eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import type { T } from "./i18n";
+import { pickerLabels } from "./picker-labels";
 
 /** Options every editor needs: accounts, projects and partners of the current company. */
 export async function bookOptions(companyId: string, accName: (a: { nameEn: string; nameFr: string }) => string) {
@@ -15,7 +16,7 @@ export async function bookOptions(companyId: string, accName: (a: { nameEn: stri
     accounts,
     projects,
     partners,
-    accountOpts: accounts.map((a) => ({ id: a.id, code: a.code, name: accName(a), type: a.type })),
+    accountOpts: accounts.map((a) => ({ id: a.id, code: a.code, name: accName(a), type: a.type, subtype: a.subtype })),
     projectOpts: projects.map((p) => ({ id: p.id, code: p.code, name: p.name })),
   };
 }
@@ -27,14 +28,14 @@ export function typeLabels(t: T) {
 export function journalLabels(t: T) {
   return {
     account: t("account"), debit: t("debit"), credit: t("credit"), description: t("description"), project: t("project"),
-    add_line: t("add_line"), balanced: t("balanced"), not_balanced: t("not_balanced"), none: t("none"), delete: t("delete"), types: typeLabels(t),
+    add_line: t("add_line"), balanced: t("balanced"), not_balanced: t("not_balanced"), none: t("none"), delete: t("delete"), types: typeLabels(t), picker: pickerLabels(t),
   };
 }
 
 export function docLabels(t: T) {
   return {
     description: t("description"), qty: t("qty"), unit_price: t("unit_price"), vat: t("vat"), account: t("account"), project: t("project"), item: t("item"),
-    add_line: t("add_line"), subtotal: t("subtotal"), total: t("total"), delete: t("delete"), types: typeLabels(t),
+    add_line: t("add_line"), subtotal: t("subtotal"), total: t("total"), delete: t("delete"), types: typeLabels(t), picker: pickerLabels(t),
   };
 }
 

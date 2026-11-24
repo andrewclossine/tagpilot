@@ -7,6 +7,7 @@ import { sp, type SearchParams } from "@/lib/actions";
 import { ensureAssetCategories } from "@/lib/setup";
 import { ErrorNote, PageHead } from "@/components/ui";
 import { saveCategory } from "../actions";
+import { AccountField } from "@/components/AccountField";
 
 export const metadata = { title: "Asset classes" };
 
@@ -22,10 +23,7 @@ export default async function CategoriesPage({ searchParams }: { searchParams: S
   ]);
   const editing = cats.find((c) => c.id === q("edit"));
   const sel = (name: string, value: string | undefined, types: string[]) => (
-    <select id={`c-${name}`} name={name} defaultValue={value ?? ""} required>
-      <option value="">—</option>
-      {accounts.filter((a) => types.includes(a.type)).map((a) => <option key={a.id} value={a.code}>{a.code} · {accName(a)}</option>)}
-    </select>
+    <AccountField id={`c-${name}`} name={name} required accounts={accounts.filter((a) => types.includes(a.type))} onlyTypes={types} defaultValue={value ?? ""} by="code" />
   );
   return (
     <div className="stack">

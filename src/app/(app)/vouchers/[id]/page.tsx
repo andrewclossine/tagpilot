@@ -16,6 +16,7 @@ import { ErrorNote, PageHead, Pill } from "@/components/ui";
 import type { VoucherStep } from "@/db/schema";
 import { decide, deleteVoucher, pay, saveDocuments, submitDraft } from "../actions";
 import { VoucherForm } from "../VoucherForm";
+import { AccountField } from "@/components/AccountField";
 
 export const metadata = { title: "Fund request" };
 
@@ -206,16 +207,10 @@ export default async function VoucherPage({ params, searchParams }: { params: Pr
             <label className="f">{t("date")}<input id="p-date" name="date" type="date" required defaultValue={today()} /></label>
             <label className="f">{t("pv_cheque")}<input id="p-reference" name="reference" /></label>
             <label className="f">{t("paid_from")}
-              <select id="p-money" name="moneyAccountId" required defaultValue="">
-                <option value="" disabled>{t("none")}</option>
-                {moneyAccs.map((a) => <option key={a.id} value={a.id}>{a.code} · {accName(a)}</option>)}
-              </select></label>
+              <AccountField id="p-money" name="moneyAccountId" required accounts={moneyAccs} kinds={["bank"]} /></label>
             {needsAccount ? (
               <label className="f">{t("expense_account")}
-                <select id="p-expense" name="expenseAccountId" required defaultValue="">
-                  <option value="" disabled>{t("none")}</option>
-                  {expense.map((a) => <option key={a.id} value={a.id}>{a.code} · {accName(a)}</option>)}
-                </select></label>
+                <AccountField id="p-expense" name="expenseAccountId" required accounts={expense} /></label>
             ) : null}
           </div>
           <div className="small muted">{t("pv_pay_note")}</div>

@@ -11,6 +11,7 @@ import { ConfirmButton } from "@/components/editors";
 import { ReconcileForm } from "@/components/ReconcileForm";
 import { Empty, ErrorNote, PageHead } from "@/components/ui";
 import { saveReconciliation, undoReconcile } from "../actions";
+import { AccountField } from "@/components/AccountField";
 
 export const metadata = { title: "Reconcile" };
 
@@ -45,10 +46,7 @@ export default async function ReconcilePage({ searchParams }: { searchParams: Se
           <div className="small muted">{t("bk_reconcile_help")}</div>
           <div className="fields">
             <label className="f">{t("account")}
-              <select id="r-account" name="account" required defaultValue={account?.id ?? ""}>
-                <option value="" disabled>{t("choose_account")}</option>
-                {accounts.map((a) => <option key={a.id} value={a.id}>{a.code} · {accName(a)} ({money(bal.get(a.id)?.net ?? 0)})</option>)}
-              </select></label>
+              <AccountField id="r-account" name="account" required accounts={accounts} note={(a) => money(bal.get(a.id!)?.net ?? 0)} defaultValue={account?.id ?? ""} kinds={["bank"]} /></label>
             <label className="f">{t("bk_statement_date")}<input id="r-date" name="date" type="date" required defaultValue={date} /></label>
             <label className="f">{t("bk_statement_ending")}<input id="r-ending" name="ending" className="num" inputMode="decimal" required defaultValue={q("ending")} /></label>
           </div>
