@@ -4,12 +4,13 @@ import type { ModuleKey, Role } from "@/db/schema";
 export type Area =
   | "dashboard" | "journal" | "sales" | "purchases" | "partners" | "banking" | "payroll"
   | "assets" | "inventory" | "budgets" | "reports" | "accounts" | "company" | "users" | "audit"
-  | "projects" | "achievements" | "vouchers" | "voucher_review" | "voucher_approve" | "voucher_authorize" | "voucher_pay" | "procurement" | "contracts" | "bidding" | "requisitions";
+  | "projects" | "achievements" | "vouchers" | "voucher_review" | "voucher_approve" | "voucher_authorize" | "voucher_pay" | "procurement" | "contracts" | "bidding" | "requisitions"
+  | "esign" | "qr";
 
-const ALL: Area[] = ["dashboard", "journal", "sales", "purchases", "partners", "banking", "payroll", "assets", "inventory", "budgets", "reports", "accounts", "company", "users", "audit", "projects", "achievements", "vouchers", "voucher_review", "voucher_approve", "voucher_authorize", "voucher_pay", "procurement", "contracts", "bidding", "requisitions"];
+const ALL: Area[] = ["dashboard", "journal", "sales", "purchases", "partners", "banking", "payroll", "assets", "inventory", "budgets", "reports", "accounts", "company", "users", "audit", "projects", "achievements", "vouchers", "voucher_review", "voucher_approve", "voucher_authorize", "voucher_pay", "procurement", "contracts", "bidding", "requisitions", "esign", "qr"];
 const BOOKS: Area[] = ["dashboard", "journal", "sales", "purchases", "partners", "banking", "assets", "inventory", "budgets", "reports", "accounts", "audit"];
 
-export const MODULES: ModuleKey[] = ["accounting", "projects", "procurement", "bidding"];
+export const MODULES: ModuleKey[] = ["accounting", "projects", "procurement", "bidding", "esign", "qr"];
 
 /** Which module an area belongs to. Company settings, users and the audit trail come with any module. */
 const AREA_MODULES: Partial<Record<Area, ModuleKey[]>> = {
@@ -19,6 +20,7 @@ const AREA_MODULES: Partial<Record<Area, ModuleKey[]>> = {
   projects: ["projects"], achievements: ["projects"], vouchers: ["projects"], voucher_review: ["projects"], voucher_approve: ["projects"], voucher_authorize: ["projects"], voucher_pay: ["projects"],
   procurement: ["procurement"], contracts: ["procurement"], requisitions: ["procurement"],
   bidding: ["bidding"],
+  esign: ["esign"], qr: ["qr"],
 };
 
 export function areaInModules(area: Area, modules: ModuleKey[]): boolean {
@@ -38,20 +40,23 @@ const ROLE_MODULES: Partial<Record<Role, ModuleKey[]>> = {
 export const rolesFor = (modules: ModuleKey[]) => ROLES.filter((r) => { const m = ROLE_MODULES[r]; return !m || m.some((x) => modules.includes(x)); });
 
 /** What each role may read and write, in the spirit of QuickBooks user roles. Only admins manage users and the subscription. */
+/** e-Signature and QR Codes are tools for everyone at work: each person sends and signs, or makes codes, for their own job. */
+const TOOLS: Area[] = ["esign", "qr"];
+
 const MATRIX: Record<Role, { read: Area[]; write: Area[] }> = {
   admin: { read: ALL, write: ALL },
   accountant: {
     read: [...BOOKS, "payroll", "projects", "achievements", "vouchers", "voucher_review", "voucher_pay", "procurement", "contracts", "requisitions"],
-    write: ([...BOOKS, "payroll", "vouchers", "voucher_review", "voucher_pay", "requisitions"] as Area[]).filter((a) => a !== "audit"),
+    write: ([...BOOKS, "payroll", "vouchers", "voucher_review", "voucher_pay", "requisitions", ...TOOLS] as Area[]).filter((a) => a !== "audit"),
   },
-  sales: { read: ["dashboard", "sales", "partners", "inventory"], write: ["sales", "partners", "requisitions"] },
-  purchases: { read: ["dashboard", "purchases", "partners", "journal", "inventory"], write: ["purchases", "partners", "journal", "requisitions"] },
-  payroll: { read: ["dashboard", "payroll"], write: ["payroll", "requisitions"] },
-  viewer: { read: [...BOOKS, "projects", "achievements", "vouchers", "procurement", "contracts", "bidding", "requisitions"], write: [] },
-  staff: { read: ["projects", "achievements", "vouchers"], write: ["vouchers", "achievements", "requisitions"] },
-  project_manager: { read: ["projects", "achievements", "vouchers", "voucher_approve"], write: ["projects", "achievements", "vouchers", "voucher_approve", "requisitions"] },
-  authorizer: { read: ["projects", "achievements", "vouchers", "voucher_authorize"], write: ["voucher_authorize", "requisitions"] },
-  procurement: { read: ["projects", "partners", "procurement", "contracts", "bidding"], write: ["partners", "procurement", "contracts", "bidding", "requisitions"] },
+  sales: { read: ["dashboard", "sales", "partners", "inventory"], write: ["sales", "partners", "requisitions", ...TOOLS] },
+  purchases: { read: ["dashboard", "purchases", "partners", "journal", "inventory"], write: ["purchases", "partners", "journal", "requisitions", ...TOOLS] },
+  payroll: { read: ["dashboard", "payroll"], write: ["payroll", "requisitions", ...TOOLS] },
+  viewer: { read: [...BOOKS, "projects", "achievements", "vouchers", "procurement", "contracts", "bidding", "requisitions", ...TOOLS], write: [] },
+  staff: { read: ["projects", "achievements", "vouchers"], write: ["vouchers", "achievements", "requisitions", ...TOOLS] },
+  project_manager: { read: ["projects", "achievements", "vouchers", "voucher_approve"], write: ["projects", "achievements", "vouchers", "voucher_approve", "requisitions", ...TOOLS] },
+  authorizer: { read: ["projects", "achievements", "vouchers", "voucher_authorize"], write: ["voucher_authorize", "requisitions", ...TOOLS] },
+  procurement: { read: ["projects", "partners", "procurement", "contracts", "bidding"], write: ["partners", "procurement", "contracts", "bidding", "requisitions", ...TOOLS] },
   supplier: { read: [], write: [] }, // suppliers invited by one organisation only use its supplier portal
 };
 
@@ -60,7 +65,7 @@ export function can(role: Role, area: Area, mode: "read" | "write" = "read"): bo
   return mode === "read" ? m.read.includes(area) || m.write.includes(area) : m.write.includes(area);
 }
 
-const PAGE_OF: [Area, string][] = [["dashboard", "/dashboard"], ["projects", "/projects"], ["vouchers", "/vouchers"], ["procurement", "/procurement"], ["bidding", "/adverts"], ["company", "/settings"]];
+const PAGE_OF: [Area, string][] = [["dashboard", "/dashboard"], ["projects", "/projects"], ["vouchers", "/vouchers"], ["procurement", "/procurement"], ["bidding", "/adverts"], ["esign", "/esign"], ["qr", "/qr"], ["company", "/settings"]];
 
 /** Where someone lands after signing in: the first page their role can open in what the organisation subscribes to. */
 export function homeOf(role: Role, modules: ModuleKey[]): string {

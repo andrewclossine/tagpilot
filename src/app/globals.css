@@ -23,7 +23,7 @@
   --f-num: "Plus Jakarta Sans", "Segoe UI", system-ui, sans-serif; /* numbers line up through tabular-nums */
   --f-code: "JetBrains Mono", ui-monospace, Consolas, monospace;
   --r: 6px;
-  --app-accounting: #1d4ed8; --app-projects: #0f766e; --app-procurement: #534ab7; --app-files: #c2410c;
+  --app-accounting: #1d4ed8; --app-projects: #0f766e; --app-procurement: #534ab7; --app-files: #c2410c; --app-esign: #be185d; --app-qr: #0e7490;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
@@ -261,13 +261,19 @@ table.compare th, table.compare td { white-space: nowrap; }
 .app-icon.projects > rect:not(.shine) { fill: var(--app-projects); }
 .app-icon.procurement > rect:not(.shine) { fill: var(--app-procurement); }
 .app-icon.files > rect:not(.shine) { fill: var(--app-files); }
+.app-icon.esign > rect:not(.shine) { fill: var(--app-esign); }
+.app-icon.qr > rect:not(.shine) { fill: var(--app-qr); }
 .app-icon { flex: none; }
 .launcher { min-height: 100vh; display: flex; flex-direction: column; background: var(--bg); }
 .launcher-top { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding: 14px max(16px, 3vw); background: var(--surface); border-bottom: 1px solid var(--line); }
-.launcher-main { width: 100%; max-width: 980px; margin: 0 auto; padding: 48px 16px 64px; display: flex; flex-direction: column; gap: 24px; }
+.launcher-main { width: 100%; max-width: 1080px; margin: 0 auto; padding: 24px 16px; display: flex; flex-direction: column; gap: 16px; }
 .launcher-main h1 { text-align: center; }
-.app-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; }
-.app-tile { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 10px; padding: 32px 20px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; color: var(--fg); text-decoration: none; font-size: 17px; transition: transform .12s ease, border-color .12s ease; }
+.app-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+/* Every app fits on one screen: small tiles, the help kept to two lines. */
+.app-tile b { font-size: 15px; }
+.app-tile .small { font-size: 12px; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.launcher-main h1 { margin: 0; font-size: 24px; }
+.app-tile { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; padding: 16px 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; color: var(--fg); text-decoration: none; font-size: 17px; transition: transform .12s ease, border-color .12s ease; }
 .app-tile:hover { transform: translateY(-3px); border-color: var(--accent); }
 .app-tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .app-tile.off { opacity: .55; }
@@ -497,3 +503,62 @@ a.rowfill { display: block; color: inherit; text-decoration: none; }
 .acc-dialog { border: 1px solid var(--line); border-radius: var(--r); padding: 20px; width: min(420px, calc(100vw - 32px)); background: var(--surface); color: var(--fg); box-shadow: 0 16px 48px rgba(0,0,0,.25); }
 .acc-dialog::backdrop { background: rgba(10, 18, 32, .45); }
 .acc-dialog h2 { margin: 0; }
+
+/* PDF pages (pdf.js) with fields laid over them. */
+.pdf-pages { display: flex; flex-direction: column; gap: 14px; }
+.pdf-page-wrap { position: relative; }
+.pdf-page-no { position: absolute; left: -24px; top: 4px; }
+.pdf-page { position: relative; width: 100%; background: #fff; box-shadow: 0 1px 6px rgba(0, 0, 0, .18); overflow: hidden; }
+.pdf-page canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.pdf-page .pdf-hit { position: absolute; inset: 0; }
+.pdf-loading { position: absolute; inset: 0; display: grid; place-items: center; }
+
+/* e-Signature: preparing a document. */
+.es-prepare { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 20px; align-items: start; }
+.es-side { position: sticky; top: 12px; max-height: calc(100vh - 24px); overflow: auto; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 14px; }
+.es-signer { border: 1px solid var(--line); border-left: 4px solid; border-radius: 8px; padding: 8px; display: flex; flex-direction: column; gap: 6px; cursor: pointer; }
+.es-signer.on { background: var(--accent-soft); }
+.es-palette { display: flex; flex-wrap: wrap; gap: 6px; }
+.es-selected { border: 1px dashed; border-radius: 8px; padding: 8px; }
+.es-doc { padding-left: 24px; }
+.es-doc.arming .pdf-page { cursor: crosshair; }
+.es-field { position: absolute; border: 2px solid; border-radius: 3px; cursor: move; touch-action: none; display: flex; align-items: center; justify-content: center; user-select: none; }
+.es-field.sel { box-shadow: 0 0 0 2px rgba(255, 255, 255, .9), 0 0 0 4px rgba(37, 99, 235, .5); }
+.es-field-label { font-size: 11px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; padding: 0 2px; }
+.es-field-size { position: absolute; right: -5px; bottom: -5px; width: 10px; height: 10px; background: #fff; border: 2px solid currentColor; border-radius: 2px; cursor: nwse-resize; }
+.es-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+.es-steps { display: flex; gap: 14px; padding: 0; margin: 0; list-style: none; }
+.es-steps li.on { color: var(--fg); font-weight: 700; }
+@media (max-width: 900px) { .es-prepare { grid-template-columns: minmax(0, 1fr); } .es-side { position: static; max-height: none; } .es-doc { padding-left: 0; } .pdf-page-no { display: none; } }
+
+/* e-Signature: the signer's page. */
+.sign-shell { min-height: 100vh; background: var(--bg); }
+.sign-main { max-width: 920px; margin: 0 auto; padding: 20px 16px 60px; }
+.sign-layout { display: flex; flex-direction: column; gap: 14px; }
+.sign-bar { position: sticky; top: 0; z-index: 5; display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 12px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); }
+.sign-field { position: absolute; display: flex; align-items: center; justify-content: center; background: rgba(250, 204, 21, .28); border: 2px solid #ca8a04; border-radius: 3px; font-size: 12px; color: #111827; overflow: hidden; }
+.sign-field.ok { background: rgba(34, 197, 94, .12); border-color: #16a34a; }
+.sign-field img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.sign-field input[type=text], .sign-field input:not([type]) { width: 100%; height: 100%; border: 0; background: transparent; padding: 0 4px; font-size: 12px; min-height: 0; }
+.sign-field button { border: 0; background: transparent; font-weight: 700; color: #92400e; cursor: pointer; font-size: 12px; }
+.sign-initials { font-style: italic; font-weight: 700; }
+
+/* QR codes. */
+.qr-builder { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 20px; align-items: start; }
+.qr-preview { position: sticky; top: 12px; align-items: center; text-align: center; }
+.qr-svg svg { width: 100%; height: auto; max-width: 300px; }
+.qr-types { display: flex; flex-wrap: wrap; gap: 6px; }
+.qr-type { border: 1px solid var(--line); background: var(--surface); color: var(--fg); border-radius: 999px; padding: 6px 12px; font: inherit; font-size: 13px; cursor: pointer; }
+.qr-type.on { background: var(--app-qr); border-color: var(--app-qr); color: #fff; }
+.qr-type:disabled { opacity: .45; cursor: default; }
+.qr-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.qr-card { display: flex; gap: 12px; align-items: center; text-decoration: none; color: inherit; }
+.qr-card:hover { border-color: var(--app-qr); }
+.qr-thumb svg { width: 84px; height: auto; display: block; }
+.qr-card-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.qr-bars { display: flex; align-items: flex-end; gap: 3px; height: 120px; padding: 4px 0; border-bottom: 1px solid var(--line); }
+.qr-bars div { flex: 1; background: var(--app-qr); border-radius: 2px 2px 0 0; min-width: 4px; }
+.qr-landing { min-height: 100vh; padding: 32px 16px; background: var(--bg); }
+@media (max-width: 900px) { .qr-builder { grid-template-columns: minmax(0, 1fr); } .qr-preview { position: static; } }
+
+.qr-builder input[type=color] { width: 56px; height: 34px; padding: 2px; border-radius: 6px; cursor: pointer; }

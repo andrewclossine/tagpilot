@@ -5,7 +5,7 @@ import type { T } from "./i18n";
 import type { Area } from "./roles";
 
 /** The apps. A supplier's adverts and bids live inside Procurement; My Files gathers the documents of the other three. */
-export const APPS: AppKey[] = ["accounting", "projects", "procurement", "files"];
+export const APPS: AppKey[] = ["accounting", "projects", "procurement", "esign", "qr", "files"];
 
 /** My Files' folders and the part of the books each belongs to (the same list as lib/myfiles, without its server code). */
 const FILE_FOLDERS: [string, Area][] = [["purchases", "purchases"], ["sales", "sales"], ["banking", "banking"], ["inventory", "inventory"], ["assets", "assets"], ["employees", "payroll"], ["reports", "reports"]];
@@ -106,6 +106,18 @@ export function appWorkspaces(ctx: Ctx, t: T): (Workspace & { key: AppKey })[] {
     {
       key: "procurement", label: t("module_procurement"),
       items: [...buying, ...(buying.length ? group(t("nav_as_supplier"), bidding) : bidding)],
+    },
+    {
+      key: "esign", label: t("module_esign"), items: [
+        ...top("esign", "/esign", t("es_nav_dashboard")),
+        ...(ctx.can("esign", "write") ? top("esign", "/esign/new", t("es_new")) : []),
+      ],
+    },
+    {
+      key: "qr", label: t("module_qr"), items: [
+        ...top("qr", "/qr", t("qr_nav_codes")),
+        ...(ctx.can("qr", "write") ? top("qr", "/qr/new", t("qr_new")) : []),
+      ],
     },
     {
       key: "files", label: t("mf_title"),

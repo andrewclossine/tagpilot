@@ -176,8 +176,9 @@ export async function savePricesAction(fd: FormData) {
   const currency = str(fd, "currency").toUpperCase();
   try {
     if (!CURRENCIES.includes(currency)) throw new UserError("err_amount");
-    const num = (m: string) => { const v = str(fd, `price_${m}`); return v === "" ? NaN : parseAmount(v); };
-    await savePrices(currency, { accounting: num("accounting"), projects: num("projects"), procurement: num("procurement"), bidding: num("bidding") });
+    // A price left blank is refused; a module the form did not send at all (one added since) keeps the price it has.
+    const num = (m: string) => { if (fd.get(`price_${m}`) === null) return undefined; const v = str(fd, `price_${m}`); return v === "" ? NaN : parseAmount(v); };
+    await savePrices(currency, { accounting: num("accounting"), projects: num("projects"), procurement: num("procurement"), bidding: num("bidding"), esign: num("esign"), qr: num("qr") });
   } catch (e) { if (e instanceof UserError) redirect(`/platform/prices?error=${e.message}`); throw e; }
   console.log(`platform prices ${currency} saved by ${owner.email}`);
   revalidatePath("/platform/prices");

@@ -9,7 +9,7 @@ type Labels = { help: string; clear: string; upload: string; redraw: string; rem
  * Where a person signs: draw with a finger or mouse, upload a picture of the signature, or reuse the one kept from last time.
  * The drawing is sent as a PNG in the "signature" field. The field is required, so the browser stops a form with no signature.
  */
-export function SignaturePad({ saved, labels }: { saved?: string | null; labels: Labels }) {
+export function SignaturePad({ saved, labels, onChange, noRemember }: { saved?: string | null; labels: Labels; onChange?: (png: string) => void; noRemember?: boolean }) {
   const [value, setValue] = useState(saved ?? "");
   const [usingSaved, setUsingSaved] = useState(!!saved);
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -17,6 +17,7 @@ export function SignaturePad({ saved, labels }: { saved?: string | null; labels:
   const drawing = useRef(false);
 
   useEffect(() => { field.current?.setCustomValidity(value ? "" : labels.required); }, [value, labels.required]);
+  useEffect(() => { onChange?.(value); }, [value, onChange]);
 
   const blank = () => {
     const c = canvas.current?.getContext("2d");
@@ -88,7 +89,7 @@ export function SignaturePad({ saved, labels }: { saved?: string | null; labels:
             <label className="btn sm">{labels.upload}<input type="file" accept="image/png,image/jpeg" onChange={upload} hidden /></label>
           </>
         )}
-        <label className="row small" style={{ gap: 6 }}><input type="checkbox" name="rememberSignature" defaultChecked={!!saved} style={{ width: "auto" }} />{labels.remember}</label>
+        {noRemember ? null : <label className="row small" style={{ gap: 6 }}><input type="checkbox" name="rememberSignature" defaultChecked={!!saved} style={{ width: "auto" }} />{labels.remember}</label>}
       </div>
     </div>
   );

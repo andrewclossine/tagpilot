@@ -14,7 +14,7 @@ const FLW = "https://api.flutterwave.com/v3";
 export type Period = "monthly" | "yearly";
 
 export type Prices = Record<ModuleKey, number>;
-const MODULE_KEYS: ModuleKey[] = ["accounting", "projects", "procurement", "bidding"];
+const MODULE_KEYS: ModuleKey[] = ["accounting", "projects", "procurement", "bidding", "esign", "qr"];
 
 /** The currency prices are shown in when nobody chose another one. */
 export const defaultCurrency = () => (process.env.SUBSCRIPTION_CURRENCY || "USD").toUpperCase();
@@ -26,6 +26,8 @@ function envPrices(): Prices {
     projects: Number(process.env.PRICE_PROJECTS_MONTHLY || 20),
     procurement: Number(process.env.PRICE_PROCUREMENT_MONTHLY || 25),
     bidding: Number(process.env.PRICE_BIDDING_MONTHLY || 10),
+    esign: Number(process.env.PRICE_ESIGN_MONTHLY || 10),
+    qr: Number(process.env.PRICE_QR_MONTHLY || 5),
   };
 }
 
@@ -35,7 +37,7 @@ export async function priceList(): Promise<{ currency: string; prices: Prices }[
   const rows = await db.select().from(schema.platformPrices);
   const byCurrency = new Map<string, Prices>();
   for (const r of rows) {
-    const p = byCurrency.get(r.currency) ?? { accounting: 0, projects: 0, procurement: 0, bidding: 0 };
+    const p = byCurrency.get(r.currency) ?? { accounting: 0, projects: 0, procurement: 0, bidding: 0, esign: 0, qr: 0 };
     if (MODULE_KEYS.includes(r.module)) p[r.module] = r.monthly;
     byCurrency.set(r.currency, p);
   }
@@ -60,15 +62,17 @@ export async function planPrices(modules: ModuleKey[], currency?: string | null)
 }
 
 /** The platform owner sets the monthly price of every module in one currency. */
-export async function savePrices(currency: string, prices: Prices) {
+export async function savePrices(currency: string, prices: Partial<Record<ModuleKey, number | undefined>>) {
   if (!/^[A-Z]{3}$/.test(currency)) throw new UserError("err_amount");
-  if (MODULE_KEYS.some((m) => !(prices[m] >= 0) || !Number.isFinite(prices[m]))) throw new UserError("err_amount");
-  if (MODULE_KEYS.every((m) => !prices[m])) throw new UserError("err_amount");
+  // Only the modules given are saved: one added to TAGPILOT later keeps its price until the owner sets it.
+  const given = MODULE_KEYS.filter((m) => prices[m] !== undefined);
+  if (given.some((m) => !(prices[m]! >= 0) || !Number.isFinite(prices[m]))) throw new UserError("err_amount");
+  if (given.every((m) => !prices[m])) throw new UserError("err_amount");
   const db = await getDb();
   await db.transaction(async (tx) => {
-    for (const m of MODULE_KEYS) {
-      await tx.insert(schema.platformPrices).values({ currency, module: m, monthly: round2(prices[m]) })
-        .onConflictDoUpdate({ target: [schema.platformPrices.currency, schema.platformPrices.module], set: { monthly: round2(prices[m]), updatedAt: new Date() } });
+    for (const m of given) {
+      await tx.insert(schema.platformPrices).values({ currency, module: m, monthly: round2(prices[m]!) })
+        .onConflictDoUpdate({ target: [schema.platformPrices.currency, schema.platformPrices.module], set: { monthly: round2(prices[m]!), updatedAt: new Date() } });
     }
   });
 }

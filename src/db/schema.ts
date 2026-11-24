@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
-  boolean, date, index, integer, jsonb, numeric, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid,
+  boolean, date, doublePrecision, index, integer, jsonb, numeric, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid,
 } from "drizzle-orm/pg-core";
 
 // Amounts are stored with two decimals and read back as JS numbers.
@@ -9,7 +9,7 @@ const created = () => timestamp("created_at", { withTimezone: true }).notNull().
 
 export type Role = "admin" | "accountant" | "sales" | "purchases" | "payroll" | "viewer" | "staff" | "procurement" | "supplier" | "project_manager" | "authorizer";
 /** The parts of the system an organisation subscribes to. "bidding" is for suppliers: see adverts and bid on them. */
-export type ModuleKey = "accounting" | "projects" | "procurement" | "bidding";
+export type ModuleKey = "accounting" | "projects" | "procurement" | "bidding" | "esign" | "qr";
 export type AccountType = "asset" | "liability" | "equity" | "income" | "expense";
 /** Accounts with a subtype play a fixed role: money accounts appear in Banking, the rest are picked by documents. */
 export type AccountSubtype = "bank" | "cash" | "momo" | "ar" | "ap" | "vat_in" | "vat_out" | "wht" | null;
@@ -1416,3 +1416,115 @@ export const fileUploads = pgTable("file_uploads", {
   uploadedBy: uuid("uploaded_by").references(() => users.id),
   createdAt: created(),
 }, (t) => [index("file_uploads_folder").on(t.companyId, t.folder, t.month)]);
+
+// ---------- e-signature ----------
+export type EsignStatus = "draft" | "sent" | "completed" | "declined" | "voided";
+export type EsignSignerStatus = "waiting" | "sent" | "viewed" | "signed" | "declined";
+export type EsignFieldType = "signature" | "initials" | "date" | "name" | "text" | "checkbox";
+/** A page's size in PDF points, so fields placed on screen land in the same place on paper. */
+export type EsignPage = { w: number; h: number };
+
+/** A PDF sent for signature: prepared with its signers and fields, then signed by each, then sealed with a certificate. */
+export const esignDocuments = pgTable("esign_documents", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  number: text("number").notNull(),
+  title: text("title").notNull(),
+  message: text("message").notNull().default(""),
+  status: text("status").$type<EsignStatus>().notNull().default("draft"),
+  ordered: boolean("ordered").notNull().default(true),        // signers sign one after the other, in their order
+  originalAttachmentId: uuid("original_attachment_id").notNull().references(() => attachments.id),
+  originalHash: text("original_hash").notNull(),              // SHA-256 of the PDF as uploaded
+  pages: jsonb("pages").$type<EsignPage[]>().notNull().default([]),
+  finalAttachmentId: uuid("final_attachment_id").references(() => attachments.id),
+  finalHash: text("final_hash"),
+  voidReason: text("void_reason").notNull().default(""),
+  createdBy: uuid("created_by").references(() => users.id),
+  createdAt: created(),
+  sentAt: timestamp("sent_at", { withTimezone: true }),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+}, (t) => [uniqueIndex("esign_documents_number").on(t.companyId, t.number), index("esign_documents_company").on(t.companyId, t.status)]);
+
+/** Someone who signs a document, through a private link of their own. */
+export const esignSigners = pgTable("esign_signers", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  documentId: uuid("document_id").notNull().references(() => esignDocuments.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  email: text("email").notNull().default(""),
+  order: integer("order").notNull().default(1),
+  token: text("token").notNull(),                              // the secret in the signing link
+  status: text("status").$type<EsignSignerStatus>().notNull().default("waiting"),
+  sentAt: timestamp("sent_at", { withTimezone: true }),
+  viewedAt: timestamp("viewed_at", { withTimezone: true }),
+  signedAt: timestamp("signed_at", { withTimezone: true }),
+  ip: text("ip").notNull().default(""),
+  userAgent: text("user_agent").notNull().default(""),
+  signature: text("signature"),                                // the drawn signature, a PNG data URL
+  initials: text("initials").notNull().default(""),
+  declineReason: text("decline_reason").notNull().default(""),
+}, (t) => [uniqueIndex("esign_signers_token").on(t.token), index("esign_signers_document").on(t.documentId, t.order)]);
+
+/** A place on a page where one signer signs or fills something in. Positions are fractions of the page, from its top left. */
+export const esignFields = pgTable("esign_fields", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  documentId: uuid("document_id").notNull().references(() => esignDocuments.id, { onDelete: "cascade" }),
+  signerId: uuid("signer_id").notNull().references(() => esignSigners.id, { onDelete: "cascade" }),
+  type: text("type").$type<EsignFieldType>().notNull(),
+  page: integer("page").notNull(),
+  x: doublePrecision("x").notNull(), y: doublePrecision("y").notNull(), w: doublePrecision("w").notNull(), h: doublePrecision("h").notNull(),
+  required: boolean("required").notNull().default(true),
+  label: text("label").notNull().default(""),
+  value: text("value").notNull().default(""),
+}, (t) => [index("esign_fields_document").on(t.documentId)]);
+
+/** The audit trail: everything done to a document, when, by whom and from where. */
+export const esignEvents = pgTable("esign_events", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  documentId: uuid("document_id").notNull().references(() => esignDocuments.id, { onDelete: "cascade" }),
+  signerId: uuid("signer_id").references(() => esignSigners.id, { onDelete: "set null" }),
+  userId: uuid("user_id").references(() => users.id),
+  action: text("action").notNull(),
+  at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
+  ip: text("ip").notNull().default(""),
+  userAgent: text("user_agent").notNull().default(""),
+  detail: text("detail").notNull().default(""),
+}, (t) => [index("esign_events_document").on(t.documentId, t.at)]);
+
+// ---------- QR codes ----------
+export type QrType = "url" | "text" | "email" | "phone" | "sms" | "wifi" | "vcard" | "location" | "file";
+/** How a code looks: colours, the shape of its dots and corner eyes, a logo in the middle and a frame with a call to action. */
+export type QrStyle = {
+  fg: string; bg: string; dots: "square" | "rounded" | "dots"; eyes: "square" | "rounded" | "circle"; eyeColor: string;
+  logo: string | null; /* a small PNG or JPEG data URL */ frame: "none" | "box" | "banner"; frameText: string; frameColor: string; ecc: "L" | "M" | "Q" | "H";
+};
+
+/**
+ * A QR code. A static one holds its content in the pattern and never changes. A dynamic one holds a short link to
+ * TAGPILOT, so its destination can be edited after printing and every scan is counted.
+ */
+export const qrCodes = pgTable("qr_codes", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  type: text("type").$type<QrType>().notNull(),
+  data: jsonb("data").$type<Record<string, string>>().notNull().default({}),
+  dynamic: boolean("dynamic").notNull().default(true),
+  slug: text("slug").notNull(),                                   // the short link of a dynamic code: /q/<slug>
+  style: jsonb("style").$type<QrStyle>().notNull(),
+  fileAttachmentId: uuid("file_attachment_id").references(() => attachments.id),
+  active: boolean("active").notNull().default(true),
+  scans: integer("scans").notNull().default(0),
+  createdBy: uuid("created_by").references(() => users.id),
+  createdAt: created(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [uniqueIndex("qr_codes_slug").on(t.slug), index("qr_codes_company").on(t.companyId)]);
+
+/** One scan of a dynamic code: when, and on what kind of device. No address or person is kept. */
+export const qrScans = pgTable("qr_scans", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  codeId: uuid("code_id").notNull().references(() => qrCodes.id, { onDelete: "cascade" }),
+  at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
+  device: text("device").notNull().default(""),  // phone, tablet, computer
+  os: text("os").notNull().default(""),          // Android, iOS, Windows...
+  browser: text("browser").notNull().default(""),
+}, (t) => [index("qr_scans_code").on(t.codeId, t.at)]);

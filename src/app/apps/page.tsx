@@ -34,7 +34,7 @@ export default async function AppsPage() {
             if (app) {
               return (
                 <Link key={key} href={appHome(app)} className="app-tile">
-                  <AppIcon app={key} size={72} />
+                  <AppIcon app={key} size={52} />
                   <b>{app.label}</b>
                   <span className="small muted">{t(`app_${key}_help`)}</span>
                 </Link>
@@ -45,8 +45,8 @@ export default async function AppsPage() {
             if (!ctx.isAdmin || key === "files") return null;
             return (
               <Link key={key} href="/billing" className="app-tile off">
-                <AppIcon app={key} size={72} />
-                <b>{t(`module_${key}`)}</b>
+                <AppIcon app={key} size={52} />
+                <b>{t(`module_${key}` as "module_accounting")}</b>
                 <span className="small muted">{t("apps_add")}</span>
               </Link>
             );

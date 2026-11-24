@@ -232,6 +232,13 @@
       "when": 1795510763717,
       "tag": "0032_asset_from_purchase",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1795512163069,
+      "tag": "0033_esign_and_qr",
+      "breakpoints": true
     }
   ]
 }
