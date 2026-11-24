@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
-import { requireView } from "@/lib/auth";
+import { requireView, requireFeature } from "@/lib/auth";
 import { getI18n } from "@/lib/i18n";
 import { sp, type SearchParams } from "@/lib/actions";
 import { isUuid } from "@/lib/format";
@@ -30,6 +30,8 @@ export default async function FsDraftPage({ params, searchParams }: { params: Pr
   const { id } = await params;
   if (!isUuid(id)) notFound();
   const ctx = await requireView("reports");
+
+  requireFeature(ctx, "financial_statements");
   const { t: tu, err } = await getI18n();
   const q = await sp(searchParams);
   const draft = await loadDraft(ctx.company.id, id);

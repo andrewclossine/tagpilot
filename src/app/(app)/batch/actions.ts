@@ -1,6 +1,6 @@
 "use server";
 import { revalidatePath } from "next/cache";
-import { getCtx } from "@/lib/auth";
+import { getCtx, requireFeature } from "@/lib/auth";
 import { str } from "@/lib/format";
 import { saveBatch, type BatchKind, type BatchResult, type BatchRow } from "@/lib/batch";
 
@@ -11,6 +11,8 @@ const AREA = { invoice: "sales", bill: "purchases", bank: "banking" } as const;
 
 export async function saveBatchAction(_prev: BatchState, fd: FormData): Promise<BatchState> {
   const ctx = await getCtx();
+
+  requireFeature(ctx, "batch");
   const kind: BatchKind = str(fd, "kind") === "bill" ? "bill" : str(fd, "kind") === "bank" ? "bank" : "invoice";
   if (!ctx.can(AREA[kind], "write") || !ctx.can("journal", "write")) return { kind, saved: 0, errors: [{ row: -1, message: "err_no_access" }] };
   let rows: BatchRow[];

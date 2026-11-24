@@ -12,6 +12,7 @@ import { audit } from "@/lib/audit";
 import { ensureStarterAccounts } from "@/lib/setup";
 import { saveAttachment } from "@/lib/storage";
 import type { AccountSubtype, AccountType } from "@/db/schema";
+import { assertProjectSlot } from "@/lib/limits";
 
 const TYPES: AccountType[] = ["asset", "liability", "equity", "income", "expense"];
 const SUBTYPES = ["bank", "cash", "momo", "ar", "ap", "vat_in", "vat_out", "wht"] as const;
@@ -112,7 +113,7 @@ export async function saveProject(fd: FormData) {
     if (!values.code || !values.name) throw new UserError("err_required");
     const db = await getDb();
     if (id) await db.update(schema.projects).set(values).where(and(eq(schema.projects.id, id), eq(schema.projects.companyId, ctx.company.id)));
-    else await db.insert(schema.projects).values({ ...values, companyId: ctx.company.id });
+    else { await assertProjectSlot(db, ctx); await db.insert(schema.projects).values({ ...values, companyId: ctx.company.id }); }
     await audit(db, ctx.company.id, ctx.user.id, id ? "update" : "create", "project", values.code);
   } catch (e) { fail(e, "/settings?tab=projects"); }
   revalidatePath("/settings");

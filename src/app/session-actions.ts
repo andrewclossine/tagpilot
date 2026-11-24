@@ -13,6 +13,7 @@ import { companyProfile, CURRENCIES, DEFAULT_POLICIES, DEFAULT_SETTINGS, PAYROLL
 import { ensureAssetCategories, ensureStarterAccounts } from "@/lib/setup";
 import { audit } from "@/lib/audit";
 import { MODULES } from "@/lib/roles";
+import { readPlan } from "@/lib/plans";
 
 /** Starts a subscription: the person who signs up becomes the admin of the company they create next, on a free trial. */
 export async function signUp(fd: FormData) {
@@ -155,7 +156,7 @@ export async function createCompany(fd: FormData) {
   const vatRegistered = str(fd, "vat") === "1";
   const companyId = await db.transaction(async (tx) => {
     const [c] = await tx.insert(schema.companies).values({
-      name, ...companyProfile(fd), currency, modules, paidModules: [],
+      name, ...companyProfile(fd), currency, modules, paidModules: [], tiers: readPlan(fd, modules).tiers, seats: 0, storageTier: readPlan(fd, modules).storage,
       vatRegistered, vatRate: vatRegistered ? parseAmount(fd.get("vatRate")) : 0,
       policies: DEFAULT_POLICIES, settings: { ...DEFAULT_SETTINGS, payroll: { ...PAYROLL_DEFAULTS, country: str(fd, "country") } },
     }).returning({ id: schema.companies.id });

@@ -18,6 +18,7 @@ import { committeeTechnical } from "@/lib/committee";
 import { notifyUser } from "@/lib/requisitions";
 import { audit } from "@/lib/audit";
 import type { TenderStage } from "@/db/schema";
+import { assertTenderSlot } from "@/lib/limits";
 
 const refresh = (id: string) => { revalidatePath("/procurement"); revalidatePath(`/procurement/${id}`); };
 const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, Math.round(n) || 0));
@@ -116,6 +117,7 @@ export async function saveTender(fd: FormData) {
         await tx.update(schema.tenders).set({ ...values, attachmentId: attachmentId ?? old.attachmentId }).where(eq(schema.tenders.id, id));
         return id;
       }
+      await assertTenderSlot(tx, ctx);
       const number = await nextNumber(tx, schema.tenders, { number: schema.tenders.number, companyId: schema.tenders.companyId }, ctx.company.id, kind === "rfq" ? "RFQ" : "TND");
       const [row] = await tx.insert(schema.tenders).values({ ...values, technicalWeight: kind === "rfq" ? 0 : 70, companyId: ctx.company.id, number, kind, attachmentId, createdBy: ctx.user.id }).returning({ id: schema.tenders.id });
       await audit(tx, ctx.company.id, ctx.user.id, "create", "tender", number, { kind });

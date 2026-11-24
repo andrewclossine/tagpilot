@@ -1,4 +1,4 @@
-import { requireView } from "@/lib/auth";
+import { requireView, requireFeature } from "@/lib/auth";
 import { fsFigures, fsTokens, loadDraft } from "@/lib/fs";
 import { fsPdf } from "@/lib/pdf-fs";
 import { printedCompany } from "@/lib/pdf-data";
@@ -7,6 +7,8 @@ import { isUuid } from "@/lib/format";
 /** The financial statements as a PDF, with today's figures from the ledger. */
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const ctx = await requireView("reports");
+
+  requireFeature(ctx, "financial_statements");
   const { id } = await params;
   const draft = isUuid(id) ? await loadDraft(ctx.company.id, id) : null;
   if (!draft) return new Response("Not found", { status: 404 });

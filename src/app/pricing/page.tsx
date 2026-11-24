@@ -5,10 +5,12 @@ import { PRICED } from "@/lib/site-copy";
 import { SiteFooter, SiteHeader, siteText } from "@/components/Site";
 import type { SearchParams } from "@/lib/actions";
 import { sp } from "@/lib/actions";
+import { TIERS } from "@/lib/plans";
+import type { ModuleKey } from "@/db/schema";
 
 export const metadata: Metadata = {
   title: "Pricing",
-  description: "TAGPILOT pricing by app, for your whole organisation, with unlimited users and a 30-day free trial.",
+  description: "TAGPILOT pricing by app and package, from Free to Premium, with a 30-day free trial.",
 };
 
 /** Prices come from the same settings the subscription uses, so this page always shows what customers pay. */
@@ -21,7 +23,10 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
   const fmt = (n: number) => new Intl.NumberFormat(lang === "fr" ? "fr-FR" : "en-US", { style: "currency", currency, maximumFractionDigits: n % 1 ? 2 : 0 }).format(n);
   const show = (monthly: number) => (yearly ? monthly * 10 : monthly);
   const names = { accounting: c.app_accounting, projects: c.app_projects, procurement: c.app_procurement } as const;
-  const all = prices.accounting + prices.projects + prices.procurement;
+  // Each app from its Starter package; the bundle is the three apps on Starter together.
+  const from = (m: string) => prices[`${m}:starter`] ?? 0;
+  const all = from("accounting") + from("projects") + from("procurement");
+  const tierName = (tier: string) => (tier === "free" ? (lang === "fr" ? "Gratuit" : "Free") : tier[0].toUpperCase() + tier.slice(1));
   const per = yearly ? c.pr_per_year : c.pr_per_month;
   return (
     <div className="site">
@@ -47,7 +52,8 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
               {PRICED.map(({ key, points }) => (
                 <div key={key} className="panel site-price">
                   <h3>{names[key as keyof typeof names]}</h3>
-                  <div className="site-amount">{fmt(show(prices[key]))}<span className="small muted"> / {per}</span></div>
+                  <div className="site-amount"><span className="small muted">{lang === "fr" ? "dès " : "from "}</span>{fmt(show(from(key)))}<span className="small muted"> / {per}</span></div>
+                  <div className="small">{TIERS[key as ModuleKey].map((tier) => `${tierName(tier)} ${fmt(show(prices[`${key}:${tier}`] ?? 0))}`).join(" · ")}</div>
                   <div className="small muted">{c.pr_unlimited}{yearly ? ` · ${c.pr_billed_yearly}` : ""}</div>
                   <ul className="site-ticks">{points ? c[points].map((p) => <li key={p}>{p}</li>) : null}</ul>
                   <Link className="btn" href="/signup">{c.pr_choose}</Link>
@@ -66,7 +72,7 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
 
             <div className="panel site-split" style={{ padding: 20 }}>
               <div className="stack" style={{ gap: 6 }}>
-                <h3 style={{ margin: 0 }}>{c.pr_suppliers_title} · {fmt(show(prices.bidding))} / {per}</h3>
+                <h3 style={{ margin: 0 }}>{c.pr_suppliers_title} · {fmt(show(prices["bidding:starter"] ?? 0))} / {per}</h3>
                 <div className="small muted">{c.pr_suppliers_sub}</div>
                 <div className="small">{c.pr_invited_free}</div>
               </div>

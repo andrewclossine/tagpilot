@@ -2,7 +2,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getDb } from "@/db";
-import { requireWrite } from "@/lib/auth";
+import { requireWrite, requireFeature } from "@/lib/auth";
 import { fail } from "@/lib/actions";
 import { isIsoDate, isUuid, parseAmount, str, today } from "@/lib/format";
 import { UserError } from "@/lib/ledger";
@@ -13,6 +13,8 @@ const dateOf = (fd: FormData, key = "date") => { const d = str(fd, key); if (!is
 
 export async function newProductionOrder(fd: FormData) {
   const ctx = await requireWrite("inventory");
+
+  requireFeature(ctx, "manufacturing");
   let id: string;
   try {
     const itemId = str(fd, "itemId");
@@ -28,6 +30,8 @@ export async function newProductionOrder(fd: FormData) {
 /** Saves a draft run; with "start" it also issues the materials. */
 export async function saveProductionDraft(fd: FormData) {
   const ctx = await requireWrite("inventory");
+
+  requireFeature(ctx, "manufacturing");
   const id = str(fd, "id");
   try {
     if (!isUuid(id)) throw new UserError("err_not_found");
@@ -46,6 +50,8 @@ export async function saveProductionDraft(fd: FormData) {
 
 export async function finishProduction(fd: FormData) {
   const ctx = await requireWrite("inventory");
+
+  requireFeature(ctx, "manufacturing");
   const id = str(fd, "id");
   try {
     if (!isUuid(id)) throw new UserError("err_not_found");
@@ -59,6 +65,8 @@ export async function finishProduction(fd: FormData) {
 
 export async function cancelProduction(fd: FormData) {
   const ctx = await requireWrite("inventory");
+
+  requireFeature(ctx, "manufacturing");
   const id = str(fd, "id");
   try {
     if (!isUuid(id)) throw new UserError("err_not_found");

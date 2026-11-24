@@ -1,7 +1,8 @@
 import { desc, eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { getCtx } from "@/lib/auth";
-import { getI18n } from "@/lib/i18n";
+import { getI18n, type Key } from "@/lib/i18n";
+import { chosenPlan, STORAGE_GB, userLimit } from "@/lib/plans";
 import { sp, type SearchParams } from "@/lib/actions";
 import { paymentsConfigured, pickCurrency, planPrices } from "@/lib/billing";
 import { ModulePicker } from "@/components/ModulePicker";
@@ -19,9 +20,11 @@ export default async function BillingPage({ searchParams }: { searchParams: Sear
   if (!ctx.isAdmin) redirect("/no-access");
   const { t, err, lang } = await getI18n();
   const q = await sp(searchParams);
+  const upgrade = q("upgrade");
   // Pay in any currency the platform offers; the organisation's own currency comes first when it is offered.
   const { currency, currencies } = await pickCurrency(q("cur"), ctx.company.currency);
-  const price = await planPrices(ctx.company.modules, currency);
+  const plan = chosenPlan(ctx.company);
+  const price = await planPrices(plan, currency, ctx.company.orgType);
   const unpaid = ctx.company.modules.filter((m) => !ctx.has(m));
   const db = await getDb();
   const history = await db.select().from(schema.subscriptionPayments).where(eq(schema.subscriptionPayments.companyId, ctx.company.id))
@@ -54,13 +57,28 @@ export default async function BillingPage({ searchParams }: { searchParams: Sear
         <div className="small muted">{t("billing_plan_help")}</div>
       </div>
       {q("saved") ? <div className="note ok small">{t("saved")}</div> : null}
+      {upgrade ? <div className="note info small">{t("pk_upgrade_note")}</div> : null}
       <form action={changeModules} className="panel stack">
         <h2>{t("modules_title")}</h2>
         <div className="small muted">{t("modules_change_help")}</div>
-        <ModulePicker t={t} lang={lang} prices={price.prices} currency={price.currency} selected={ctx.company.modules} />
+        <ModulePicker t={t} lang={lang} prices={price.prices} currency={price.currency} selected={ctx.company.modules} tiers={plan.tiers} seats={plan.seats} storage={plan.storage} />
+        <div className="small muted">{t("pk_users_now").replace("{n}", String(userLimit(plan)))}</div>
         {unpaid.length ? <div className="note warn small">{t("modules_unpaid")}: {unpaid.map((m) => t(`module_${m}`)).join(", ")}</div> : null}
         <div><button type="submit" className="btn">{t("save")}</button></div>
       </form>
+      <div className="panel stack">
+        <h2>{t("pk_summary")}</h2>
+        <div className="tbl-wrap"><table>
+          <tbody>
+            {price.lines.map((l) => (
+              <tr key={l.module}><td>{l.module === "seat" ? t("pk_extra_users") + ` × ${plan.seats}` : l.module === "files" ? `${t("mf_title")} · ${t(`tier_${l.tier}` as Key)} (${STORAGE_GB[l.tier] >= 1024 ? `${STORAGE_GB[l.tier] / 1024} TB` : `${STORAGE_GB[l.tier]} GB`})` : `${t(`module_${l.module}` as Key)} · ${t(`tier_${l.tier}` as Key)}`}</td><td className="num">{amount(l.amount)}</td></tr>
+            ))}
+            {price.bundleOff ? <tr><td>{t(`pk_bundle_${price.bundle}` as Key)}</td><td className="num">−{amount(price.bundleOff)}</td></tr> : null}
+            {price.orgOff ? <tr><td>{t("pk_org_discount").replace("{p}", String(Math.round(price.orgRate * 100)))}</td><td className="num">−{amount(price.orgOff)}</td></tr> : null}
+            <tr className="total"><td>{t("billing_monthly")}</td><td className="num">{amount(price.monthly)}</td></tr>
+          </tbody>
+        </table></div>
+      </div>
       {!paymentsConfigured() ? <div className="note warn">{t("err_payments_off")}</div> : null}
       {currencies.length > 1 ? (
         <div className="row" style={{ gap: 8, alignItems: "center", flexWrap: "wrap" }}>

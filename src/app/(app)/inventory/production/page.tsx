@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { desc, eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
-import { requireView } from "@/lib/auth";
+import { requireView, requireFeature } from "@/lib/auth";
 import { getI18n } from "@/lib/i18n";
 import { round2 } from "@/lib/format";
 import { Empty, PageHead, Pill } from "@/components/ui";
@@ -13,6 +13,8 @@ export const metadata = { title: "Production" };
 /** Production runs: what is being made, in what quantity, and what it cost. */
 export default async function ProductionPage() {
   const ctx = await requireView("inventory");
+
+  requireFeature(ctx, "manufacturing");
   const { t, money } = await getI18n();
   const db = await getDb();
   const orders = await db.select({ o: schema.productionOrders, sku: schema.items.sku, name: schema.items.name, unit: schema.items.unit })

@@ -8,41 +8,38 @@ import type { Tx } from "@/db";
 import { audit } from "./audit";
 import { round2 } from "./format";
 import { UserError } from "./ledger";
+import { LIST_PRICES, PRICE_KEYS, quote, type Plan } from "./plans";
 
 const FLW = "https://api.flutterwave.com/v3";
 
 export type Period = "monthly" | "yearly";
 
-export type Prices = Record<ModuleKey, number>;
-const MODULE_KEYS: ModuleKey[] = ["accounting", "projects", "procurement", "bidding", "esign", "qr"];
+/** Monthly prices in one currency, keyed "<app>:<tier>" (lib/plans), and "seat" for an extra user. */
+export type Prices = Record<string, number>;
 
 /** The currency prices are shown in when nobody chose another one. */
 export const defaultCurrency = () => (process.env.SUBSCRIPTION_CURRENCY || "USD").toUpperCase();
 
-/** Prices from the server settings: they apply to the default currency until the platform owner sets prices for it. */
-function envPrices(): Prices {
-  return {
-    accounting: Number(process.env.PRICE_ACCOUNTING_MONTHLY || 30),
-    projects: Number(process.env.PRICE_PROJECTS_MONTHLY || 20),
-    procurement: Number(process.env.PRICE_PROCUREMENT_MONTHLY || 25),
-    bidding: Number(process.env.PRICE_BIDDING_MONTHLY || 10),
-    esign: Number(process.env.PRICE_ESIGN_MONTHLY || 10),
-    qr: Number(process.env.PRICE_QR_MONTHLY || 5),
-  };
-}
+/** Built-in list prices: in RWF and USD (lib/plans), until the platform owner sets others. */
+const builtIn = (currency: string): Prices | null => (currency === "RWF" || currency === "USD" ? { ...LIST_PRICES[currency] } : null);
 
-/** Every currency subscribers can pay in, default first, with each module's monthly price in it. */
+/**
+ * Every currency subscribers can pay in, default first, with each package's monthly price in it. A currency the owner
+ * priced takes the owner's prices, filling any package not priced yet from the built-in list where there is one.
+ */
 export async function priceList(): Promise<{ currency: string; prices: Prices }[]> {
   const db = await getDb();
   const rows = await db.select().from(schema.platformPrices);
   const byCurrency = new Map<string, Prices>();
+  for (const cur of ["RWF", "USD", defaultCurrency()]) { const b = builtIn(cur); if (b) byCurrency.set(cur, b); }
   for (const r of rows) {
-    const p = byCurrency.get(r.currency) ?? { accounting: 0, projects: 0, procurement: 0, bidding: 0, esign: 0, qr: 0 };
-    if (MODULE_KEYS.includes(r.module)) p[r.module] = r.monthly;
+    if (!PRICE_KEYS.includes(r.module)) continue; // a price from before packages, per app only
+    const p = byCurrency.get(r.currency) ?? Object.fromEntries(PRICE_KEYS.map((k) => [k, 0]));
+    p[r.module] = r.monthly;
     byCurrency.set(r.currency, p);
   }
   const def = defaultCurrency();
-  if (!byCurrency.has(def)) byCurrency.set(def, envPrices());
+  if (!byCurrency.has(def)) byCurrency.set(def, { ...LIST_PRICES.USD });
   return [...byCurrency].map(([currency, prices]) => ({ currency, prices })).sort((a, b) => (a.currency === def ? -1 : b.currency === def ? 1 : a.currency.localeCompare(b.currency)));
 }
 
@@ -54,25 +51,23 @@ export async function pickCurrency(...wanted: (string | null | undefined)[]) {
   return { ...chosen, currencies: list.map((l) => l.currency) };
 }
 
-/** What the chosen modules cost together in one currency. A year costs ten months. */
-export async function planPrices(modules: ModuleKey[], currency?: string | null) {
+/** What a plan costs in one currency: its lines, pack and organisation discounts, a month and a year (ten months). */
+export async function planPrices(plan: Plan, currency: string | null | undefined, orgType: string) {
   const { currency: cur, prices } = await pickCurrency(currency);
-  const monthly = round2(modules.reduce((sum, m) => sum + (prices[m] ?? 0), 0));
-  return { currency: cur, monthly, yearly: round2(monthly * 10), prices };
+  return { currency: cur, prices, ...quote(plan, prices, orgType) };
 }
 
-/** The platform owner sets the monthly price of every module in one currency. */
-export async function savePrices(currency: string, prices: Partial<Record<ModuleKey, number | undefined>>) {
+/** The platform owner sets the monthly price of packages in one currency. Packages not given keep their price. */
+export async function savePrices(currency: string, prices: Record<string, number | undefined>) {
   if (!/^[A-Z]{3}$/.test(currency)) throw new UserError("err_amount");
-  // Only the modules given are saved: one added to TAGPILOT later keeps its price until the owner sets it.
-  const given = MODULE_KEYS.filter((m) => prices[m] !== undefined);
-  if (given.some((m) => !(prices[m]! >= 0) || !Number.isFinite(prices[m]))) throw new UserError("err_amount");
-  if (given.every((m) => !prices[m])) throw new UserError("err_amount");
+  const given = PRICE_KEYS.filter((k) => prices[k] !== undefined);
+  if (given.some((k) => !(prices[k]! >= 0) || !Number.isFinite(prices[k]))) throw new UserError("err_amount");
+  if (given.every((k) => !prices[k])) throw new UserError("err_amount");
   const db = await getDb();
   await db.transaction(async (tx) => {
-    for (const m of given) {
-      await tx.insert(schema.platformPrices).values({ currency, module: m, monthly: round2(prices[m]!) })
-        .onConflictDoUpdate({ target: [schema.platformPrices.currency, schema.platformPrices.module], set: { monthly: round2(prices[m]!), updatedAt: new Date() } });
+    for (const k of given) {
+      await tx.insert(schema.platformPrices).values({ currency, module: k as ModuleKey, monthly: round2(prices[k]!) })
+        .onConflictDoUpdate({ target: [schema.platformPrices.currency, schema.platformPrices.module], set: { monthly: round2(prices[k]!), updatedAt: new Date() } });
     }
   });
 }
@@ -105,13 +100,13 @@ async function flw<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 /** Opens a Flutterwave hosted checkout for one subscription period and returns its address. */
-export async function startCheckout(company: { id: string; name: string; modules: ModuleKey[] }, user: { id: string; name: string; email: string | null }, period: Period, currency: string) {
-  const price = await planPrices(company.modules, currency);
+export async function startCheckout(company: { id: string; name: string; orgType: string }, plan: Plan, user: { id: string; name: string; email: string | null }, period: Period, currency: string) {
+  const price = await planPrices(plan, currency, company.orgType);
   const amount = price[period];
   if (!(amount > 0)) throw new UserError("err_payment_provider");
   const txRef = `TP-${company.id.slice(0, 8)}-${Date.now()}-${crypto.randomBytes(3).toString("hex")}`;
   const db = await getDb();
-  await db.insert(schema.subscriptionPayments).values({ companyId: company.id, txRef, period, modules: company.modules, amount, currency: price.currency, createdBy: user.id });
+  await db.insert(schema.subscriptionPayments).values({ companyId: company.id, txRef, period, modules: plan.modules, tiers: plan.tiers, seats: plan.seats, storageTier: plan.storage, amount, currency: price.currency, createdBy: user.id });
   const base = await appUrl();
   const res = await flw<{ status: string; data?: { link?: string } }>("/payments", {
     method: "POST",
@@ -170,7 +165,7 @@ export async function applyPayment(dbx: Tx, p: typeof schema.subscriptionPayment
   if (p.period === "yearly") end.setFullYear(end.getFullYear() + 1); else end.setMonth(end.getMonth() + 1);
   await dbx.update(schema.subscriptionPayments).set({ status: "successful", providerTransactionId: providerTransactionId ?? p.providerTransactionId, periodStart: start, periodEnd: end, paidAt: new Date() })
     .where(eq(schema.subscriptionPayments.id, p.id));
-  await dbx.update(schema.companies).set({ paidUntil: end, plan: "active", ...(p.modules.length ? { paidModules: p.modules } : {}) }).where(eq(schema.companies.id, p.companyId));
+  await dbx.update(schema.companies).set({ paidUntil: end, plan: "active", ...(p.modules.length ? { paidModules: p.modules, paidTiers: p.tiers ?? {}, paidSeats: p.seats ?? 0, paidStorageTier: p.storageTier ?? "free" } : {}) }).where(eq(schema.companies.id, p.companyId));
   await audit(dbx, p.companyId, p.createdBy, "subscription_paid", "subscription", p.txRef, { period: p.period, amount: p.amount, until: end.toISOString().slice(0, 10) });
   return end;
 }

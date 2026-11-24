@@ -564,3 +564,15 @@ a.rowfill { display: block; color: inherit; text-decoration: none; }
 @media (max-width: 900px) { .qr-builder { grid-template-columns: minmax(0, 1fr); } .qr-preview { position: static; } }
 
 .qr-builder input[type=color] { width: 56px; height: 34px; padding: 2px; border-radius: 6px; cursor: pointer; }
+
+/* Packages: each app with its tiers side by side. */
+.packages { display: flex; flex-direction: column; gap: 12px; border: 0; padding: 0; margin: 0; }
+.package { border: 1px solid var(--line); border-radius: var(--r); padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.package-head { gap: 8px; align-items: flex-start; }
+.package-tiers { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; }
+.package-tier { display: flex; gap: 8px; align-items: flex-start; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; cursor: pointer; }
+.package-tier:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+.package-tier > span { display: flex; flex-direction: column; gap: 2px; }
+
+.mf-storage { height: 8px; border-radius: 4px; background: var(--surface-2); overflow: hidden; }
+.mf-storage > i { display: block; height: 100%; border-radius: 4px; }

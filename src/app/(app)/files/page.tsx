@@ -4,6 +4,8 @@ import { getI18n } from "@/lib/i18n";
 import { sp, type SearchParams } from "@/lib/actions";
 import { folderFiles, myFolders } from "@/lib/myfiles";
 import { PageHead } from "@/components/ui";
+import { getDb } from "@/db";
+import { storageLimit, storageUsed } from "@/lib/storage";
 import { FolderIcon } from "./FolderIcon";
 
 export const metadata = { title: "My Files" };
@@ -17,6 +19,11 @@ export default async function FilesPage({ searchParams }: { searchParams: Search
   const year = /^\d{4}$/.test(q("year")) ? Number(q("year")) : thisYear;
   const folders = myFolders(ctx);
   const counts = await Promise.all(folders.map(async (f) => (await folderFiles(ctx, f.key, `${year}-01`, `${year}-12`)).length));
+  // Storage used against the My Files package.
+  const db = await getDb();
+  const [used, limit] = await Promise.all([storageUsed(db, ctx.company.id), storageLimit(db, ctx.company.id)]);
+  const size = (b: number) => (b >= 1024 ** 4 ? `${(b / 1024 ** 4).toFixed(2)} TB` : b >= 1024 ** 3 ? `${(b / 1024 ** 3).toFixed(1)} GB` : `${Math.round(b / 1024 ** 2)} MB`);
+  const share = limit ? Math.min(1, used / limit) : 1;
   return (
     <div className="stack">
       <PageHead title={t("mf_title")}>
@@ -26,6 +33,13 @@ export default async function FilesPage({ searchParams }: { searchParams: Search
           {year < thisYear ? <Link className="btn sm ghost" href={`/files?year=${year + 1}`} aria-label={t("mf_next_year")}>→</Link> : null}
         </div>
       </PageHead>
+      <div className="panel stack" style={{ gap: 6 }}>
+        <div className="row" style={{ justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+          <span className="small">{t("mf_storage_used").replace("{used}", size(used)).replace("{limit}", size(limit))}</span>
+          {ctx.isAdmin ? <Link className="small" href="/billing">{t("mf_storage_more")}</Link> : null}
+        </div>
+        <div className="mf-storage"><i style={{ width: `${Math.round(share * 100)}%`, background: share > 0.9 ? "var(--bad)" : "var(--app-files)" }} /></div>
+      </div>
       <div className="small muted">{t("mf_help")}</div>
       {folders.length ? (
         <div className="mf-grid">

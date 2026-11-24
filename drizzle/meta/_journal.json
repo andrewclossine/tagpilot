@@ -239,6 +239,13 @@
       "when": 1795512163069,
       "tag": "0033_esign_and_qr",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1795545247434,
+      "tag": "0034_packages",
+      "breakpoints": true
     }
   ]
 }

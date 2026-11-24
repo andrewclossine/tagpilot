@@ -12,6 +12,7 @@ import { UserError } from "@/lib/ledger";
 import { audit } from "@/lib/audit";
 import { saveAttachment, MAX_UPLOAD, ALLOWED_TYPES } from "@/lib/storage";
 import { DEFAULT_STYLE, QR_FIELDS, QR_TYPES, qrContent } from "@/lib/qr";
+import { assertQrDynamic } from "@/lib/limits";
 
 const BASE = "/qr";
 const ALPHABET = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -51,6 +52,10 @@ export async function saveQr(fd: FormData) {
     if (type !== "file" && !qrContent(type, data)) throw new UserError("err_qr_content");
     const style = readStyle(str(fd, "style"));
     const db = await getDb();
+    // What the QR package allows: a logo from Starter, file codes from Business, and a number of dynamic codes.
+    if (style.logo && !ctx.feature("qr_logo")) throw new UserError("err_plan_qr_logo");
+    if (type === "file" && !ctx.feature("qr_file")) throw new UserError("err_plan_qr_file");
+    if (!id && dynamic) await assertQrDynamic(db, ctx);
     let fileAttachmentId: string | null | undefined;
     const file = fd.get("file");
     if (file instanceof File && file.size) {

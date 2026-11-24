@@ -12,6 +12,7 @@ import { UserError } from "@/lib/ledger";
 import { nextNumber } from "@/lib/numbering";
 import { saveAttachment, MAX_UPLOAD } from "@/lib/storage";
 import { FIELD_TYPES, invite, loadDoc, logEvent, newToken, requestMeta, sha256, whoseTurn } from "@/lib/esign";
+import { assertEsignSend } from "@/lib/limits";
 
 const BASE = "/esign";
 const isEmail = (s: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
@@ -74,6 +75,7 @@ export async function saveEsignDraft(fd: FormData) {
       const signers = (d.signers ?? []).slice(0, 30).map((s, i) => ({ key: String(s.key), name: String(s.name ?? "").trim().slice(0, 120), email: String(s.email ?? "").trim().toLowerCase().slice(0, 200), order: d.ordered ? Math.max(1, Math.trunc(Number(s.order) || i + 1)) : 1 }));
       const fields = (d.fields ?? []).slice(0, 500).filter((f) => FIELD_TYPES.includes(f.type as EsignFieldType) && signers.some((s) => s.key === String(f.signer)) && f.page >= 1 && f.page <= pageCount);
       if (send) {
+        await assertEsignSend(tx, ctx);
         if (!signers.length) throw new UserError("err_es_no_signers");
         if (signers.some((s) => !s.name)) throw new UserError("err_es_signer_name");
         if (signers.some((s) => s.email && !isEmail(s.email))) throw new UserError("err_email_invalid");

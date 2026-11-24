@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { and, eq, inArray } from "drizzle-orm";
 import { getDb, schema } from "@/db";
-import { requireWrite } from "@/lib/auth";
+import { requireWrite, requireFeature } from "@/lib/auth";
 import { getI18n } from "@/lib/i18n";
 import { sp, type SearchParams } from "@/lib/actions";
 import { today } from "@/lib/format";
@@ -13,6 +13,8 @@ export const metadata = { title: "New production order" };
 /** Pick a product that has a bill of materials and how many to make. */
 export default async function NewProductionPage({ searchParams }: { searchParams: SearchParams }) {
   const ctx = await requireWrite("inventory");
+
+  requireFeature(ctx, "manufacturing");
   const { t, err } = await getI18n();
   const q = await sp(searchParams);
   const db = await getDb();

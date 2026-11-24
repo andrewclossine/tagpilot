@@ -13,6 +13,7 @@ import { requirePlatformOwner } from "@/lib/platform";
 import { UserError } from "@/lib/ledger";
 import { confirmByReference, defaultCurrency, removeCurrency, savePrices } from "@/lib/billing";
 import { CURRENCIES } from "@/lib/template";
+import { PRICE_KEYS } from "@/lib/plans";
 import { cancelRefund, cancelSubscription, confirmReportedPayment, markRefundPaid, rejectReportedPayment, resendRefundLink, tellAccess } from "@/lib/subscriptions";
 
 const back = (id: string, error?: string) => `/platform/companies/${id}${error ? `?error=${error}` : "?saved=1"}`;
@@ -77,10 +78,10 @@ export async function recordPayment(fd: FormData) {
   const db = await getDb();
   await db.transaction(async (tx) => {
     await tx.insert(schema.subscriptionPayments).values({
-      companyId: id, txRef: `manual-${crypto.randomUUID()}`, method: "manual", period: "monthly", modules, amount, currency, status: "successful",
+      companyId: id, txRef: `manual-${crypto.randomUUID()}`, method: "manual", period: "monthly", modules, tiers: c.tiers ?? {}, seats: c.seats ?? 0, storageTier: c.storageTier, amount, currency, status: "successful",
       providerTransactionId: str(fd, "reference").slice(0, 120) || null, periodStart: new Date(), periodEnd, createdBy: null, paidAt: new Date(),
     });
-    await tx.update(schema.companies).set({ paidUntil: periodEnd, paidModules: modules, plan: "active" }).where(eq(schema.companies.id, id));
+    await tx.update(schema.companies).set({ paidUntil: periodEnd, paidModules: modules, paidTiers: c.tiers ?? {}, paidSeats: c.seats ?? 0, paidStorageTier: c.storageTier, plan: "active" }).where(eq(schema.companies.id, id));
     await audit(tx, id, null, "platform_payment", "company", id, { amount, currency, until, by: owner.email });
   });
   revalidatePath(`/platform/companies/${id}`);
@@ -178,7 +179,7 @@ export async function savePricesAction(fd: FormData) {
     if (!CURRENCIES.includes(currency)) throw new UserError("err_amount");
     // A price left blank is refused; a module the form did not send at all (one added since) keeps the price it has.
     const num = (m: string) => { if (fd.get(`price_${m}`) === null) return undefined; const v = str(fd, `price_${m}`); return v === "" ? NaN : parseAmount(v); };
-    await savePrices(currency, { accounting: num("accounting"), projects: num("projects"), procurement: num("procurement"), bidding: num("bidding"), esign: num("esign"), qr: num("qr") });
+    await savePrices(currency, Object.fromEntries(PRICE_KEYS.map((k) => [k, num(k)])));
   } catch (e) { if (e instanceof UserError) redirect(`/platform/prices?error=${e.message}`); throw e; }
   console.log(`platform prices ${currency} saved by ${owner.email}`);
   revalidatePath("/platform/prices");

@@ -8,6 +8,10 @@ import { and, eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import type { ModuleKey, Role } from "@/db/schema";
 import { areaInModules, can, homeOf, type Area } from "./roles";
+import { chosenPlan, hasFeature, lowerTier, TIERS, tierOf, type Feature, type Plan, type Tier } from "./plans";
+
+/** Areas that a package unlocks: Starter Accounting has no payroll, stock, fixed assets or budgets. */
+const AREA_FEATURE: Partial<Record<Area, Feature>> = { payroll: "payroll", inventory: "inventory", assets: "assets", budgets: "budgets" };
 
 const SESSION_COOKIE = "konti_session";
 const COMPANY_COOKIE = "konti_company";
@@ -73,6 +77,11 @@ export type Ctx = {
   modules: ModuleKey[];
   has: (module: ModuleKey) => boolean;
   can: (area: Area, mode?: "read" | "write") => boolean;
+  /** The packages in force: what was chosen, held to what was paid for once a subscription is running. */
+  plan: Plan;
+  feature: (f: Feature) => boolean;
+  /** The package feature an area needs and the plan lacks, if that is all that stands in the way. */
+  blockedBy: (area: Area) => Feature | null;
 };
 
 /** The signed-in user, their current company and their role in it. Sends them to login or onboarding when missing. */
@@ -92,10 +101,25 @@ export const getCtx = cache(async (): Promise<Ctx> => {
   const trialDaysLeft = paid ? null : Math.max(0, Math.ceil((row.company.trialEndsAt.getTime() - Date.now()) / 86400000));
   const locked = !paid && trialDaysLeft === 0;
   const modules = paid ? row.company.modules.filter((m) => row.company.paidModules.includes(m)) : row.company.modules;
+  // A tier raised after the last payment applies once it is paid for; a payment from before packages covered everything.
+  const chosen = { tiers: row.company.tiers ?? {} };
+  const paidTiers = row.company.paidTiers ?? {};
+  const tiers: Partial<Record<ModuleKey, Tier>> = {};
+  // The free trial opens every package at its top, so the whole of TAGPILOT can be tried; the packages chosen apply once paid.
+  for (const m of modules) {
+    const want = paid ? tierOf(chosen, m) : TIERS[m].at(-1)!;
+    tiers[m] = paid && Object.keys(paidTiers).length ? lowerTier(want, tierOf({ tiers: paidTiers }, m)) : want;
+    if (!TIERS[m].includes(tiers[m]!)) tiers[m] = want;
+  }
+  const storageWant = paid ? chosenPlan(row.company).storage : "premium";
+  const storage = paid && Object.keys(paidTiers).length ? lowerTier(storageWant, chosenPlan({ ...row.company, storageTier: row.company.paidStorageTier }).storage) : storageWant;
+  const plan: Plan = { modules, tiers, seats: paid ? Math.min(row.company.seats, row.company.paidSeats) : 0, storage };
+  const feature = (f: Feature) => hasFeature(plan, f);
+  const blockedBy = (area: Area) => { const f = AREA_FEATURE[area]; return f && !feature(f) ? f : null; };
   return {
     user, company: row.company, role: row.role, partnerId: row.partnerId, isAdmin: row.role === "admin", trialDaysLeft, locked,
-    modules, has: (m) => modules.includes(m),
-    can: (area, mode = "read") => areaInModules(area, modules) && (mode === "write" && locked ? false : can(row.role, area, mode)),
+    modules, has: (m) => modules.includes(m), plan, feature, blockedBy,
+    can: (area, mode = "read") => areaInModules(area, modules) && !blockedBy(area) && (mode === "write" && locked ? false : can(row.role, area, mode)),
   };
 });
 
@@ -109,8 +133,18 @@ export async function requireWrite(area: Area): Promise<Ctx> {
 /** For pages: the context, or the no-access page when the role may not see this area. */
 export async function requireView(area: Area): Promise<Ctx> {
   const ctx = await getCtx();
-  if (!ctx.can(area)) redirect(area === "dashboard" || ctx.role === "supplier" ? homeOf(ctx.role, ctx.modules) : "/no-access");
+  if (!ctx.can(area)) {
+    // Only the package stands in the way: show what it takes to open this part.
+    const f = ctx.blockedBy(area);
+    if (f && areaInModules(area, ctx.modules) && can(ctx.role, area, "read")) redirect(`/upgrade?feature=${f}`);
+    redirect(area === "dashboard" || ctx.role === "supplier" ? homeOf(ctx.role, ctx.modules) : "/no-access");
+  }
   return ctx;
+}
+
+/** For pages that a package unlocks beyond their area (financial statements, batch entry, manufacturing). */
+export function requireFeature(ctx: Ctx, f: Feature) {
+  if (!ctx.feature(f)) redirect(`/upgrade?feature=${f}`);
 }
 
 /** For the supplier portal: the context of a supplier's account, with the supplier it belongs to. */

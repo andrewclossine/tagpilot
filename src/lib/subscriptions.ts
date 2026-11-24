@@ -56,13 +56,13 @@ async function companyName(dbx: Tx, id: string) {
 // ---------- payments the subscriber reports ----------
 
 /** A subscriber says they paid by bank transfer or mobile money. It waits for the platform owner to confirm it. */
-export async function reportTransfer(companyId: string, userId: string, input: { period: "monthly" | "yearly"; amount: number; currency: string; reference: string; note: string; modules: string[] }) {
+export async function reportTransfer(companyId: string, userId: string, input: { period: "monthly" | "yearly"; amount: number; currency: string; reference: string; note: string; modules: string[]; tiers?: Record<string, string>; seats?: number; storageTier?: string }) {
   if (!(input.amount > 0) || !/^[A-Z]{3}$/.test(input.currency)) throw new UserError("err_amount");
   if (!input.reference) throw new UserError("err_required");
   const db = await getDb();
   const name = await db.transaction(async (tx) => {
     await tx.insert(schema.subscriptionPayments).values({
-      companyId, txRef: `transfer-${crypto.randomUUID()}`, period: input.period, modules: input.modules as never, amount: round2(input.amount), currency: input.currency,
+      companyId, txRef: `transfer-${crypto.randomUUID()}`, period: input.period, modules: input.modules as never, tiers: (input.tiers ?? {}) as never, seats: input.seats ?? 0, storageTier: (input.storageTier ?? "free") as never, amount: round2(input.amount), currency: input.currency,
       status: "pending", method: "transfer", providerTransactionId: input.reference.slice(0, 120), note: input.note.slice(0, 500), createdBy: userId,
     });
     await audit(tx, companyId, userId, "subscription_transfer_reported", "subscription", input.reference.slice(0, 120), { amount: input.amount, currency: input.currency, period: input.period });

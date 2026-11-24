@@ -9,6 +9,7 @@ const created = () => timestamp("created_at", { withTimezone: true }).notNull().
 
 export type Role = "admin" | "accountant" | "sales" | "purchases" | "payroll" | "viewer" | "staff" | "procurement" | "supplier" | "project_manager" | "authorizer";
 /** The parts of the system an organisation subscribes to. "bidding" is for suppliers: see adverts and bid on them. */
+import type { Tier } from "@/lib/plans";
 export type ModuleKey = "accounting" | "projects" | "procurement" | "bidding" | "esign" | "qr";
 export type AccountType = "asset" | "liability" | "equity" | "income" | "expense";
 /** Accounts with a subtype play a fixed role: money accounts appear in Banking, the rest are picked by documents. */
@@ -105,6 +106,14 @@ export const companies = pgTable("companies", {
   // What the organisation chose, and what its last payment covers. Organisations from before modules keep everything.
   modules: jsonb("modules").$type<ModuleKey[]>().notNull().default(["accounting", "projects", "procurement"]),
   paidModules: jsonb("paid_modules").$type<ModuleKey[]>().notNull().default(["accounting", "projects", "procurement"]),
+  // The package of each app (lib/plans), and users bought beyond what the packages include. An app with no tier here
+  // keeps everything it had before packages existed. The paid copies say what the last payment covers.
+  tiers: jsonb("tiers").$type<Partial<Record<ModuleKey, Tier>>>().notNull().default({}),
+  paidTiers: jsonb("paid_tiers").$type<Partial<Record<ModuleKey, Tier>>>().notNull().default({}),
+  seats: integer("seats").notNull().default(0),
+  paidSeats: integer("paid_seats").notNull().default(0),
+  storageTier: text("storage_tier").$type<Tier>().notNull().default("free"),          // My Files: 5 GB, 50 GB, 500 GB or 2 TB
+  paidStorageTier: text("paid_storage_tier").$type<Tier>().notNull().default("free"),
   vatRegistered: boolean("vat_registered").notNull().default(true),
   vatRate: numeric("vat_rate", { precision: 5, scale: 2, mode: "number" }).notNull().default(18),
   policies: text("policies").notNull().default(""),
@@ -1286,6 +1295,9 @@ export const subscriptionPayments = pgTable("subscription_payments", {
   txRef: text("tx_ref").notNull().unique(),
   period: text("period").$type<"monthly" | "yearly">().notNull(),
   modules: jsonb("modules").$type<ModuleKey[]>().notNull().default([]), // what this payment covers
+  tiers: jsonb("tiers").$type<Partial<Record<ModuleKey, Tier>>>().notNull().default({}),
+  seats: integer("seats").notNull().default(0),
+  storageTier: text("storage_tier").$type<Tier>().notNull().default("free"),
   amount: money("amount"),
   currency: text("currency").notNull(),
   status: text("status").$type<PaymentStatus>().notNull().default("pending"),

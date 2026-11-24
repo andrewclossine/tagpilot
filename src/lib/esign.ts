@@ -147,7 +147,7 @@ export async function finalize(db: Db, documentId: string) {
   pdf.setTitle(doc.title); pdf.setProducer("TAGPILOT e-Signature"); pdf.setCreator("TAGPILOT");
   const bytes = Buffer.from(await pdf.save());
   const file = new File([bytes], `${doc.title.replace(/[\\/:*?"<>|]+/g, "-").slice(0, 100)} - signed.pdf`, { type: "application/pdf" });
-  const saved = await saveAttachment(doc.companyId, doc.createdBy, file);
+  const saved = await saveAttachment(doc.companyId, doc.createdBy, file, { skipQuota: true });
   const finalHash = sha256(bytes);
   await db.update(schema.esignDocuments).set({ status: "completed", completedAt: new Date(), finalAttachmentId: saved.id, finalHash }).where(eq(schema.esignDocuments.id, doc.id));
   await logEvent(db, doc.id, "completed", { detail: `SHA-256 ${finalHash}` });

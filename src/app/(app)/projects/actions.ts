@@ -15,6 +15,7 @@ import { readProjectDocument, saveImportedProject } from "@/lib/project-import";
 import { optionalUpload } from "@/lib/upload";
 import { audit } from "@/lib/audit";
 import type { BudgetPlan } from "@/db/schema";
+import { assertProjectSlot } from "@/lib/limits";
 
 const backTo = (id: string, view: string) => `/projects/${id}?view=${view}`;
 const dateOrNull = (fd: FormData, key: string) => { const d = str(fd, key); return isIsoDate(d) ? d : null; };
@@ -34,6 +35,7 @@ export async function addProject(fd: FormData) {
     const code = str(fd, "code"), name = str(fd, "name");
     if (!code || !name) throw new UserError("err_required");
     const db = await getDb();
+    await assertProjectSlot(db, ctx);
     const [row] = await db.insert(schema.projects).values({
       companyId: ctx.company.id, code, name, donor: str(fd, "donor"), kind: str(fd, "kind") === "cost_center" ? "cost_center" : "project",
       startDate: dateOrNull(fd, "startDate"), endDate: dateOrNull(fd, "endDate"),
@@ -89,6 +91,7 @@ export async function uploadBudget(fd: FormData) {
     id = await db.transaction(async (tx) => {
       let projectId = existing;
       if (!projectId) {
+        await assertProjectSlot(tx, ctx);
         const [row] = await tx.insert(schema.projects).values({ companyId: ctx.company.id, code, name, donor: str(fd, "donor"), kind: str(fd, "kind") === "cost_center" ? "cost_center" : "project" }).returning({ id: schema.projects.id });
         projectId = row.id;
       }

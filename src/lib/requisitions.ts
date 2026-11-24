@@ -9,6 +9,7 @@ import { nextNumber } from "./numbering";
 import { audit } from "./audit";
 import { sendMail } from "./mail";
 import { logframe } from "./programs";
+import { assertTenderSlot } from "./limits";
 
 export type Requisition = typeof schema.requisitions.$inferSelect;
 export type RequisitionInput = {
@@ -142,6 +143,7 @@ export async function convertRequisition(tx: Tx, ctx: Ctx, id: string, kind: "rf
   if (r.status !== "approved") throw new UserError("err_requisition_state");
   const lines = await tx.select().from(schema.requisitionLines).where(eq(schema.requisitionLines.requisitionId, id)).orderBy(asc(schema.requisitionLines.sortOrder));
   const number = await nextNumber(tx, schema.tenders, { number: schema.tenders.number, companyId: schema.tenders.companyId }, ctx.company.id, kind === "rfq" ? "RFQ" : "TND");
+  await assertTenderSlot(tx, ctx);
   const [tender] = await tx.insert(schema.tenders).values({
     companyId: ctx.company.id, number, kind, title: r.title, description: r.justification, projectId: r.projectId, budgetItemId: r.budgetItemId,
     estimate: r.total, technicalWeight: kind === "rfq" ? 0 : 70, openToAll: kind === "tender", createdBy: ctx.user.id,

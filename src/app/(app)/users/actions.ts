@@ -10,6 +10,7 @@ import { UserError } from "@/lib/ledger";
 import { rolesFor } from "@/lib/roles";
 import { audit } from "@/lib/audit";
 import type { ModuleKey, Role } from "@/db/schema";
+import { assertUserSeat } from "@/lib/limits";
 
 const pickRole = (fd: FormData, modules: ModuleKey[]): Role => rolesFor(modules).find((r) => r === str(fd, "role")) ?? "viewer";
 const done = () => { revalidatePath("/users"); redirect("/users?saved=1"); };
@@ -32,6 +33,7 @@ export async function createUser(fd: FormData) {
       if (used) throw new UserError("err_email_taken");
     }
     await db.transaction(async (tx) => {
+      await assertUserSeat(tx, ctx);
       const [u] = await tx.insert(schema.users).values({ username, name, email, passwordHash: await hashPassword(password), createdBy: ctx.user.id })
         .returning({ id: schema.users.id });
       const role = pickRole(fd, ctx.modules);

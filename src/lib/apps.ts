@@ -71,7 +71,7 @@ export function appWorkspaces(ctx: Ctx, t: T): (Workspace & { key: AppKey })[] {
         ] : []),
         ...group(t("nav_inventory"), ctx.can("inventory") ? [
           ...link("inventory", "/inventory", t("nav_items")),
-          ...link("inventory", "/inventory/production", t("mo_title")),
+          ...(ctx.feature("manufacturing") ? link("inventory", "/inventory/production", t("mo_title")) : []),
           ...link("inventory", "/inventory/valuation", t("val_title")),
         ] : []),
         ...group(t("nav_employees"), [
@@ -86,8 +86,8 @@ export function appWorkspaces(ctx: Ctx, t: T): (Workspace & { key: AppKey })[] {
         ]),
         ...group(t("nav_accountant"), [
           ...link("journal", "/journal", t("nav_journal")),
-          ...link("journal", "/batch", t("batch_title")),
-          ...link("reports", "/financial-statements", t("fs_generate")),
+          ...(ctx.feature("batch") ? link("journal", "/batch", t("batch_title")) : []),
+          ...(ctx.feature("financial_statements") ? link("reports", "/financial-statements", t("fs_generate")) : []),
           ...link("accounts", "/accounts", t("nav_coa")),
           ...link("budgets", "/budgets", t("nav_budgets")),
           ...link("journal", "/recurring", t("rec_title")),

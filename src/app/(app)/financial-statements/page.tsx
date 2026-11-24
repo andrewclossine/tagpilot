@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { desc, eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
-import { requireView } from "@/lib/auth";
+import { requireView, requireFeature } from "@/lib/auth";
 import { getI18n } from "@/lib/i18n";
 import { sp, type SearchParams } from "@/lib/actions";
 import { Empty, ErrorNote, PageHead, Pill } from "@/components/ui";
@@ -13,6 +13,8 @@ export const metadata = { title: "Financial statements" };
 /** Every set of financial statements drafted so far, and the form that drafts a new one from the trial balance. */
 export default async function FsListPage({ searchParams }: { searchParams: SearchParams }) {
   const ctx = await requireView("reports");
+
+  requireFeature(ctx, "financial_statements");
   const { t, err } = await getI18n();
   const q = await sp(searchParams);
   const db = await getDb();

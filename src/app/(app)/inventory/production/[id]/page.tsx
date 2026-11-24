@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { and, asc, eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
-import { requireView } from "@/lib/auth";
+import { requireView, requireFeature } from "@/lib/auth";
 import { getI18n } from "@/lib/i18n";
 import { sp, type SearchParams } from "@/lib/actions";
 import { isUuid, round2, today } from "@/lib/format";
@@ -21,6 +21,8 @@ export default async function ProductionOrderPage({ params, searchParams }: { pa
   const { id } = await params;
   if (!isUuid(id)) notFound();
   const ctx = await requireView("inventory");
+
+  requireFeature(ctx, "manufacturing");
   const { t, err, money } = await getI18n();
   const q = await sp(searchParams);
   const db = await getDb();

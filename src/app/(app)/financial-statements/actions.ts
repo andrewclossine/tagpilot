@@ -3,7 +3,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { and, asc, desc, eq, gt, lt } from "drizzle-orm";
 import { getDb, schema } from "@/db";
-import { requireWrite } from "@/lib/auth";
+import { requireWrite, requireFeature } from "@/lib/auth";
 import { fail } from "@/lib/actions";
 import { isIsoDate, isUuid, str } from "@/lib/format";
 import { UserError } from "@/lib/ledger";
@@ -20,6 +20,8 @@ const MAX_DRAFTS = 10;
 /** Only accountants change statements. */
 async function editable(id: string) {
   const ctx = await requireWrite("journal");
+
+  requireFeature(ctx, "financial_statements");
   if (!isUuid(id)) throw new UserError("err_not_found");
   const draft = await loadDraft(ctx.company.id, id);
   if (!draft) throw new UserError("err_not_found");
@@ -33,6 +35,8 @@ const companyOf = (c: { name: string; country: string; orgType: string; sector: 
 /** Reads the trial balance for the period and drafts the statements with the reports, policies and notes that apply. */
 export async function generateFs(fd: FormData) {
   const ctx = await requireWrite("journal");
+
+  requireFeature(ctx, "financial_statements");
   const { lang, t } = await getI18n();
   let id = "";
   try {

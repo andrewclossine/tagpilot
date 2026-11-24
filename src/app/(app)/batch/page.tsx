@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireView } from "@/lib/auth";
+import { requireView, requireFeature } from "@/lib/auth";
 import { getI18n, type Key } from "@/lib/i18n";
 import { sp, type SearchParams } from "@/lib/actions";
 import { batchLists, type BatchKind } from "@/lib/batch";
@@ -17,6 +17,8 @@ const AREA = { invoice: "sales", bill: "purchases", bank: "banking" } as const;
  */
 export default async function BatchPage({ searchParams }: { searchParams: SearchParams }) {
   const ctx = await requireView("journal");
+
+  requireFeature(ctx, "batch");
   const { t, lang, accName } = await getI18n();
   const q = await sp(searchParams);
   const kinds = (["invoice", "bill", "bank"] as const).filter((k) => ctx.can(AREA[k], "write"));

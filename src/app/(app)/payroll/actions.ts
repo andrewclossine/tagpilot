@@ -15,6 +15,7 @@ import { suggestPayrollRules } from "@/lib/ai";
 import { getI18n } from "@/lib/i18n";
 import { audit } from "@/lib/audit";
 import type { PayrollComponent, PayrollSettings } from "@/db/schema";
+import { assertEmployee } from "@/lib/limits";
 
 const monthOk = (m: string) => /^\d{4}-\d{2}$/.test(m);
 
@@ -36,7 +37,7 @@ export async function saveEmployee(fd: FormData) {
     if (!values.name) throw new UserError("err_required");
     const db = await getDb();
     if (id) await db.update(schema.employees).set(values).where(and(eq(schema.employees.id, id), eq(schema.employees.companyId, ctx.company.id)));
-    else await db.insert(schema.employees).values({ ...values, companyId: ctx.company.id });
+    else { await assertEmployee(db, ctx); await db.insert(schema.employees).values({ ...values, companyId: ctx.company.id }); }
     await audit(db, ctx.company.id, ctx.user.id, id ? "update" : "create", "employee", id || values.name);
   } catch (e) { fail(e, "/payroll?tab=employees"); }
   revalidatePath("/payroll");
