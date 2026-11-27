@@ -50,13 +50,26 @@ export function yearBefore(date: string): string {
  */
 export function typedMemo() {
   const jl = schema.journalLines, je = schema.journalEntries;
+  // A reversal says what it reverses and why: its own memo, not the lines it copied.
   return sql<string>`coalesce(
-    case when ${jl.description} <> '' and ${jl.description} <> 'VAT' and ${jl.description} <> ${je.reference}
+    case when ${je.source} = 'reversal' then nullif(${je.memo}, '') end,
+    case when ${jl.description} <> '' and ${jl.description} <> 'VAT' and ${jl.description} <> 'WHT' and ${jl.description} <> ${je.reference}
       and ${jl.description} not like ${je.reference} || ' %' and ${jl.description} !~ '^[A-Z]{2,6}-[0-9]+$' then ${jl.description} end,
     (select string_agg(distinct x.description, ', ') from journal_lines x where x.entry_id = ${je.id}
-      and x.description <> '' and x.description <> 'VAT' and x.description <> ${je.reference}
+      and x.description <> '' and x.description <> 'VAT' and x.description <> 'WHT' and x.description <> ${je.reference}
       and x.description not like ${je.reference} || ' %' and x.description !~ '^[A-Z]{2,6}-[0-9]+$'),
     ${je.memo})`;
+}
+
+/** What the person wrote for a whole entry: the descriptions typed on its lines, else its memo (see typedMemo). */
+export function entryMemo() {
+  const je = schema.journalEntries;
+  return sql<string>`coalesce(
+    case when ${je.source} = 'reversal' then nullif(${je.memo}, '') end,
+    (select string_agg(distinct x.description, ', ') from journal_lines x where x.entry_id = ${je.id}
+      and x.description <> '' and x.description <> 'VAT' and x.description <> 'WHT' and x.description <> ${je.reference}
+      and x.description not like ${je.reference} || ' %' and x.description !~ '^[A-Z]{2,6}-[0-9]+$'),
+    nullif(${je.memo}, ''))`;
 }
 
 /** Every posted line of a period. A line without its own project or partner takes the one on its entry. */
@@ -64,7 +77,7 @@ export async function ledgerLines(db: Db, companyId: string, from: string, to: s
   const jl = schema.journalLines, je = schema.journalEntries, p = schema.partners;
   return db.select({
     accountId: jl.accountId, debit: jl.debit, credit: jl.credit,
-    entryId: je.id, number: je.number, date: je.date, memo: typedMemo(), source: je.source, isAdjusting: je.isAdjusting,
+    entryId: je.id, number: je.number, reference: je.reference, date: je.date, memo: typedMemo(), source: je.source, isAdjusting: je.isAdjusting,
     projectId: sql<string | null>`coalesce(${jl.projectId}, ${je.projectId})`,
     partnerId: p.id, partner: p.name, partnerKind: p.kind,
   }).from(jl).innerJoin(je, eq(je.id, jl.entryId))
@@ -490,7 +503,9 @@ export async function reportWorkbook(report: Report, title: string, company: str
   }
   report.columns.forEach((c, i) => {
     const col = ws.getColumn(i + 1);
-    col.width = c.type === "text" ? (report.columns.length <= 5 && i === 0 ? 46 : i === 3 ? 40 : 18) : 18;
+    // The general ledger's ten columns (Type, Date, Num, Adj, Name, Memo, Split, Debit, Credit, Balance) have their own widths.
+    const gl = report.columns.length === 10 ? [14, 11, 14, 6, 26, 40, 30, 16, 16, 16] : null;
+    col.width = gl ? gl[i] : c.type === "text" ? (report.columns.length <= 5 && i === 0 ? 46 : i === 3 ? 40 : 18) : 18;
     if (c.type === "money") col.numFmt = "#,##0.00";
     if (c.type === "pct") col.numFmt = "0.0%";
   });

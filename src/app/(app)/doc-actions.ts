@@ -6,7 +6,7 @@ import { getDb, schema, type Tx } from "@/db";
 import { requireWrite } from "@/lib/auth";
 import { fail } from "@/lib/actions";
 import { isIsoDate, parseAmount, str, today } from "@/lib/format";
-import { getDoc, payDoc, postDoc, postSalesReceipt, reopenDoc, saveDocDraft, voidDoc, type DocKind } from "@/lib/documents";
+import { getDoc, payDoc, postDoc, postSalesReceipt, reopenDoc, saveDocDraft, undoPayment, voidDoc, type DocKind } from "@/lib/documents";
 import { UserError } from "@/lib/ledger";
 import { parseDocLines } from "@/lib/parse";
 import { getI18n } from "@/lib/i18n";
@@ -83,6 +83,20 @@ export async function payDocAction(fd: FormData) {
   } catch (e) { fail(e, `${base}/${id}`); }
   revalidatePath(base);
   redirect(`${base}/${id}`);
+}
+
+/** Takes back a payment recorded on an invoice or bill (lib/documents undoPayment). */
+export async function undoPaymentAction(fd: FormData) {
+  const kind = kindOf(fd);
+  const ctx = await requireWrite(kind === "invoice" ? "sales" : "purchases");
+  const base = docBase(kind), id = str(fd, "id");
+  const { t } = await getI18n();
+  try {
+    const db = await getDb();
+    await db.transaction((tx) => undoPayment(tx, ctx.company.id, ctx.user.id, str(fd, "paymentId"), t("pay_undone")));
+  } catch (e) { fail(e, `${base}/${id}`); }
+  revalidatePath(base);
+  redirect(`${base}/${id}?saved=1`);
 }
 
 /** Opens a posted, unpaid invoice or bill for editing (lib/documents reopenDoc). */

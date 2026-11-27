@@ -128,7 +128,18 @@ export async function buildReport(kind: ReportKind, o: Options): Promise<Report>
       const open = kind === "gl" ? await balances(db, companyId, { to: addDays(from, -1) }) : null;
       const chosen = byId.get(o.account ?? "");
       const list = chosen ? [chosen] : accounts;
+      // As in QuickBooks: Type, Date, Num, Adj, Name, Memo, Split, Debit, Credit, Balance. Num is the document's own
+      // number (the cheque or invoice number); Split is the other account of the entry, or "-SPLIT-" when there are several.
+      const accountsOf = new Map<string, Set<string>>();
+      for (const l of lines) { const set = accountsOf.get(l.entryId) ?? new Set<string>(); set.add(l.accountId); accountsOf.set(l.entryId, set); }
+      const splitOf = (l: (typeof lines)[number]) => {
+        const others = [...(accountsOf.get(l.entryId) ?? [])].filter((id) => id !== l.accountId);
+        if (others.length > 1) return t("r_split_many");
+        const other = byId.get(others[0] ?? "");
+        return other ? label(other) : "";
+      };
       let dr = 0, cr = 0;
+      const pad = [null, null, null, null, null, null];
       const rows = list.flatMap((a): Row[] => {
         const own = lines.filter((l) => l.accountId === a.id);
         const opening = open ? natural(a, open.get(a.id)?.net ?? 0) : 0;
@@ -136,26 +147,24 @@ export async function buildReport(kind: ReportKind, o: Options): Promise<Report>
         let run = opening, d = 0, c = 0;
         const body = own.map((l): Row => {
           run = round2(run + natural(a, l.debit - l.credit)); d = round2(d + l.debit); c = round2(c + l.credit);
-          const who = l.partner ?? "";
-          return { style: "line", cells: kind === "gl"
-            ? [l.date, l.number, who, l.memo, l.debit || null, l.credit || null, run]
-            : [l.date, t(`src_${l.source}`), l.number, who, l.memo, l.debit || null, l.credit || null, run], links: { [kind === "gl" ? 1 : 2]: journal(l.entryId) } };
+          const num = l.reference || (l.number ? `#${l.number}` : "");
+          return {
+            style: "line",
+            cells: [t(`src_${l.source}`), l.date, num, l.isAdjusting ? "✓" : "", l.partner ?? "", l.memo, splitOf(l), l.debit || null, l.credit || null, run],
+            links: { 2: journal(l.entryId) },
+          };
         });
         dr = round2(dr + d); cr = round2(cr + c);
-        const pad = kind === "gl" ? [null, null, null] : [null, null, null, null];
         return [
           { style: "group", cells: [label(a)] },
-          ...(kind === "gl" ? [{ style: "line" as const, cells: [t("opening"), null, null, null, null, null, opening] }] : []),
+          ...(kind === "gl" ? [{ style: "line" as const, cells: [t("opening"), ...pad, null, null, opening] }] : []),
           ...body,
           { style: "sub", cells: [kind === "gl" ? t("closing") : `${t("total")} ${label(a)}`, ...pad, d, c, run] },
         ];
       });
-      const pad = kind === "gl" ? [null, null, null] : [null, null, null, null];
       return {
         period,
-        columns: kind === "gl"
-          ? [text(t("date")), text(t("number")), text(t("r_name")), text(t("memo")), money(t("debit")), money(t("credit")), money(t("balance"))]
-          : [text(t("date")), text(t("r_txn_type")), text(t("number")), text(t("r_name")), text(t("memo")), money(t("debit")), money(t("credit")), money(t("balance"))],
+        columns: [text(t("r_txn_type")), text(t("date")), text(t("r_num")), text(t("r_adj")), text(t("r_name")), text(t("memo")), text(t("r_split")), money(t("debit")), money(t("credit")), money(t("balance"))],
         rows: rows.length ? [...rows, { style: "total", cells: [t("total"), ...pad, dr, cr, null] }] : [],
       };
     }

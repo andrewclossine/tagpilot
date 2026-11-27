@@ -2007,6 +2007,14 @@ const en = {
   err_edit_credited: "A credit note was issued on this document: correct it with another credit note instead.",
   r_dep_due: "Depreciation up to {month} is not booked yet, so it is missing from this report.",
   r_dep_book: "Book depreciation now",
+  pay_undo: "Undo payment",
+  pay_undone: "Payment undone",
+  err_undo_receipt: "A sales receipt is paid on the spot: void it instead.",
+  err_payment_reconciled: "This payment is ticked off in a bank reconciliation. Undo the reconciliation first.",
+  r_num: "Num",
+  r_adj: "Adj",
+  r_split: "Split",
+  r_split_many: "-SPLIT-",
 } as const;
 
 export type Key = keyof typeof en;
@@ -4020,6 +4028,14 @@ const fr: Record<Key, string> = {
   err_edit_credited: "Un avoir a été émis sur ce document : corrigez-le plutôt par un autre avoir.",
   r_dep_due: "L'amortissement jusqu'à {month} n'est pas encore comptabilisé : il manque dans ce rapport.",
   r_dep_book: "Comptabiliser l'amortissement",
+  pay_undo: "Annuler le paiement",
+  pay_undone: "Paiement annulé",
+  err_undo_receipt: "Un reçu de vente est payé sur-le-champ : annulez-le plutôt.",
+  err_payment_reconciled: "Ce paiement est pointé dans un rapprochement bancaire. Annulez d'abord le rapprochement.",
+  r_num: "N°",
+  r_adj: "Ajust.",
+  r_split: "Contrepartie",
+  r_split_many: "-RÉPARTI-",
 };
 
 export const dict = { en, fr } as const;

@@ -190,6 +190,29 @@ export async function payDoc(tx: Tx, kind: DocKind, companyId: string, userId: s
 }
 
 /**
+ * Takes back a payment recorded by mistake, so it can be recorded again or its invoice or bill edited: the payment's
+ * entry is reversed on the payment's own date and the document owes that amount again. A payment already ticked off
+ * in a bank reconciliation is refused, so the reconciled balance never changes behind the accountant's back.
+ */
+export async function undoPayment(tx: Tx, companyId: string, userId: string, paymentId: string, memoPrefix: string) {
+  const [p] = await tx.select().from(schema.payments).where(and(eq(schema.payments.id, paymentId), eq(schema.payments.companyId, companyId)));
+  if (!p) throw new UserError("err_not_found");
+  const kind: DocKind = p.invoiceId ? "invoice" : "bill";
+  const t = tables(kind);
+  const d = await getDoc(tx, kind, companyId, (p.invoiceId ?? p.billId)!);
+  if (kind === "invoice" && (d as { docType?: string }).docType === "receipt") throw new UserError("err_undo_receipt");
+  const [ticked] = await tx.select({ id: schema.journalLines.id }).from(schema.journalLines)
+    .where(and(eq(schema.journalLines.entryId, p.entryId), eq(schema.journalLines.reconciled, true))).limit(1);
+  if (ticked) throw new UserError("err_payment_reconciled");
+  await reverseEntry(tx, companyId, userId, p.entryId, p.date, memoPrefix);
+  await tx.delete(schema.payments).where(eq(schema.payments.id, p.id));
+  const paid = round2(Math.max(0, d.amountPaid - p.amount));
+  await tx.update(t.doc).set({ amountPaid: paid, status: paid > 0.004 ? "partial" : "open" }).where(eq(t.doc.id, d.id));
+  await audit(tx, companyId, userId, "undo_payment", kind, d.id, { amount: p.amount, date: p.date });
+  return { kind, docId: d.id };
+}
+
+/**
  * A sales receipt: a sale paid on the spot. The draft becomes a receipt with its own number, is issued, and its whole
  * amount is received into the money account, all at once.
  */

@@ -11,7 +11,7 @@ import { addDays, daysBetween, round2, today } from "@/lib/format";
 import { ConfirmButton, DocLinesEditor, type DLine, type ItemOpt } from "./editors";
 import { PartnerPicker } from "./PartnerPicker";
 import { Empty, ErrorNote, PageHead, Pill, Tabs } from "./ui";
-import { createCreditNote, deleteDocDraft, payDocAction, reopenDocAction, saveDoc, voidCreditNoteAction, voidDocAction } from "@/app/(app)/doc-actions";
+import { createCreditNote, deleteDocDraft, payDocAction, reopenDocAction, saveDoc, undoPaymentAction, voidCreditNoteAction, voidDocAction } from "@/app/(app)/doc-actions";
 import { creditableLines } from "@/lib/credit-notes";
 import { MakeRecurring } from "./MakeRecurring";
 import { sendInvoiceEmail } from "@/app/(app)/send-actions";
@@ -274,7 +274,13 @@ export async function DocView({ kind, ctx, doc, error }: { kind: DocKind; ctx: C
                 {pays.map(({ p, acc }) => (
                   <tr key={p.id}><td className="num" style={{ textAlign: "left" }}>{p.date}</td><td>{acc}{p.reference ? ` · ${p.reference}` : ""}</td>
                     <td className="num">{money(p.amount, 2)}</td><td className="small muted">{p.wht ? `${t("wht")} ${money(p.wht, 2)}` : ""}</td>
-                    <td><Link href={`/journal/${p.entryId}`} className="small">→</Link></td></tr>
+                    <td style={{ whiteSpace: "nowrap" }}><Link href={`/journal/${p.entryId}`} className="small">→</Link>
+                      {ctx.can(kind === "invoice" ? "sales" : "purchases", "write") && !isReceipt ? (
+                        <form action={undoPaymentAction} style={{ display: "inline", marginLeft: 8 }}>
+                          <input type="hidden" name="kind" value={kind} /><input type="hidden" name="id" value={doc.id} /><input type="hidden" name="paymentId" value={p.id} />
+                          <ConfirmButton className="btn ghost sm" confirmLabel={t("confirm")}>{t("pay_undo")}</ConfirmButton>
+                        </form>
+                      ) : null}</td></tr>
                 ))}
               </tbody></table>
             </div>

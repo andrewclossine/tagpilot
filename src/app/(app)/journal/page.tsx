@@ -6,6 +6,8 @@ import { getI18n } from "@/lib/i18n";
 import { sp, type SearchParams } from "@/lib/actions";
 import { isIsoDate, today } from "@/lib/format";
 import { Empty, PageHead, Pill, Tabs } from "@/components/ui";
+import { entryMemo } from "@/lib/financial-reports";
+import { txnHref } from "@/lib/txn-links";
 
 export const metadata = { title: "Journal" };
 
@@ -22,6 +24,7 @@ export default async function JournalPage({ searchParams }: { searchParams: Sear
   const rows = await db.select({
     e: schema.journalEntries, partner: schema.partners.name,
     total: sql<string>`(select coalesce(sum(debit),0) from journal_lines l where l.entry_id = ${schema.journalEntries.id})`,
+    typed: entryMemo(),
   }).from(schema.journalEntries).leftJoin(schema.partners, eq(schema.partners.id, schema.journalEntries.partnerId))
     .where(and(...conds)).orderBy(desc(schema.journalEntries.date), desc(schema.journalEntries.createdAt)).limit(500);
   const base = `/journal?from=${from}&to=${to}`;
@@ -50,16 +53,21 @@ export default async function JournalPage({ searchParams }: { searchParams: Sear
           <div className="tbl-wrap"><table>
             <thead><tr><th>{t("number")}</th><th>{t("date")}</th><th>{t("memo")}</th><th>{t("partner")}</th><th>{t("source")}</th><th className="num">{t("amount")}</th><th>{t("status")}</th></tr></thead>
             <tbody>
-              {rows.map(({ e, partner, total }) => (
-                <tr key={e.id} className="click">
-                  <td className="num" style={{ textAlign: "left" }}>{e.number ?? "—"}</td>
-                  <td className="num" style={{ textAlign: "left" }}>{e.date}</td>
-                  <td><Link className="rowlink" href={`/journal/${e.id}`}>{e.memo || e.reference || "—"}</Link></td>
-                  <td>{partner ?? ""}</td><td className="small muted">{t(`src_${e.source}`)}</td>
-                  <td className="num">{money(Number(total))}</td>
-                  <td><Pill kind={e.status}>{t(e.status === "posted" ? "st_posted" : "st_draft")}</Pill></td>
-                </tr>
-              ))}
+              {rows.map(({ e, partner, total, typed }) => {
+                // The whole line opens the transaction itself: the invoice, bill or voucher behind it, or its entry.
+                const href = e.status === "draft" ? `/journal/${e.id}` : txnHref(e);
+                const cell = (v: React.ReactNode, i: number) => <Link className="rowfill" href={href} tabIndex={i ? -1 : 0}>{v || "\u00a0"}</Link>;
+                return (
+                  <tr key={e.id} className="rowclick">
+                    <td className="num" style={{ textAlign: "left" }}>{cell(e.number ?? "—", 0)}</td>
+                    <td className="num" style={{ textAlign: "left" }}>{cell(e.date, 1)}</td>
+                    <td>{cell(<b>{typed || e.reference || "—"}</b>, 2)}</td>
+                    <td>{cell(partner ?? "", 3)}</td><td className="small muted">{cell(t(`src_${e.source}`), 4)}</td>
+                    <td className="num">{cell(money(Number(total)), 5)}</td>
+                    <td>{cell(<Pill kind={e.status}>{t(e.status === "posted" ? "st_posted" : "st_draft")}</Pill>, 6)}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table></div>
         ) : <Empty>{t("nothing_yet")}</Empty>}
