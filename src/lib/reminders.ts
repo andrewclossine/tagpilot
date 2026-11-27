@@ -9,6 +9,7 @@ import { UserError } from "./ledger";
 import { mailConfigured, sendMail } from "./mail";
 import { buildInvoicePdf } from "./pdf-data";
 import { audit } from "./audit";
+import { autoDepreciate } from "./assets";
 import { runRecurring } from "./recurring";
 
 /** Unpaid invoices past their due date, with the customer's email and how often they were reminded. */
@@ -50,10 +51,12 @@ export async function sendReminder(company: Ctx["company"], userId: string | nul
  */
 export async function runDailyAccounting(db: Db) {
   const companies = (await db.select().from(schema.companies)).filter((c) => !c.suspendedAt && c.modules.includes("accounting"));
-  let made = 0, failed = 0, reminded = 0;
+  let made = 0, failed = 0, reminded = 0, depreciation = 0;
   for (const c of companies) {
     const r = await runRecurring(db, c, null);
     made += r.made; failed += r.failed;
+    // Last month's depreciation, so the income statement carries it without anyone running it.
+    depreciation += await autoDepreciate(db, c.id);
     const every = c.settings.reminderDays ?? 0;
     if (!every || !mailConfigured()) continue;
     for (const o of await overdueInvoices(db, c.id)) {
@@ -62,5 +65,5 @@ export async function runDailyAccounting(db: Db) {
       try { await sendReminder(c, null, o.d.id); reminded++; } catch (e) { console.error("Reminder failed", o.d.number, e); }
     }
   }
-  return { made, failed, reminded };
+  return { made, failed, reminded, depreciation };
 }

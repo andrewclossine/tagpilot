@@ -1,5 +1,5 @@
 import "server-only";
-import { and, eq, inArray, lte, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, lt, lte, or, sql } from "drizzle-orm";
 import type { Db, Tx } from "@/db";
 import { schema } from "@/db";
 import { lastDayOfMonth, round2 } from "./format";
@@ -196,4 +196,42 @@ export async function assetPurchases(db: Db | Tx, companyId: string, cat: Catego
       supplier: l.partner ?? "", description: l.description || l.memo, amount: Number(l.debit), registered, left: round2(Number(l.debit) - registered),
     };
   }).filter((p) => p.left > 0.004);
+}
+
+/**
+ * Books depreciation by itself, once a month: every active asset is charged up to the end of last month (catching up
+ * months never booked), so the income statement always carries it. A period already closed is left alone.
+ */
+export async function autoDepreciate(db: Db, companyId: string): Promise<number> {
+  const now = new Date();
+  const month = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1)).toISOString().slice(0, 7);
+  const end = lastDayOfMonth(month);
+  const [due] = await db.select({ id: schema.fixedAssets.id }).from(schema.fixedAssets).where(and(
+    eq(schema.fixedAssets.companyId, companyId), eq(schema.fixedAssets.status, "active"), lte(schema.fixedAssets.availableDate, end),
+    or(isNull(schema.fixedAssets.depreciatedTo), lt(schema.fixedAssets.depreciatedTo, end)),
+  )).limit(1);
+  if (!due) return 0;
+  const [admin] = await db.select({ userId: schema.memberships.userId }).from(schema.memberships)
+    .where(and(eq(schema.memberships.companyId, companyId), eq(schema.memberships.role, "admin"))).limit(1);
+  try {
+    return (await db.transaction((tx) => runDepreciation(tx, companyId, admin?.userId ?? null as unknown as string, month, `Depreciation ${month}`))).total;
+  } catch (e) {
+    console.error("Automatic depreciation not booked", companyId, (e as Error).message);
+    return 0;
+  }
+}
+
+/** The last month end up to a date that some active asset has not been depreciated to, if any. */
+export async function depreciationDue(db: Db | Tx, companyId: string, upTo: string): Promise<string | null> {
+  const now = new Date();
+  const lastClosed = lastDayOfMonth(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1)).toISOString().slice(0, 7));
+  // The last month end on or before the date: depreciation is booked month by month.
+  const prevEnd = (d: string) => lastDayOfMonth(new Date(Date.UTC(Number(d.slice(0, 4)), Number(d.slice(5, 7)) - 2, 1)).toISOString().slice(0, 7));
+  const capped = upTo < lastClosed ? upTo : lastClosed;
+  const end = lastDayOfMonth(capped.slice(0, 7)) === capped ? capped : prevEnd(capped);
+  const [due] = await db.select({ id: schema.fixedAssets.id }).from(schema.fixedAssets).where(and(
+    eq(schema.fixedAssets.companyId, companyId), eq(schema.fixedAssets.status, "active"), lte(schema.fixedAssets.availableDate, end),
+    or(isNull(schema.fixedAssets.depreciatedTo), lt(schema.fixedAssets.depreciatedTo, end)),
+  )).limit(1);
+  return due ? end.slice(0, 7) : null;
 }

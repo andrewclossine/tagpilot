@@ -12,6 +12,7 @@ import { mailConfigured, sendMail } from "@/lib/mail";
 import { isReportKind, reportArea } from "@/lib/reports";
 import { readQuery, reportFiles } from "@/lib/report-view";
 import { isIsoDate, str } from "@/lib/format";
+import { autoDepreciate } from "@/lib/assets";
 import { taxLinesFor, type TaxLine } from "@/lib/tax-lines";
 
 /** Saves which income tax line each income and expense account belongs to. */
@@ -57,4 +58,14 @@ export async function emailReport(fd: FormData) {
     await audit(db, ctx.company.id, ctx.user.id, "email", "report", kind, { to, format });
   } catch (e) { fail(e, back); }
   redirect(`${back}${back.includes("?") ? "&" : "?"}emailed=${encodeURIComponent(to.join(", "))}`);
+}
+
+/** Books the depreciation not yet booked, up to the end of last month, from a report that would be missing it. */
+export async function bookDepreciationNow(fd: FormData) {
+  const ctx = await requireWrite("assets");
+  const back = str(fd, "back").startsWith("/reports/") ? str(fd, "back") : "/reports";
+  const db = await getDb();
+  await autoDepreciate(db, ctx.company.id);
+  revalidatePath("/reports");
+  redirect(`${back}${back.includes("?") ? "&" : "?"}saved=1`);
 }

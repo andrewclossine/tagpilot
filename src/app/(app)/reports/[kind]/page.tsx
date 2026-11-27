@@ -11,7 +11,8 @@ import { isReportKind, REPORT_TITLES, reportArea } from "@/lib/reports";
 import { RANGE_GROUPS, RANGES } from "@/lib/report-dates";
 import { companyToday, fiscalStart, loadReport, queryString, readQuery } from "@/lib/report-view";
 import { taxLineKey, taxLineOf, taxLinesFor } from "@/lib/tax-lines";
-import { emailReport, saveTaxLines } from "../actions";
+import { bookDepreciationNow, emailReport, saveTaxLines } from "../actions";
+import { depreciationDue } from "@/lib/assets";
 import { PrintButton } from "@/components/PrintButton";
 import { ReportControls } from "@/components/ReportControls";
 import { ReportTable } from "@/components/ReportTable";
@@ -36,6 +37,8 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
   const qs = queryString(query);
   const { full, report, title, asAt } = await loadReport(ctx, kind, query);
   const db = await getDb();
+  // Statements that carry results or balances would miss depreciation not yet booked: say so, with a way to book it.
+  const depDue = ["pl", "pl-detail", "pl-compare", "proj", "bs", "bs-detail", "bs-summary", "bs-compare", "cf", "tb"].includes(kind) && ctx.has("accounting") ? await depreciationDue(db, ctx.company.id, to) : null;
 
   let body: React.ReactNode;
   let picker: React.ReactNode = null;
@@ -91,6 +94,13 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
       </PageHead>
       <ErrorNote message={err(q("error"))} />
       {q("saved") ? <div className="note ok small">{t("saved")}</div> : null}
+      {depDue ? (
+        <form action={bookDepreciationNow} className="note warn small row noprint" style={{ gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+          <input type="hidden" name="back" value={back} />
+          <span>{t("r_dep_due").replace("{month}", depDue)}</span>
+          {ctx.can("assets", "write") ? <button type="submit" className="btn sm">{t("r_dep_book")}</button> : null}
+        </form>
+      ) : null}
       {q("emailed") ? <div className="note ok small">{t("r_emailed_to")} {q("emailed")}</div> : null}
       <ReportControls
         range={query.range} from={from} to={to} asAt={asAt} today={companyToday(ctx)} fiscalStart={fiscalStart(ctx)} account={query.account}

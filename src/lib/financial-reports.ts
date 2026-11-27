@@ -43,12 +43,28 @@ export function yearBefore(date: string): string {
   return lastOfMonth ? lastDayOfMonth(`${year}-${month}`) : `${year}${date.slice(4)}`;
 }
 
+/**
+ * What the person wrote when they recorded the transaction: the line's own description (an invoice item, a cheque
+ * line), else the descriptions typed on the entry's other lines, else the entry's memo. Words the system writes on
+ * the balancing lines (the document number, "VAT", the cheque number and payee) are passed over.
+ */
+export function typedMemo() {
+  const jl = schema.journalLines, je = schema.journalEntries;
+  return sql<string>`coalesce(
+    case when ${jl.description} <> '' and ${jl.description} <> 'VAT' and ${jl.description} <> ${je.reference}
+      and ${jl.description} not like ${je.reference} || ' %' and ${jl.description} !~ '^[A-Z]{2,6}-[0-9]+$' then ${jl.description} end,
+    (select string_agg(distinct x.description, ', ') from journal_lines x where x.entry_id = ${je.id}
+      and x.description <> '' and x.description <> 'VAT' and x.description <> ${je.reference}
+      and x.description not like ${je.reference} || ' %' and x.description !~ '^[A-Z]{2,6}-[0-9]+$'),
+    ${je.memo})`;
+}
+
 /** Every posted line of a period. A line without its own project or partner takes the one on its entry. */
 export async function ledgerLines(db: Db, companyId: string, from: string, to: string) {
   const jl = schema.journalLines, je = schema.journalEntries, p = schema.partners;
   return db.select({
     accountId: jl.accountId, debit: jl.debit, credit: jl.credit,
-    entryId: je.id, number: je.number, date: je.date, memo: je.memo, source: je.source, isAdjusting: je.isAdjusting,
+    entryId: je.id, number: je.number, date: je.date, memo: typedMemo(), source: je.source, isAdjusting: je.isAdjusting,
     projectId: sql<string | null>`coalesce(${jl.projectId}, ${je.projectId})`,
     partnerId: p.id, partner: p.name, partnerKind: p.kind,
   }).from(jl).innerJoin(je, eq(je.id, jl.entryId))

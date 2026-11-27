@@ -11,7 +11,7 @@ import { addDays, daysBetween, round2, today } from "@/lib/format";
 import { ConfirmButton, DocLinesEditor, type DLine, type ItemOpt } from "./editors";
 import { PartnerPicker } from "./PartnerPicker";
 import { Empty, ErrorNote, PageHead, Pill, Tabs } from "./ui";
-import { createCreditNote, deleteDocDraft, payDocAction, saveDoc, voidCreditNoteAction, voidDocAction } from "@/app/(app)/doc-actions";
+import { createCreditNote, deleteDocDraft, payDocAction, reopenDocAction, saveDoc, voidCreditNoteAction, voidDocAction } from "@/app/(app)/doc-actions";
 import { creditableLines } from "@/lib/credit-notes";
 import { MakeRecurring } from "./MakeRecurring";
 import { sendInvoiceEmail } from "@/app/(app)/send-actions";
@@ -240,6 +240,12 @@ export async function DocView({ kind, ctx, doc, error }: { kind: DocKind; ctx: C
             </form>
           ) : null}
           {ctx.can(kind === "invoice" ? "sales" : "purchases", "write") && doc.status !== "void" && !isReceipt ? <MakeRecurring kind={kind} sourceId={doc.id} date={doc.date} /> : null}
+          {ctx.can(kind === "invoice" ? "sales" : "purchases", "write") && doc.status !== "void" && doc.status !== "draft" && doc.amountPaid === 0 && !isReceipt ? (
+            <form action={reopenDocAction}>
+              <input type="hidden" name="kind" value={kind} /><input type="hidden" name="id" value={doc.id} />
+              <ConfirmButton className="btn primary sm" confirmLabel={t("confirm")}>{t("txn_edit")}</ConfirmButton>
+            </form>
+          ) : null}
           {ctx.can(kind === "invoice" ? "sales" : "purchases", "write") && doc.status !== "void" && doc.amountPaid === 0 ? (
             <form action={voidDocAction}>
               <input type="hidden" name="kind" value={kind} /><input type="hidden" name="id" value={doc.id} />

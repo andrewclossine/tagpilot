@@ -202,6 +202,32 @@ export async function postSalesReceipt(tx: Tx, companyId: string, userId: string
   await payDoc(tx, "invoice", companyId, userId, id, { date: d.date, amount: d.total, moneyAccountId: p.moneyAccountId, reference: p.reference }, settings);
 }
 
+/**
+ * Opens a posted, unpaid invoice or bill for editing, as QuickBooks lets you edit a transaction: its ledger entry and
+ * any stock it moved are reversed on the document's own date (so every report of that period stays right), and it
+ * goes back to draft with its number, to be changed and posted again. Both steps stay in the audit trail.
+ */
+export async function reopenDoc(tx: Tx, kind: DocKind, companyId: string, userId: string, id: string, memoPrefix: string) {
+  const t = tables(kind);
+  const d = await getDoc(tx, kind, companyId, id);
+  if (d.status === "draft") return;
+  if (d.status === "void") throw new UserError("err_posted_locked");
+  if (d.amountPaid > 0) throw new UserError("err_edit_paid");
+  const [cn] = await tx.select({ id: schema.creditNotes.id }).from(schema.creditNotes)
+    .where(and(eq(schema.creditNotes.companyId, companyId), kind === "invoice" ? eq(schema.creditNotes.invoiceId, id) : eq(schema.creditNotes.billId, id), eq(schema.creditNotes.status, "posted"))).limit(1);
+  if (cn) throw new UserError("err_edit_credited");
+  if (d.entryId) {
+    await reverseEntry(tx, companyId, userId, d.entryId, d.date, memoPrefix);
+    await reverseDocumentStock(tx, companyId, kind, id, d.date);
+  }
+  await tx.update(t.doc).set({ status: "draft", entryId: null }).where(eq(t.doc.id, id));
+  if (kind === "bill") {
+    await tx.update(schema.goodsReceipts).set({ status: "received", billId: null }).where(eq(schema.goodsReceipts.billId, id));
+    await tx.update(schema.supplierBills).set({ status: "received", billId: null }).where(eq(schema.supplierBills.billId, id));
+  }
+  await audit(tx, companyId, userId, "reopen", kind, id);
+}
+
 /** Voids an unpaid document: drafts are simply marked void, posted ones are reversed in the ledger. */
 export async function voidDoc(tx: Tx, kind: DocKind, companyId: string, userId: string, id: string, date: string, memoPrefix: string) {
   const t = tables(kind);

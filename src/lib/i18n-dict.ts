@@ -1668,8 +1668,8 @@ const en = {
   set_fiscal_help: "Report dates such as This fiscal quarter and Last fiscal year count from this month.",
   txn_open_document: "Open the document",
   txn_adjust_on_document: "Change or adjust this transaction on its document.",
-  txn_correct: "Correct this entry",
-  txn_correct_help: "It is reversed on its own date and an editable copy opens, to change and post.",
+  txn_correct: "Edit this transaction",
+  txn_correct_help: "The original is reversed on its own date and an editable copy opens: change it and post. Both stay in the audit trail.",
   txn_correcting: "The entry was reversed. Change this copy and post it to finish the correction.",
   acck_bank: "Bank",
   acck_ar: "Accounts receivable",
@@ -2001,6 +2001,12 @@ const en = {
   mf_storage_more: "More storage",
   err_plan_storage: "Your My Files storage is full. Choose a larger My Files package on the Subscription page.",
   err_plan_storage_down: "The organisation keeps more files than this My Files package holds. Choose a larger one.",
+  txn_edit: "Edit",
+  txn_edit_reversal: "Reopened for editing",
+  err_edit_paid: "A document with a payment cannot be edited: correct it with a credit note.",
+  err_edit_credited: "A credit note was issued on this document: correct it with another credit note instead.",
+  r_dep_due: "Depreciation up to {month} is not booked yet, so it is missing from this report.",
+  r_dep_book: "Book depreciation now",
 } as const;
 
 export type Key = keyof typeof en;
@@ -3675,7 +3681,7 @@ const fr: Record<Key, string> = {
   set_fiscal_help: "Les dates de rapport comme Ce trimestre fiscal et Exercice précédent partent de ce mois.",
   txn_open_document: "Ouvrir le document",
   txn_adjust_on_document: "Modifiez ou ajustez cette opération sur son document.",
-  txn_correct: "Corriger cette écriture",
+  txn_correct: "Modifier cette opération",
   txn_correct_help: "Elle est contrepassée à sa propre date et une copie modifiable s'ouvre, à changer et comptabiliser.",
   txn_correcting: "L'écriture a été contrepassée. Modifiez cette copie et comptabilisez-la pour terminer la correction.",
   acck_bank: "Banque",
@@ -4008,6 +4014,12 @@ const fr: Record<Key, string> = {
   mf_storage_more: "Plus de stockage",
   err_plan_storage: "Le stockage de Mes fichiers est plein. Choisissez un forfait Mes fichiers plus grand sur la page Abonnement.",
   err_plan_storage_down: "L'organisation garde plus de fichiers que ce forfait Mes fichiers n'en contient. Choisissez-en un plus grand.",
+  txn_edit: "Modifier",
+  txn_edit_reversal: "Rouvert pour modification",
+  err_edit_paid: "Un document qui a reçu un paiement ne peut pas être modifié : corrigez-le par un avoir.",
+  err_edit_credited: "Un avoir a été émis sur ce document : corrigez-le plutôt par un autre avoir.",
+  r_dep_due: "L'amortissement jusqu'à {month} n'est pas encore comptabilisé : il manque dans ce rapport.",
+  r_dep_book: "Comptabiliser l'amortissement",
 };
 
 export const dict = { en, fr } as const;

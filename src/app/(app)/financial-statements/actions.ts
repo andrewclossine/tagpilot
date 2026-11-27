@@ -11,6 +11,7 @@ import { audit } from "@/lib/audit";
 import { getI18n } from "@/lib/i18n";
 import { fsFigures, loadDraft } from "@/lib/fs";
 import { startingNotes, TEMPLATES } from "@/lib/fs-templates";
+import { autoDepreciate } from "@/lib/assets";
 import type { FsFramework } from "@/db/schema";
 
 const BASE = "/financial-statements";
@@ -44,6 +45,8 @@ export async function generateFs(fd: FormData) {
     if (!isIsoDate(from) || !isIsoDate(to) || from > to) throw new UserError("err_fs_period");
     const framework: FsFramework = str(fd, "framework") === "ifrs" ? "ifrs" : "ifrs_sme";
     const comparative = str(fd, "comparative") === "1";
+    // Depreciation not yet booked would leave it out of the statements: book it first.
+    await autoDepreciate(await getDb(), ctx.company.id);
     const f = await fsFigures(ctx.company.id, from, to, comparative, lang);
     const notes = startingNotes({ f, c: companyOf(ctx.company), framework }, lang);
     const db = await getDb();
