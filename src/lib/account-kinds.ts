@@ -33,7 +33,9 @@ export const KIND_SPEC: Record<AccountKind, { type: MainType; subtype: Sub; from
 };
 
 /** The kind of an existing account, read from its type, role and code. */
-export function kindOf(a: { type: string; subtype?: string | null; code: string }): AccountKind {
+export function kindOf(a: { type: string; subtype?: string | null; code: string; kind?: string | null }): AccountKind {
+  // The type someone chose stands, as long as it fits the account's main type.
+  if (a.kind && isAccountKind(a.kind) && KIND_SPEC[a.kind].type === a.type) return a.kind;
   const n = Number(a.code.replace(/\D/g, "").slice(0, 4));
   const inRange = (k: AccountKind) => n >= KIND_SPEC[k].from && n <= KIND_SPEC[k].to;
   switch (a.type) {

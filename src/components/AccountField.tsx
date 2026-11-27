@@ -11,12 +11,12 @@ export async function pickerProps(): Promise<{ labels: PickerLabels; canAdd: boo
   return { canAdd: ctx.can("accounts", "write"), labels: pickerLabels(t) };
 }
 
-type Row = { id?: string; code: string; nameEn?: string; nameFr?: string; name?: string; type: string; subtype?: string | null };
+type Row = { id?: string; code: string; nameEn?: string; nameFr?: string; name?: string; type: string; subtype?: string | null; kind?: string | null };
 
 /** Accounts from the database as the picker shows them, in the reader's language, with an optional note each. */
 export async function pickAccounts(rows: Row[], note?: (a: Row) => string | undefined): Promise<PickAccount[]> {
   const { accName } = await getI18n();
-  return rows.map((a) => ({ id: a.id ?? a.code, code: a.code, name: a.name ?? accName({ nameEn: a.nameEn ?? a.code, nameFr: a.nameFr ?? "" }), type: a.type, subtype: a.subtype ?? null, note: note?.(a) }));
+  return rows.map((a) => ({ id: a.id ?? a.code, code: a.code, name: a.name ?? accName({ nameEn: a.nameEn ?? a.code, nameFr: a.nameFr ?? "" }), type: a.type, subtype: a.subtype ?? null, kind: a.kind ?? null, note: note?.(a) }));
 }
 
 /** An account list on a server-rendered form: the account type beside each account and "+ Add new account". */

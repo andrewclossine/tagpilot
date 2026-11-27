@@ -2,7 +2,8 @@ import Link from "next/link";
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { requireView } from "@/lib/auth";
-import { getI18n } from "@/lib/i18n";
+import { getI18n, type Key } from "@/lib/i18n";
+import { ACCOUNT_KINDS, KIND_SPEC, kindOf } from "@/lib/account-kinds";
 import { sp, type SearchParams } from "@/lib/actions";
 import { balances } from "@/lib/ledger";
 import { today } from "@/lib/format";
@@ -13,7 +14,6 @@ import { companyChart } from "@/lib/setup";
 
 export const metadata = { title: "Chart of accounts" };
 
-const SUBTYPES = ["bank", "cash", "momo", "ar", "ap", "vat_in", "vat_out", "wht"] as const;
 const TYPES = ["asset", "liability", "equity", "income", "expense"] as const;
 
 /** The chart of accounts, grouped by type, with each account's balance today. */
@@ -49,7 +49,7 @@ export default async function AccountsPage({ searchParams }: { searchParams: Sea
       ) : null}
       <div className="panel tbl-wrap">
         <table>
-          <thead><tr><th>{t("code")}</th><th>{t("name")}</th><th>{t("subtype")}</th><th className="num">{t("balance")} ({ctx.company.currency})</th><th /></tr></thead>
+          <thead><tr><th>{t("code")}</th><th>{t("name")}</th><th>{t("acc_pick_kind")}</th><th className="num">{t("balance")} ({ctx.company.currency})</th><th /></tr></thead>
           <tbody>
             {TYPES.map((ty) => {
               const list = accounts.filter((a) => a.type === ty);
@@ -60,7 +60,7 @@ export default async function AccountsPage({ searchParams }: { searchParams: Sea
                   <tr key={a.id} style={{ opacity: a.isActive ? 1 : 0.5 }}>
                     <td><code className="k">{a.code}</code></td>
                     <td><Link className="rowlink" href={`/reports/gl?account=${a.id}&from=${today().slice(0, 4)}-01-01&to=${today()}`}>{a.nameEn}</Link>{a.nameFr && a.nameFr !== a.nameEn ? <div className="small muted">{a.nameFr}</div> : null}</td>
-                    <td className="small">{a.subtype ? t(`sub_${a.subtype}`) : ""}</td>
+                    <td className="small">{t(`acck_${kindOf(a)}` as Key)}</td>
                     <td className="num">{money((bal.get(a.id)?.net ?? 0) * sign(ty))}</td>
                     <td style={{ whiteSpace: "nowrap" }}>{canEdit ? <>
                       <a className="btn ghost sm" href={`/accounts?edit=${a.id}#acc`}>{t("edit")}</a>
@@ -82,8 +82,9 @@ export default async function AccountsPage({ searchParams }: { searchParams: Sea
             <label className="f">{t("code")}<input id="a-code" name="code" defaultValue={editing?.code} required /></label>
             <label className="f">{t("name_en")}<input id="a-en" name="nameEn" defaultValue={editing?.nameEn} required /></label>
             <label className="f">{t("name_fr")}<input id="a-fr" name="nameFr" defaultValue={editing?.nameFr} /></label>
-            <label className="f">{t("type")}<select id="a-type" name="type" defaultValue={editing?.type ?? "expense"}>{TYPES.map((x) => <option key={x} value={x}>{t(`t_${x}`)}</option>)}</select></label>
-            <label className="f">{t("subtype")}<select id="a-sub" name="subtype" defaultValue={editing?.subtype ?? ""}><option value="">{t("sub_none")}</option>{SUBTYPES.map((x) => <option key={x} value={x}>{t(`sub_${x}`)}</option>)}</select></label>
+            <label className="f">{t("acc_pick_kind")}<select id="a-kind" name="kind" defaultValue={editing ? kindOf(editing) : "expense"}>
+              {TYPES.map((ty) => <optgroup key={ty} label={t(`t_${ty}`)}>{ACCOUNT_KINDS.filter((k) => KIND_SPEC[k].type === ty).map((k) => <option key={k} value={k}>{t(`acck_${k}` as Key)}</option>)}</optgroup>)}
+            </select></label>
             <label className="f">{t("status")}<select id="a-act" name="isActive" defaultValue={editing?.isActive === false ? "0" : "1"}><option value="1">{t("active")}</option><option value="0">{t("inactive")}</option></select></label>
           </div>
           <div className="row"><button type="submit" className="btn primary">{t("save")}</button>{editing ? <a className="btn ghost" href="/accounts">{t("cancel")}</a> : null}</div>

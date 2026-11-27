@@ -16,7 +16,7 @@ export async function bookOptions(companyId: string, accName: (a: { nameEn: stri
     accounts,
     projects,
     partners,
-    accountOpts: accounts.map((a) => ({ id: a.id, code: a.code, name: accName(a), type: a.type, subtype: a.subtype })),
+    accountOpts: accounts.map((a) => ({ id: a.id, code: a.code, name: accName(a), type: a.type, subtype: a.subtype, kind: a.kind })),
     projectOpts: projects.map((p) => ({ id: p.id, code: p.code, name: p.name })),
   };
 }

@@ -13,9 +13,8 @@ import { ensureStarterAccounts } from "@/lib/setup";
 import { saveAttachment } from "@/lib/storage";
 import type { AccountSubtype, AccountType } from "@/db/schema";
 import { assertProjectSlot } from "@/lib/limits";
+import { isAccountKind, KIND_SPEC, type AccountKind } from "@/lib/account-kinds";
 
-const TYPES: AccountType[] = ["asset", "liability", "equity", "income", "expense"];
-const SUBTYPES = ["bank", "cash", "momo", "ar", "ap", "vat_in", "vat_out", "wht"] as const;
 
 export async function saveCompanySettings(fd: FormData) {
   const ctx = await requireWrite("company");
@@ -77,9 +76,17 @@ export async function removeLogo() {
 export async function saveAccount(fd: FormData) {
   const ctx = await requireWrite("accounts");
   const id = str(fd, "id");
-  const type = TYPES.find((x) => x === str(fd, "type")) ?? "expense";
-  const sub = SUBTYPES.find((x) => x === str(fd, "subtype")) ?? null;
-  const values = { code: str(fd, "code"), nameEn: str(fd, "nameEn"), nameFr: str(fd, "nameFr"), type, subtype: sub as AccountSubtype, isActive: str(fd, "isActive") !== "0" };
+  // One account type (Bank, Accounts receivable, Fixed asset...) gives the main type and the account's role in the
+  // books. A role the type does not set (cash or mobile money for a bank, input VAT, withholding tax) is kept.
+  const kindRaw = str(fd, "kind");
+  const kind: AccountKind = isAccountKind(kindRaw) ? kindRaw : "expense";
+  const spec = KIND_SPEC[kind];
+  const type = spec.type;
+  const db0 = await getDb();
+  const [old] = id ? await db0.select({ subtype: schema.accounts.subtype, type: schema.accounts.type }).from(schema.accounts).where(and(eq(schema.accounts.id, id), eq(schema.accounts.companyId, ctx.company.id))) : [];
+  const keep = old?.subtype && old.type === type && (kind === "bank" ? ["bank", "cash", "momo"].includes(old.subtype) : !spec.subtype && ["vat_in", "vat_out", "wht"].includes(old.subtype));
+  const sub = (keep ? old!.subtype : spec.subtype) ?? null;
+  const values = { code: str(fd, "code"), nameEn: str(fd, "nameEn"), nameFr: str(fd, "nameFr"), type, subtype: sub as AccountSubtype, kind, isActive: str(fd, "isActive") !== "0" };
   try {
     if (!values.code || !values.nameEn || !/^[A-Za-z0-9._-]+$/.test(values.code)) throw new UserError("err_required");
     const db = await getDb();

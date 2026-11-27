@@ -2,7 +2,7 @@
 import { useMemo, useState } from "react";
 import { AccountPicker, type PickerLabels } from "./AccountPicker";
 
-export type AccountOpt = { id: string; code: string; name: string; type: string; subtype?: string | null };
+export type AccountOpt = { id: string; code: string; name: string; type: string; subtype?: string | null; kind?: string | null };
 export type ProjectOpt = { id: string; code: string; name: string };
 
 const num = (v: string | number) => { const n = Number(String(v).replace(/[\s,]/g, "")); return Number.isFinite(n) ? n : 0; };

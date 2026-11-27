@@ -140,6 +140,7 @@ export const accounts = pgTable("accounts", {
   nameFr: text("name_fr").notNull().default(""),
   type: text("type").$type<AccountType>().notNull(),
   subtype: text("subtype").$type<AccountSubtype>(),
+  kind: text("kind"), // the account type shown to people (lib/account-kinds): Bank, Fixed asset, Cost of sales...; empty is worked out
   taxLine: text("tax_line"), // income tax working paper line; empty uses the default for the account
   currency: text("currency"), // a money account held in a foreign currency; empty is the company's own currency
   isActive: boolean("is_active").notNull().default(true),

@@ -3,7 +3,7 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { quickAddAccount, type NewAccount } from "@/app/(app)/accounts/actions";
 import { ACCOUNT_KINDS, KIND_SPEC, kindOf, kindsForTypes, nextCode, type AccountKind } from "@/lib/account-kinds";
 
-export type PickAccount = { id: string; code: string; name: string; type: string; subtype?: string | null; note?: string };
+export type PickAccount = { id: string; code: string; name: string; type: string; subtype?: string | null; kind?: string | null; note?: string };
 export type PickerLabels = {
   kinds: Record<string, string>; add: string; title: string; kind: string; code: string; codeHelp: string; name: string;
   save: string; cancel: string; choose: string; errors: Record<string, string>;
@@ -65,7 +65,7 @@ export function AccountPicker({ accounts, name, id, value, defaultValue, onChang
           kinds={kinds.length ? kinds : [...ACCOUNT_KINDS]} used={list.map((a) => a.code)} labels={labels}
           onClose={() => setOpen(false)}
           onAdded={(a) => {
-            const pick: PickAccount = { id: a.id, code: a.code, name: a.name, type: a.type, subtype: a.subtype };
+            const pick: PickAccount = { id: a.id, code: a.code, name: a.name, type: a.type, subtype: a.subtype, kind: a.kind };
             setAdded((xs) => [...xs, pick]);
             window.dispatchEvent(new CustomEvent(EVENT, { detail: pick }));
             setOpen(false);

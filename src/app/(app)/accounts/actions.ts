@@ -6,7 +6,7 @@ import { audit } from "@/lib/audit";
 import { getCtx } from "@/lib/auth";
 import { isAccountKind, KIND_SPEC, nextCode } from "@/lib/account-kinds";
 
-export type NewAccount = { id: string; code: string; name: string; type: string; subtype: string | null };
+export type NewAccount = { id: string; code: string; name: string; type: string; subtype: string | null; kind: string | null };
 
 /**
  * Adds an account from any account list, without leaving the page: the person picks the account type, the code is
@@ -26,8 +26,8 @@ export async function quickAddAccount(input: { kind: string; code: string; name:
   if (used.includes(code)) return { ok: false, error: "err_acc_code_used" };
   const [same] = await db.select({ id: schema.accounts.id }).from(schema.accounts).where(and(eq(schema.accounts.companyId, ctx.company.id), eq(schema.accounts.nameEn, name)));
   if (same) return { ok: false, error: "err_acc_name_used" };
-  const [row] = await db.insert(schema.accounts).values({ companyId: ctx.company.id, code, nameEn: name, nameFr: name, type: spec.type, subtype: spec.subtype }).returning();
+  const [row] = await db.insert(schema.accounts).values({ companyId: ctx.company.id, code, nameEn: name, nameFr: name, type: spec.type, subtype: spec.subtype, kind: input.kind }).returning();
   await audit(db, ctx.company.id, ctx.user.id, "create", "account", code, { from: "picker" });
   revalidatePath("/accounts");
-  return { ok: true, account: { id: row.id, code: row.code, name: row.nameEn, type: row.type, subtype: row.subtype } };
+  return { ok: true, account: { id: row.id, code: row.code, name: row.nameEn, type: row.type, subtype: row.subtype, kind: row.kind } };
 }
