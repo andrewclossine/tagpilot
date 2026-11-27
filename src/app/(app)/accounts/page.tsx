@@ -19,7 +19,7 @@ const TYPES = ["asset", "liability", "equity", "income", "expense"] as const;
 /** The chart of accounts, grouped by type, with each account's balance today. */
 export default async function AccountsPage({ searchParams }: { searchParams: SearchParams }) {
   const ctx = await requireView("accounts");
-  const { t, err, money, lang } = await getI18n();
+  const { t, err, money, lang, accName } = await getI18n();
   const q = await sp(searchParams);
   const db = await getDb();
   const [accounts, bal, chart] = await Promise.all([
@@ -59,7 +59,7 @@ export default async function AccountsPage({ searchParams }: { searchParams: Sea
                 ...list.map((a) => (
                   <tr key={a.id} style={{ opacity: a.isActive ? 1 : 0.5 }}>
                     <td><code className="k">{a.code}</code></td>
-                    <td><Link className="rowlink" href={`/reports/gl?account=${a.id}&from=${today().slice(0, 4)}-01-01&to=${today()}`}>{a.nameEn}</Link>{a.nameFr && a.nameFr !== a.nameEn ? <div className="small muted">{a.nameFr}</div> : null}</td>
+                    <td><Link className="rowlink" href={`/reports/gl?account=${a.id}&from=${today().slice(0, 4)}-01-01&to=${today()}`}>{accName(a)}</Link></td>
                     <td className="small">{t(`acck_${kindOf(a)}` as Key)}</td>
                     <td className="num">{money((bal.get(a.id)?.net ?? 0) * sign(ty))}</td>
                     <td style={{ whiteSpace: "nowrap" }}>{canEdit ? <>
@@ -80,8 +80,7 @@ export default async function AccountsPage({ searchParams }: { searchParams: Sea
           {editing ? <input type="hidden" name="id" value={editing.id} /> : null}
           <div className="fields">
             <label className="f">{t("code")}<input id="a-code" name="code" defaultValue={editing?.code} required /></label>
-            <label className="f">{t("name_en")}<input id="a-en" name="nameEn" defaultValue={editing?.nameEn} required /></label>
-            <label className="f">{t("name_fr")}<input id="a-fr" name="nameFr" defaultValue={editing?.nameFr} /></label>
+            <label className="f">{t("name")}<input id="a-name" name="name" defaultValue={editing ? accName(editing) : ""} required /></label>
             <label className="f">{t("acc_pick_kind")}<select id="a-kind" name="kind" defaultValue={editing ? kindOf(editing) : "expense"}>
               {TYPES.map((ty) => <optgroup key={ty} label={t(`t_${ty}`)}>{ACCOUNT_KINDS.filter((k) => KIND_SPEC[k].type === ty).map((k) => <option key={k} value={k}>{t(`acck_${k}` as Key)}</option>)}</optgroup>)}
             </select></label>

@@ -19,7 +19,8 @@ const AREA_MODULES: Partial<Record<Area, ModuleKey[]>> = {
   partners: ["accounting", "procurement"],
   projects: ["projects"], achievements: ["projects"], vouchers: ["projects"], voucher_review: ["projects"], voucher_approve: ["projects"], voucher_authorize: ["projects"], voucher_pay: ["projects"],
   procurement: ["procurement"], contracts: ["procurement"], requisitions: ["procurement"],
-  bidding: ["bidding"],
+  // Bidding on other organisations' tenders comes with Procurement: every customer with it can bid like a supplier.
+  bidding: ["bidding", "procurement"],
   esign: ["esign"], qr: ["qr"],
 };
 

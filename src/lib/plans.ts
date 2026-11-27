@@ -114,7 +114,7 @@ export function hasFeature(plan: Plan, f: Feature) {
 
 /** What the plan costs a month in one currency: each line, the pack discount, the organisation discount and the total. */
 export function quote(plan: Plan, prices: Record<string, number>, orgType: string) {
-  const lines: { module: ModuleKey | "seat" | "files"; tier: Tier; amount: number }[] = plan.modules.map((m) => ({ module: m, tier: tierOf(plan, m), amount: prices[`${m}:${tierOf(plan, m)}`] ?? 0 }));
+  const lines: { module: ModuleKey | "seat" | "files"; tier: Tier; amount: number }[] = plan.modules.map((m) => ({ module: m, tier: tierOf(plan, m), amount: m === "bidding" && plan.modules.includes("procurement") ? 0 : prices[`${m}:${tierOf(plan, m)}`] ?? 0 })); // bidding is free with Procurement
   if (plan.storage !== "free") lines.push({ module: "files", tier: plan.storage, amount: prices[`files:${plan.storage}`] ?? 0 });
   if (plan.seats > 0) lines.push({ module: "seat", tier: "starter", amount: (prices.seat ?? 0) * plan.seats });
   const qualifies = BUNDLES.filter((b) => Object.entries(b.needs).every(([m, t]) => plan.modules.includes(m as ModuleKey) && atLeast(tierOf(plan, m as ModuleKey), t!)));

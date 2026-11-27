@@ -14,6 +14,7 @@ import { saveAttachment } from "@/lib/storage";
 import type { AccountSubtype, AccountType } from "@/db/schema";
 import { assertProjectSlot } from "@/lib/limits";
 import { isAccountKind, KIND_SPEC, type AccountKind } from "@/lib/account-kinds";
+import { getI18n } from "@/lib/i18n";
 
 
 export async function saveCompanySettings(fd: FormData) {
@@ -86,7 +87,13 @@ export async function saveAccount(fd: FormData) {
   const [old] = id ? await db0.select({ subtype: schema.accounts.subtype, type: schema.accounts.type }).from(schema.accounts).where(and(eq(schema.accounts.id, id), eq(schema.accounts.companyId, ctx.company.id))) : [];
   const keep = old?.subtype && old.type === type && (kind === "bank" ? ["bank", "cash", "momo"].includes(old.subtype) : !spec.subtype && ["vat_in", "vat_out", "wht"].includes(old.subtype));
   const sub = (keep ? old!.subtype : spec.subtype) ?? null;
-  const values = { code: str(fd, "code"), nameEn: str(fd, "nameEn"), nameFr: str(fd, "nameFr"), type, subtype: sub as AccountSubtype, kind, isActive: str(fd, "isActive") !== "0" };
+  // One name, in the language the person works in. The other language keeps its own name, or takes this one when it has none.
+  const { lang } = await getI18n();
+  const name = str(fd, "name") || str(fd, lang === "fr" ? "nameFr" : "nameEn");
+  const [prev] = id ? await db0.select({ nameEn: schema.accounts.nameEn, nameFr: schema.accounts.nameFr }).from(schema.accounts).where(and(eq(schema.accounts.id, id), eq(schema.accounts.companyId, ctx.company.id))) : [];
+  const nameEn = lang === "fr" ? (prev?.nameEn || name) : name;
+  const nameFr = lang === "fr" ? name : (prev?.nameFr && prev.nameFr !== prev.nameEn ? prev.nameFr : name);
+  const values = { code: str(fd, "code"), nameEn, nameFr, type, subtype: sub as AccountSubtype, kind, isActive: str(fd, "isActive") !== "0" };
   try {
     if (!values.code || !values.nameEn || !/^[A-Za-z0-9._-]+$/.test(values.code)) throw new UserError("err_required");
     const db = await getDb();
